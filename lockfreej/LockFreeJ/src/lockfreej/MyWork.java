@@ -15,15 +15,20 @@ import java.util.logging.Logger;
  * @author yuryb
  */
 public class MyWork extends Thread {
-    private LockFreeQueue queue;
-    private static final int OP_COUNT = 1000;
-    private List<Integer> poppedData = new ArrayList<Integer>();
+    //private static LockFreeQueue queue = new LockFreeQueue();
+    private MyQueue queue;
+    public static final int OP_COUNT = 100000;
+    public List<Integer> poppedData = new ArrayList<Integer>();
     private int addN;
     private Random random = new Random();
+    public long runTime = 0;
     
-    MyWork(int n) {
+    private long tStart = 0;
+    
+    MyWork(int n, MyQueue q) {
         addN = n;
-    }
+        queue = q;
+    }    
     
     void publishData() {
         for(Integer i : poppedData) {
@@ -33,21 +38,30 @@ public class MyWork extends Thread {
     
     @Override
     public void run() {
-        try {
-                sleep(random.nextInt(200));
+        tStart = System.currentTimeMillis();
+        //System.out.println("Hello from a thread!");                
+        for(int i = 0; i < OP_COUNT; ++i) {
+            queue.enqueue(i + addN);
+            /*
+            try {
+                sleep(random.nextInt(22));
             } catch (InterruptedException ex) {
                 Logger.getLogger(MyWork.class.getName()).log(Level.SEVERE, null, ex);
             }
-        //System.out.println("Hello from a thread!");
-        queue = new LockFreeQueue();
-        for(int i = 0; i < OP_COUNT; ++i) {
-            queue.enqueue(i + addN);            
+            */
             Integer o = (Integer)queue.dequeue();
             if (o == null) {
-                System.out.printf("Thread %d exhausted queue. \n", addN);
+                calcRunTime();
+                System.out.printf("Thread %d exhausted queue. \n", addN);                
                 return;
             }
             poppedData.add(o);
         }
+        
+        calcRunTime();
+    }
+    
+    void calcRunTime() {
+        runTime = System.currentTimeMillis() - tStart;
     }
 }
