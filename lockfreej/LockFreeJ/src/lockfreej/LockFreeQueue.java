@@ -76,6 +76,7 @@ public class LockFreeQueue implements MyQueue{
         
         Node(Object o) {
             item = o;
+            next = new AtomicReference<Node>();
         }
     }
     
