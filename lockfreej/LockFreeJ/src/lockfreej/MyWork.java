@@ -7,14 +7,12 @@ package lockfreej;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  *
  * @author yuryb
  */
-public class MyWork extends Thread {
+public class MyWork implements Runnable {
     //private static LockFreeQueue queue = new LockFreeQueue();
     private MyQueue queue;
     public static final int OP_COUNT = 100000;
