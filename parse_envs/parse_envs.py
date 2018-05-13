@@ -4,8 +4,7 @@ import sys, re
 def print_usage():
     print("parse_envs.py <envfile.txt> -- output of windows 'set' command.")
 
-
-def parse_lines(lines):
+def parse_lines(lines: list) -> dict:
     line_re = re.compile('(.*)=(.*)')
     parsed_dict = {}
     for l in lines:
@@ -16,18 +15,25 @@ def parse_lines(lines):
     
     return parsed_dict
 
+
+def parse_file(fname: str) -> dict:
+    f = open(fname, 'r')
+    lines = f.readlines()
+    f.close()
+    parsed = parse_lines(lines)
+    return parsed
+
+
 def main():
     if len(sys.argv) != 2:
         print_usage()
         sys.exit(1)
 
-    f = open(sys.argv[1], 'r')
-    lines = f.readlines()
-    f.close()
-
-    parsed = parse_lines(lines)
+    parsed = parse_file(sys.argv[1])
     print(parsed)
 
     sys.exit(0)
 
-main()
+
+if __name__ == "__main__":
+    main()
