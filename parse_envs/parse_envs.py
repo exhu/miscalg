@@ -1,9 +1,6 @@
 #!/usr/bin/python3
 import sys, re
 
-def print_usage():
-    print("parse_envs.py <envfile.txt> -- output of windows 'set' command.")
-
 def parse_lines(lines: list) -> dict:
     line_re = re.compile('(.*)=(.*)')
     parsed_dict = {}
@@ -24,9 +21,12 @@ def parse_file(fname: str) -> dict:
     return parsed
 
 
-def main():
+def _print_usage():
+    print("parse_envs.py <envfile.txt> -- output of windows 'set' command.")
+
+def _main():
     if len(sys.argv) != 2:
-        print_usage()
+        _print_usage()
         sys.exit(1)
 
     parsed = parse_file(sys.argv[1])
@@ -36,4 +36,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _main()
