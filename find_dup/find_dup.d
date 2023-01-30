@@ -7,50 +7,61 @@ import std.regex;
 alias FileOrMulti = SumType!(string, string[]);
 alias PathsMap = FileOrMulti[string];
 
-pure void append(ref PathsMap m, string k, string full) {
-    if (k !in m) {
+pure void append(ref PathsMap m, string k, string full)
+{
+    if (k !in m)
+    {
         m[k] = full;
-    } else {
+    }
+    else
+    {
         m[k].match!(
             (string s) { m[k] = [s, full]; },
-            (string[] a) { a~=full; },
+            (string[] a) { a ~= full; },
         );
     }
 }
 
-PathsMap gather_files(string root) {
+PathsMap gather_files(string root)
+{
     PathsMap result;
-    foreach (string name; dirEntries(root, SpanMode.depth)) {
-        if (name.isFile) {
+    foreach (string name; dirEntries(root, SpanMode.depth))
+    {
+        if (name.isFile)
+        {
             append(result, name.baseName, name);
         }
     }
     return result;
 }
 
-void print_paths(in FileOrMulti files) {
+void print_paths(in FileOrMulti files)
+{
     files.match!(
         (string s) { writeln(s); },
-        (in string[] a) { foreach(f; a) writeln(f); }
+        (in string[] a) {
+        foreach (f; a)
+            writeln(f);
+    }
     );
 }
 
-void process_dups(in PathsMap listA, in PathsMap listB) {
-// print file name, then the paths it's found in listA,
-// then in listB
-// then print the same for listB
-    foreach(k, v; listA) {
+void process_dups(in PathsMap listA, in PathsMap listB)
+{
+    // print file name, then the paths it's found in listA,
+    // then in listB
+    // then print the same for listB
+    foreach (k, v; listA)
+    {
         bool printed_paths = false;
         v.match!(
-            (in string[] m) {
-                writeln(k);
-                print_paths(v);
-                printed_paths = true;
-            },
-            (_) {},
+            (in string[] m) { writeln(k); print_paths(v); printed_paths = true; },
+        (_) {},
         );
-        if (k in listB) {
-            if (!printed_paths) {
+        if (k in listB)
+        {
+            if (!printed_paths)
+            {
                 writeln(k);
                 print_paths(v);
             }
@@ -58,7 +69,7 @@ void process_dups(in PathsMap listA, in PathsMap listB) {
         }
     }
 
-/*
+    /*
     foreach (k, v; listA)
     {
         if (k in listB) {
@@ -69,12 +80,15 @@ void process_dups(in PathsMap listA, in PathsMap listB) {
     */
 }
 
-void usage() {
+void usage()
+{
     writeln("Usage: find_dup <path a> [path b]");
 }
 
-int main(string[] args) {
-    if (args.length < 2 && args.length > 3) {
+int main(string[] args)
+{
+    if (args.length < 2 && args.length > 3)
+    {
         usage();
         return 1;
     }
@@ -84,7 +98,8 @@ int main(string[] args) {
 
     const pathBok = !pathB || (pathB.exists() && pathB.isDir());
 
-    if (pathA.exists() && pathA.isDir() && pathBok ) {
+    if (pathA.exists() && pathA.isDir() && pathBok)
+    {
         const listA = gather_files(pathA);
         const listB = pathB ? gather_files(pathB) : new PathsMap;
         process_dups(listA, listB);
