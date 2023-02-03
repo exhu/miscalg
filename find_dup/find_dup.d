@@ -1,8 +1,7 @@
-import std.stdio;
-import std.file;
-import std.path;
+import std.file : exists, isDir, isFile, dirEntries, SpanMode;
+import std.path : baseName;
+import std.stdio : writeln, stderr;
 import std.sumtype;
-import std.regex;
 
 alias FileOrMulti = SumType!(string, string[]);
 alias PathsMap = FileOrMulti[string];
@@ -22,7 +21,20 @@ pure void append(ref PathsMap m, string k, string full)
     }
 }
 
-PathsMap gather_files(string root)
+pure void append(ref PathsMap m, string k, in FileOrMulti full)
+{
+    const as_array = full.match!(
+        (in string s) { return [s]; },
+        (in string[] m) { return m; }
+    );
+
+    m[k].match!(
+        (string s) { m[k] = [s] ~ as_array; },
+        (string[] a) { a ~= as_array; },
+    );
+}
+
+PathsMap gatherFiles(string root)
 {
     PathsMap result;
     foreach (string name; dirEntries(root, SpanMode.depth))
@@ -35,7 +47,7 @@ PathsMap gather_files(string root)
     return result;
 }
 
-void print_paths(in FileOrMulti files)
+void printPaths(in FileOrMulti files)
 {
     files.match!(
         (string s) { writeln(s); },
@@ -46,38 +58,43 @@ void print_paths(in FileOrMulti files)
     );
 }
 
-void process_dups(in PathsMap listA, in PathsMap listB)
+PathsMap collectSameNames(in PathsMap listA, in PathsMap listB)
 {
+    PathsMap result;
     // print file name, then the paths it's found in listA,
     // then in listB
-    // then print the same for listB
     foreach (k, v; listA)
     {
-        bool printed_paths = false;
         v.match!(
-            (in string[] m) { writeln(k); print_paths(v); printed_paths = true; },
+            (in string[] m) { result[k] = v; },
         (_) {},
         );
         if (k in listB)
         {
-            if (!printed_paths)
-            {
-                writeln(k);
-                print_paths(v);
-            }
-            print_paths(listB[k]);
+            append(result, k, listB[k]);
         }
     }
 
-    /*
-    foreach (k, v; listA)
-    {
-        if (k in listB) {
-            print_paths(v);
-            print_paths(listB[k]);
-        }
-    }
-    */
+    return result;
+
+}
+
+PathsMap processDups(in PathsMap listA, in PathsMap listB)
+{
+    PathsMap sameNames = collectSameNames(listA, listB);
+
+    // TODO filter sameNames by areSameFiles
+
+    PathsMap result;
+    return result;
+}
+
+bool areSameFiles(in string fileA, string fileB)
+{
+    import std.process : execute;
+
+    // Exit status is 0 if inputs are the same, 1 if different, 2 if trouble.
+    return execute(["cmp", fileA, fileB]).status == 0;
 }
 
 void usage()
@@ -85,9 +102,18 @@ void usage()
     writeln("Usage: find_dup <path a> [path b]");
 }
 
+void printDups(in PathsMap dups)
+{
+    foreach (k, v; dups)
+    {
+        writeln(k);
+        printPaths(v);
+    }
+}
+
 int main(string[] args)
 {
-    if (args.length < 2 && args.length > 3)
+    if (args.length < 2 || args.length > 3)
     {
         usage();
         return 1;
@@ -100,13 +126,14 @@ int main(string[] args)
 
     if (pathA.exists() && pathA.isDir() && pathBok)
     {
-        const listA = gather_files(pathA);
-        const listB = pathB ? gather_files(pathB) : new PathsMap;
-        process_dups(listA, listB);
+        const listA = gatherFiles(pathA);
+        const listB = pathB ? gatherFiles(pathB) : new PathsMap;
+        const dups = processDups(listA, listB);
+        printDups(dups);
         return 0;
     }
 
-    stderr.writeln("Must be existing directories.");
+    writeln(stderr, "Must be existing directories.");
 
     return 1;
 }
