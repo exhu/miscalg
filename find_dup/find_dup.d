@@ -1,7 +1,6 @@
 import std.file : exists, isDir, isFile, dirEntries, SpanMode;
 import std.path : baseName;
 import std.stdio : writeln, stderr;
-import std.sumtype;
 
 alias PathsMap = string[][string];
 
@@ -20,7 +19,9 @@ PathsMap gatherFiles(string root)
 
 void printPaths(in string[] files)
 {
-    foreach (f; files)
+    import std.algorithm.sorting;
+    auto sorted = sort(files.dup);
+    foreach (f; sorted)
         writeln(f);
 }
 
@@ -92,10 +93,12 @@ void usage()
 
 void printDups(in PathsMap dups)
 {
-    foreach (k, v; dups)
+    import std.algorithm.sorting;
+    auto sortedKeys = sort(dups.keys);
+    foreach (k; sortedKeys)
     {
         writeln(k, ":");
-        printPaths(v);
+        printPaths(dups[k]);
     }
 }
 
