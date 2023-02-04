@@ -42,25 +42,20 @@ PathsMap collectSameNames(in PathsMap listA, in PathsMap listB)
 
 string[] findSameFiles(in string[] files)
 {
-    string[] result;
+    bool[string] result;
     string[] next;
     foreach(i, a; files)
     {
-        bool foundCopy = false;
-        foreach(b; files[i+1..$])
+        foreach(b; files[(i+1)..$])
         {
             if (areSameFiles(a, b))
             {
-                result ~= b;
-                foundCopy = true;
+                result[a] = true;
+                result[b] = true;
             }
         }
-        if (foundCopy)
-        {
-            result ~= a;
-        }
     }
-    return result;
+    return result.keys;
 }
 
 PathsMap processDups(in PathsMap listA, in PathsMap listB)
