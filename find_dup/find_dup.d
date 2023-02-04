@@ -3,36 +3,7 @@ import std.path : baseName;
 import std.stdio : writeln, stderr;
 import std.sumtype;
 
-alias FileOrMulti = SumType!(string, string[]);
-alias PathsMap = FileOrMulti[string];
-
-pure void append(ref PathsMap m, string k, string full)
-{
-    if (k !in m)
-    {
-        m[k] = full;
-    }
-    else
-    {
-        m[k].match!(
-            (string s) { m[k] = [s, full]; },
-            (string[] a) { a ~= full; },
-        );
-    }
-}
-
-pure void append(ref PathsMap m, string k, in FileOrMulti full)
-{
-    const as_array = full.match!(
-        (in string s) { return [s]; },
-        (in string[] m) { return m; }
-    );
-
-    m[k].match!(
-        (string s) { m[k] = [s] ~ as_array; },
-        (string[] a) { a ~= as_array; },
-    );
-}
+alias PathsMap = string[][string];
 
 PathsMap gatherFiles(string root)
 {
@@ -41,55 +12,72 @@ PathsMap gatherFiles(string root)
     {
         if (name.isFile)
         {
-            append(result, name.baseName, name);
+            result[name.baseName] ~= name;
         }
     }
     return result;
 }
 
-void printPaths(in FileOrMulti files)
+void printPaths(in string[] files)
 {
-    files.match!(
-        (string s) { writeln(s); },
-        (in string[] a) {
-        foreach (f; a)
-            writeln(f);
-    }
-    );
+    foreach (f; files)
+        writeln(f);
 }
 
 PathsMap collectSameNames(in PathsMap listA, in PathsMap listB)
 {
     PathsMap result;
-    // print file name, then the paths it's found in listA,
-    // then in listB
     foreach (k, v; listA)
     {
-        v.match!(
-            (in string[] m) { result[k] = v; },
-        (_) {},
-        );
+        result[k] = v.dup;
         if (k in listB)
         {
-            append(result, k, listB[k]);
+            result[k] ~= listB[k];
         }
     }
 
     return result;
+}
 
+string[] findSameFiles(in string[] files)
+{
+    string[] result;
+    string[] next;
+    foreach(i, a; files)
+    {
+        bool foundCopy = false;
+        foreach(b; files[i+1..$])
+        {
+            if (areSameFiles(a, b))
+            {
+                result ~= b;
+                foundCopy = true;
+            }
+        }
+        if (foundCopy)
+        {
+            result ~= a;
+        }
+    }
+    return result;
 }
 
 PathsMap processDups(in PathsMap listA, in PathsMap listB)
 {
     PathsMap sameNames = collectSameNames(listA, listB);
-
-    // TODO filter sameNames by areSameFiles
-
     PathsMap result;
+    foreach(k,v; sameNames)
+    {
+        auto matched = findSameFiles(v);
+        if (matched.length > 0)
+        {
+            result[k] = matched;
+        }
+    }
     return result;
 }
 
-bool areSameFiles(in string fileA, string fileB)
+bool areSameFiles(in string fileA, in string fileB)
 {
     import std.process : execute;
 
@@ -106,7 +94,7 @@ void printDups(in PathsMap dups)
 {
     foreach (k, v; dups)
     {
-        writeln(k);
+        writeln(k, ":");
         printPaths(v);
     }
 }
