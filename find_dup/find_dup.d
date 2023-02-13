@@ -1,4 +1,4 @@
-import std.file : exists, isDir, isFile, dirEntries, SpanMode;
+import std.file : exists, isDir, isFile, dirEntries, SpanMode, isSymlink;
 import std.path : baseName;
 import std.stdio : writeln, stderr;
 
@@ -9,7 +9,7 @@ PathsMap gatherFiles(string root)
     PathsMap result;
     foreach (string name; dirEntries(root, SpanMode.depth))
     {
-        if (name.isFile)
+        if (!name.isSymlink && name.isFile)
         {
             result[name.baseName] ~= name;
         }
