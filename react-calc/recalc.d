@@ -121,7 +121,24 @@ ValueNode[] topSorted(ValueNode start)
     writefln("Edges = %s", edges.map!(to!string));
 
     ValueNode[] result;
-    return result;
+    bool[ValueNode] permanent, temp;
+
+    void visitNode(ValueNode n)
+    {
+        if (n in permanent) return;
+        if (n in temp) throw new Exception("cyclic graph, no topo. order exists");
+
+        foreach (d; n.deps) visitNode(d);
+
+        temp.remove(n);
+        permanent[n] = true;
+        result ~= n;
+    }
+
+    visitNode(start);
+
+    import std.algorithm : reverse;
+    return reverse(result);
 }
 
 void updateTopsorted()
@@ -129,13 +146,17 @@ void updateTopsorted()
     writeln("updateTopSorted");
     auto root = build();
 
-    topSorted(root);
-    /*
+    auto sorted = topSorted(root);
+    import std.algorithm : map;
+    writefln("topSorted = %s", sorted.map!(a => a.name));
     writefln("before = %s", root);
-    // TODO build topologically sorted graph
-    writefln("after = %s", root);
-    */
 
+    foreach(n; sorted)
+    {
+        n.update(1);
+    }
+
+    writefln("after = %s", root);
 }
 
 void updateWithDeps()
