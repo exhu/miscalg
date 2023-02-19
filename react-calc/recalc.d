@@ -92,33 +92,36 @@ ValueNode build()
 
 ValueNode[] topSorted(ValueNode start)
 {
-    bool[ValueNode] nodes = [start: true];
-    struct Edge
+    debug
     {
-        ValueNode from, to;
-        string toString() const
+        bool[ValueNode] nodes = [start: true];
+        struct Edge
         {
-            return "from " ~ from.name ~ " to " ~ to.name;
+            ValueNode from, to;
+            string toString() const
+            {
+                return "from " ~ from.name ~ " to " ~ to.name;
+            }
         }
-    }
-    Edge[] edges;
-    // discover all nodes and edges
-    void collect(ValueNode s)
-    {
-        foreach (n; s.deps)
+        Edge[] edges;
+        // discover all nodes and edges
+        void collect(ValueNode s)
         {
-            nodes[n] = true;
-            edges ~= Edge(s, n);
-            collect(n);
+            foreach (n; s.deps)
+            {
+                nodes[n] = true;
+                edges ~= Edge(s, n);
+                collect(n);
+            }
         }
+
+        collect(start);
+
+        import std.algorithm : map;
+        import std.conv : to;
+        writefln("Nodes = %s", nodes.keys.map!(n => n.name));
+        writefln("Edges = %s", edges.map!(to!string));
     }
-
-    collect(start);
-
-    import std.algorithm : map;
-    import std.conv : to;
-    writefln("Nodes = %s", nodes.keys.map!(n => n.name));
-    writefln("Edges = %s", edges.map!(to!string));
 
     ValueNode[] result;
     bool[ValueNode] permanent, temp;
@@ -128,6 +131,8 @@ ValueNode[] topSorted(ValueNode start)
         if (n in permanent) return;
         if (n in temp) throw new Exception("cyclic graph, no topo. order exists");
 
+        temp[n] = true;
+        // can exhaust stack
         foreach (d; n.deps) visitNode(d);
 
         temp.remove(n);
