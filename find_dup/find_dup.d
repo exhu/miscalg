@@ -40,10 +40,14 @@ PathsMap collectSameNames(in PathsMap listA, in PathsMap listB)
     return result;
 }
 
+// TODO fix, must return groups of equal files, but now it returns files which
+// have a match, i.e.
+// given files with same names [a,b,c,d] where files [a,b] are dups,
+// and files [c,d] are dups, but a and b have different contents than
+// c and d, the result will contain all!
 string[] findSameFiles(in string[] files)
 {
     bool[string] result;
-    string[] next;
     foreach(i, a; files)
     {
         foreach(b; files[(i+1)..$])
