@@ -12,7 +12,7 @@ import std.array;
 import std.string;
 import std.path : baseName;
 
-void process(string[] listA, string[] listB)
+void process(string[] listA, string[] listB, bool ignoreContents)
 {
     stderr.writeln("to process ", listA.length, ", ", listB.length);
     int groupNumber = 0;
@@ -50,7 +50,8 @@ void process(string[] listA, string[] listB)
             if (pathA != pathB)
             {
                 // check only the same named files
-                if (sameName(pathA, pathB) && sameFileContents(pathA, pathB))
+                if (sameName(pathA, pathB) &&
+                    (ignoreContents || sameFileContents(pathA, pathB)))
                 {
                     updateGroup(pathA, pathB);
                 }
@@ -59,15 +60,15 @@ void process(string[] listA, string[] listB)
     }
 
     string[][int] groups;
-    foreach(k, v; pathToGroup)
+    foreach (k, v; pathToGroup)
     {
         groups[v] ~= k;
     }
 
-    foreach(k, v; groups)
+    foreach (k, v; groups)
     {
-        writefln("%d,%s", k, v[0].baseName);
-        foreach(f; v)
+        writefln("#%d,%s:", k, v[0].baseName);
+        foreach (f; v)
         {
             writeln(f);
         }
@@ -80,6 +81,7 @@ bool sameName(string a, string b)
     auto baseB = baseName(b);
 
     import std.uni : sicmp;
+
     return sicmp(baseA, baseB) == 0;
 }
 
@@ -111,21 +113,44 @@ string[] readLines(string fn)
     return readText(fn).splitLines();
 }
 
-void usage()
+import std.getopt;
+
+void usage(GetoptResult helpInfo)
 {
-    writeln("Usage: find_dup_lists file1 file2\n\nWhere files contain absolute
-            file names separated by new line.");
+    defaultGetoptPrinter("Usage: find_dup_lists [options] file1 file2\n\nWhere files contain
+absolute file names separated by new line.
+
+You can generate those lists with 'fd -t f . /my-dir-to-list/subdir/'
+
+Note: case folding is basic, i.e. no special rules are used for Greek, German
+etc. where letters not merely change case, but may be replaced with several
+letters.
+", helpInfo.options);
 }
 
 int main(string[] args)
 {
-    if (args.length < 3 || args.length > 3)
+    bool ignoreContents = false;
+    auto helpInfo = getopt(args, "n",
+        "Do not check file contents, print only matching filenames (case-insensitive)",
+        &ignoreContents);
+
+    if (helpInfo.helpWanted)
     {
-        usage();
+        usage(helpInfo);
+        return 0;
+    }
+
+    enum minArgs = 3;
+    enum maxArgs = 3;
+
+    if (args.length < minArgs || args.length > maxArgs)
+    {
+        usage(helpInfo);
         return 1;
     }
 
-    process(readLines(args[1]), readLines(args[2]));
+    process(readLines(args[1]), readLines(args[2]), ignoreContents);
 
     return 0;
 }
