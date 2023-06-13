@@ -26,6 +26,15 @@ where F: Fn(&str) -> bool {
     None
 }
 
+pub fn read_list(filename: &str) -> Option<Vec<String>> {
+    let r = std::fs::read_to_string(filename);
+    if r.is_err() {
+        return None
+    }
+    
+    Some(r.unwrap().lines().map(str::to_owned).collect())
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -51,4 +60,12 @@ mod tests {
         let r4 = find_unque_name(s, |a| a == s || a == "myaaa.jpg.001.jpg");
         assert_eq!(r4, Some("myaaa.jpg.002.jpg".to_owned()));
     }
+    
+    #[test]
+    fn read_lines_test() {
+        let r = read_list("Cargo.toml").unwrap();
+        assert_eq!(r[0], "[package]");
+        assert_eq!(r[1], "name = \"paths-to-links\"");
+    }
+
 }
