@@ -39,11 +39,11 @@ pub fn read_list(filename: &str) -> Option<Vec<String>> {
     Some(r.unwrap().lines().map(str::to_owned).collect())
 }
 
-pub fn temp_dir() -> String {
+pub fn temp_dir(base_name: &str) -> String {
     use std::env;
     let root = env::temp_dir();
     let mut sub = root.clone();
-    sub.push("tmplinks");
+    sub.push(base_name);
     let new_temp = find_unque_name(sub.as_os_str().to_str().unwrap(), |a| {
         let mut n = root.clone();
         n.push(a);
@@ -86,7 +86,7 @@ mod tests {
     
     #[test]
     fn tmpdir() {
-        let td = temp_dir();
+        let td = temp_dir("tmplinkstest");
         let np = std::path::Path::new(&td);
         assert!(!np.exists());
         println!("temp dir = {}", np.to_str().unwrap());
