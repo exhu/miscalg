@@ -1,10 +1,14 @@
 pub fn make_unique_name(src: &str, number: u32) -> String {
     use std::path::*;
-    use std::ffi::OsStr;
     let p = Path::new(src);
-    let suff = p.extension().and_then(OsStr::to_str).unwrap();
-    let res = format!("{src}.{number:03}.{suff}");
-    res
+    let ext = p.extension();
+    match ext {
+        None => format!("{src}.{number:03}"),
+        Some(e) => {
+            let suff = e.to_str().unwrap();
+            format!("{src}.{number:03}.{suff}")
+        }
+    }
 }
 
 const MAX_TRIES:u32 = 999;
@@ -33,6 +37,18 @@ pub fn read_list(filename: &str) -> Option<Vec<String>> {
     }
     
     Some(r.unwrap().lines().map(str::to_owned).collect())
+}
+
+pub fn temp_dir() -> String {
+    use std::env;
+    let root = env::temp_dir();
+    let mut sub = root.clone();
+    sub.push("tmplinks");
+    let new_temp = find_unque_name(sub.as_os_str().to_str().unwrap(), |a| {
+        let mut n = root.clone();
+        n.push(a);
+        n.exists() });
+    new_temp.unwrap()
 }
 
 
@@ -66,6 +82,17 @@ mod tests {
         let r = read_list("Cargo.toml").unwrap();
         assert_eq!(r[0], "[package]");
         assert_eq!(r[1], "name = \"paths-to-links\"");
+    }
+    
+    #[test]
+    fn tmpdir() {
+        let td = temp_dir();
+        let np = std::path::Path::new(&td);
+        assert!(!np.exists());
+        println!("temp dir = {}", np.to_str().unwrap());
+        assert!(std::fs::create_dir(np).is_ok());
+        assert!(np.exists());
+        assert!(std::fs::remove_dir(np).is_ok());
     }
 
 }
