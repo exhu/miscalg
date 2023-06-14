@@ -51,6 +51,12 @@ pub fn temp_dir(base_name: &str) -> String {
     new_temp.unwrap()
 }
 
+pub fn remove_file_prefix(name: &str) -> &str {
+    match name.strip_prefix("file://") {
+        Some(unprefixed) => unprefixed,
+        None => name,
+    }
+}
 
 #[cfg(test)]
 mod tests {
