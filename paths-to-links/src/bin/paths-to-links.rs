@@ -12,12 +12,27 @@ struct Arguments {
     #[arg(short, long, default_value_t = false)]
     pub keep: bool,
 }
+
 fn main() -> ExitCode {
     // read text file with file names, remove file:///
     // create links in destination
     // if program name is given, run program
-    let _parsed = Arguments::parse();
-    //println!("usage: <file names.txt> [-o destination path] [-k keep temp dir] [program name to pass directory]");
+    let parsed = Arguments::parse();
+    let dirname = paths_to_links::temp_dir("p2l");
+    if parsed.program_name.is_none() {
+        println!("{dirname}");
+    } else {
+        eprintln!("{dirname}");
+    }
+    let dirpath = std::path::Path::new(&dirname);
+    std::fs::create_dir(dirpath).expect("Failed to create dir.");
+    // TODO make links
     println!("succc");
+    if let Some(prog) = parsed.program_name {
+        // TODO run and wait
+    }
+    if !parsed.keep {
+        std::fs::remove_dir_all(dirpath).expect("Failed to delete dir.");
+    }
     ExitCode::SUCCESS
 }
