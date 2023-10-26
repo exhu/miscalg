@@ -87,13 +87,21 @@ fn read_whitespace(src: &[char], start: usize) -> Option<Token> {
 }
 
 fn read_token(src: &[char], start: usize) -> Token {
-    read_whitespace(src, start)
-        .or_else(|| read_number(src, start))
-        .or(Some(Token {
+    let end = src.len();
+    if start >= end {
+        return Token {
             kind: TokenKind::Eof,
+            span: TokenSpan { start, end },
+        };
+    }
+
+    match read_whitespace(src, start).or_else(|| read_number(src, start)) {
+        Some(t) => t,
+        None => Token {
+            kind: TokenKind::Unknown,
             span: TokenSpan { start, end: start },
-        }))
-        .unwrap()
+        },
+    }
 }
 
 fn main() {
