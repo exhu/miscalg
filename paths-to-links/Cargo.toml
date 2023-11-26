@@ -7,4 +7,4 @@ description = "Creates a temp dir, generates symbolic links to files in the list
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.3.3", features = ['derive'] }
+clap = { version = "4.4.8", features = ['derive'] }
