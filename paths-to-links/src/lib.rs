@@ -11,12 +11,14 @@ pub fn make_unique_name(src: &str, number: u32) -> String {
     }
 }
 
-const MAX_TRIES:u32 = 999;
+const MAX_TRIES: u32 = 999;
 
 //type ExistsFn = dyn Fn(&str) -> bool;
 
-pub fn find_unque_name<F>(src: &str, exists_fn: F) -> Option<String> 
-where F: Fn(&str) -> bool {
+pub fn find_unque_name<F>(src: &str, exists_fn: F) -> Option<String>
+where
+    F: Fn(&str) -> bool,
+{
     if !exists_fn(src) {
         return Some(src.to_owned());
     }
@@ -33,9 +35,9 @@ where F: Fn(&str) -> bool {
 pub fn read_list(filename: &str) -> Option<Vec<String>> {
     let r = std::fs::read_to_string(filename);
     if r.is_err() {
-        return None
+        return None;
     }
-    
+
     Some(r.unwrap().lines().map(str::to_owned).collect())
 }
 
@@ -47,7 +49,8 @@ pub fn temp_dir(base_name: &str) -> String {
     let new_temp = find_unque_name(sub.as_os_str().to_str().unwrap(), |a| {
         let mut n = root.clone();
         n.push(a);
-        n.exists() });
+        n.exists()
+    });
     new_temp.unwrap()
 }
 
@@ -56,6 +59,10 @@ pub fn remove_file_prefix(name: &str) -> &str {
         Some(unprefixed) => unprefixed,
         None => name,
     }
+}
+
+pub fn create_symlink(link_name: &str, target: &str) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link_name)
 }
 
 #[cfg(test)]
@@ -69,7 +76,7 @@ mod tests {
         let o2 = make_unique_name(s, 11222);
         assert_eq!(o2, "my001.jpg.11222.jpg");
     }
-    
+
     #[test]
     fn find_unique() {
         let s = "myaaa.jpg";
@@ -82,14 +89,14 @@ mod tests {
         let r4 = find_unque_name(s, |a| a == s || a == "myaaa.jpg.001.jpg");
         assert_eq!(r4, Some("myaaa.jpg.002.jpg".to_owned()));
     }
-    
+
     #[test]
     fn read_lines_test() {
         let r = read_list("Cargo.toml").unwrap();
         assert_eq!(r[0], "[package]");
         assert_eq!(r[1], "name = \"paths-to-links\"");
     }
-    
+
     #[test]
     fn tmpdir() {
         let td = temp_dir("tmplinkstest");
@@ -100,5 +107,4 @@ mod tests {
         assert!(np.exists());
         assert!(std::fs::remove_dir(np).is_ok());
     }
-
 }
