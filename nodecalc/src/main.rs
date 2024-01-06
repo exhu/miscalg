@@ -121,18 +121,13 @@ fn main() {
     let node_c = ExprNode::Expression(SubValue::new(vec![node_a_id, node_b_id]));
     let node_c_id = tree.add_node(node_c);
 
-    match tree.node_from(node_c_id) {
-        ExprNode::Expression(e) => {
-            let updated = e.update(node_c_id, &tree);
-            tree.update_node(node_c_id, ExprNode::Expression(updated));
-        },
-
-        _ => (),
+    if let ExprNode::Expression(e) = tree.node_from(node_c_id) {
+        let updated = e.update(node_c_id, &tree);
+        tree.update_node(node_c_id, ExprNode::Expression(updated));
     }
 
     let node = tree.node_from(node_c_id);
     if let ExprNode::Expression(value) = node {
         println!("Hello, world! {}", value.int_value());
     }
-
 }
