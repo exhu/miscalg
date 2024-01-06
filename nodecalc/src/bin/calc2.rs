@@ -194,6 +194,8 @@ impl ExprTree {
             .map(|i| i.target)
             .collect();
 
+        //println!("deps={:?}", deps);
+
         result.extend(&deps);
         for d in deps {
             self.visit_node_for_update(d, result);
@@ -209,7 +211,8 @@ impl ExprTree {
             self.visit_node_for_update(*u, &mut result);
         }
 
-        result
+        let mut unique_items = HashSet::new();
+        result.into_iter().filter(|&e| unique_items.insert(e)).collect()
     }
 }
 
