@@ -119,7 +119,7 @@ impl ExprTree {
             .iter()
             .filter(|e| {
                 e.target == node_id
-                    && if let ExprNode::Literal{..} = self.nodes[e.source] {
+                    && if let ExprNode::Literal { .. } = self.nodes[e.source] {
                         false
                     } else {
                         true
@@ -200,12 +200,12 @@ fn main() {
     let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
     tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
     match &mut tree.nodes[node_d_id] {
-        ExprNode::Binary { args, .. } => { args[0] = node_c_id },
-        _ => {},
+        ExprNode::Binary { args, .. } => args[0] = node_c_id,
+        _ => {}
     }
     match &mut tree.nodes[node_c_id] {
-        ExprNode::Binary { args, .. } => { args[0] = node_d_id },
-        _ => {},
+        ExprNode::Binary { args, .. } => args[0] = node_d_id,
+        _ => {}
     }
 
     println!("{:?}", tree.evaluate_all());
@@ -228,12 +228,12 @@ mod tests {
         let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
         tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
         match &mut tree.nodes[node_d_id] {
-            ExprNode::Binary { args, .. } => { args[0] = node_c_id },
-            _ => {},
+            ExprNode::Binary { args, .. } => args[0] = node_c_id,
+            _ => {}
         }
         match &mut tree.nodes[node_c_id] {
-            ExprNode::Binary { args, .. } => { args[0] = node_d_id },
-            _ => {},
+            ExprNode::Binary { args, .. } => args[0] = node_d_id,
+            _ => {}
         }
 
         let result = tree.evaluate_all();
@@ -259,8 +259,6 @@ mod tests {
         println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
 
         assert!(result.is_ok());
-        assert_eq!(tree.tsorted_deps, [4,6,7]);
+        assert_eq!(tree.tsorted_deps, [4, 6, 7]);
     }
-
-
 }
