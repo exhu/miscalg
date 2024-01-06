@@ -60,10 +60,17 @@ impl CalcUpdate for SubValue {
     }
 }
 
+/*
+ * cell = expression-result node (produces value of a single leaf
+ * node), used to have a stable id value and notification.
+ *
+ */
+
 #[derive(Clone)]
 enum ExprNode {
     Literal(LiteralValue),
     Expression(SubValue),
+    Cell,
 }
 
 impl IntValue for ExprNode {
@@ -71,9 +78,11 @@ impl IntValue for ExprNode {
         match self {
             ExprNode::Literal(e) => e.int_value(),
             ExprNode::Expression(e) => e.int_value(),
+            _ => 0,
         }
     }
 }
+
 
 struct CalcTree {
     nodes: Vec<ExprNode>,
