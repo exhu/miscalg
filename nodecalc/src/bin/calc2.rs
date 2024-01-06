@@ -162,11 +162,20 @@ impl ExprTree {
         let mut temp = HashSet::<ExprNodeId>::new();
 
         let deps: Vec<_> = self.deps.iter().map(|d| d.target).collect();
+        let mut errors = Vec::<String>::new();
         for n in deps {
-            self.visit_node(n, &mut permanent, &mut temp)?;
+            // allow to proceed with recursive
+            match self.visit_node(n, &mut permanent, &mut temp) {
+                Ok(_) => {}
+                Err(e) => errors.push(e),
+            }
         }
 
-        Ok(())
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join(", "))
+        }
     }
 
     /// sorts dependencies and recalculates all, fails if circular deps detected.
@@ -181,11 +190,7 @@ impl ExprTree {
         Ok(())
     }
 
-    fn visit_node_for_update(
-        &mut self,
-        node_id: ExprNodeId,
-        result: &mut Vec<ExprNodeId>,
-    ) {
+    fn visit_node_for_update(&mut self, node_id: ExprNodeId, result: &mut Vec<ExprNodeId>) {
         // collect all non-Literal nodes
         let deps: Vec<_> = self
             .deps
@@ -212,7 +217,10 @@ impl ExprTree {
         }
 
         let mut unique_items = HashSet::new();
-        result.into_iter().filter(|&e| unique_items.insert(e)).collect()
+        result
+            .into_iter()
+            .filter(|&e| unique_items.insert(e))
+            .collect()
     }
 }
 
@@ -226,6 +234,7 @@ fn main() {
     tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
     let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
     tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
+    tree.add_node(ExprNode::new_sub(node_b_id, node_b_id));
     match &mut tree.nodes[node_d_id] {
         ExprNode::Binary { args, .. } => args[0] = node_c_id,
         _ => {}
