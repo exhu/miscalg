@@ -177,13 +177,37 @@ impl ExprTree {
             self.add_deps(i);
         }
         self.tsort_deps()?;
+        // TODO notify Cell
         Ok(())
+    }
+
+    fn visit_node_for_update(
+        &mut self,
+        node_id: ExprNodeId,
+        result: &mut Vec<ExprNodeId>,
+    ) {
+        // collect all non-Literal nodes
+        let deps: Vec<_> = self
+            .deps
+            .iter()
+            .filter(|i| i.source == node_id)
+            .map(|i| i.target)
+            .collect();
+
+        result.extend(&deps);
+        for d in deps {
+            self.visit_node_for_update(d, result);
+        }
     }
 
     /// call when only literals have been updated, i.e. graph has not been changed.
     /// returns updated cells.
     pub fn evaluate_partially(&mut self, updated_ids: &[ExprNodeId]) -> Vec<ExprNodeId> {
         let mut result = Vec::new();
+
+        for u in updated_ids {
+            self.visit_node_for_update(*u, &mut result);
+        }
 
         result
     }
@@ -260,5 +284,30 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(tree.tsorted_deps, [4, 6, 7]);
+    }
+
+    #[test]
+    fn test_partial() {
+        let mut tree = ExprTree::new();
+        let node_lit = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(777)));
+        let node_a_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(3)));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(888)));
+        let node_b_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(5)));
+        let node_c_id = tree.add_node(ExprNode::new_sub(node_a_id, node_b_id));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
+        let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
+        let node_last = tree.add_node(ExprNode::new_sub(node_a_id, node_a_id));
+        let result = tree.evaluate_all();
+        println!("{:?}", result);
+        println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
+
+        assert!(result.is_ok());
+        assert_eq!(tree.tsorted_deps, [4, 6, 7]);
+
+        let result = tree.evaluate_partially(&[node_lit]);
+        assert_eq!(result.len(), 0);
+
+        let result = tree.evaluate_partially(&[node_a_id]);
+        assert_eq!(result, [node_c_id, node_last, node_d_id]);
     }
 }
