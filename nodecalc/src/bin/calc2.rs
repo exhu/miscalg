@@ -86,8 +86,6 @@ impl ExprTree {
     pub fn add_node(&mut self, node: ExprNode) -> ExprNodeId {
         let node_id = self.nodes.len();
         self.nodes.push(node);
-        // TODO add deps as the last step, remove from here
-        self.add_deps(node_id);
         node_id
     }
 
@@ -136,12 +134,12 @@ impl ExprTree {
         node_id: ExprNodeId,
         permanent: &mut HashSet<ExprNodeId>,
         temp: &mut HashSet<ExprNodeId>,
-    ) -> Result<(), ()> {
+    ) -> Result<(), String> {
         if permanent.contains(&node_id) {
             return Ok(());
         }
         if temp.contains(&node_id) {
-            return Err(());
+            return Err(String::from(format!("recursive {}", node_id)));
         }
         temp.insert(node_id);
 
@@ -157,7 +155,7 @@ impl ExprTree {
     }
 
     /// fails if circular dependency detected
-    fn tsort_deps(&mut self) -> Result<(), ()> {
+    fn tsort_deps(&mut self) -> Result<(), String> {
         self.tsorted_deps.clear();
 
         let mut permanent = HashSet::<ExprNodeId>::new();
@@ -168,13 +166,16 @@ impl ExprTree {
             self.visit_node(n, &mut permanent, &mut temp)?;
         }
 
-        // TODO reverse result?
         Ok(())
     }
 
     /// sorts dependencies and recalculates all, fails if circular deps detected.
     /// must be called first time to initialize and proceeed with calculations.
-    pub fn evaluate_all(&mut self) -> Result<(), ()> {
+    pub fn evaluate_all(&mut self) -> Result<(), String> {
+        self.deps.clear();
+        for i in 0..self.nodes.len() {
+            self.add_deps(i);
+        }
         self.tsort_deps()?;
         Ok(())
     }
@@ -198,6 +199,15 @@ fn main() {
     tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
     let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
     tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
+    match &mut tree.nodes[node_d_id] {
+        ExprNode::Binary { args, .. } => { args[0] = node_c_id },
+        _ => {},
+    }
+    match &mut tree.nodes[node_c_id] {
+        ExprNode::Binary { args, .. } => { args[0] = node_d_id },
+        _ => {},
+    }
+
     println!("{:?}", tree.evaluate_all());
     println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
 }
