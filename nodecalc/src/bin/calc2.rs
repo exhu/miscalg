@@ -1,5 +1,7 @@
 /// Calculation Tree, assuming it is semantically correct. It is not and AST, but
 /// the final calculation machinery.
+///
+use std::collections::HashSet;
 
 type ExprNodeId = usize;
 
@@ -58,7 +60,7 @@ impl ExprNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Dependency {
     /// source node, that produces value for the target
     source: ExprNodeId,
@@ -69,7 +71,7 @@ struct Dependency {
 struct ExprTree {
     nodes: Vec<ExprNode>,
     deps: Vec<Dependency>,
-    tsorted_deps: Vec<Dependency>,
+    tsorted_deps: Vec<ExprNodeId>,
 }
 
 impl ExprTree {
@@ -113,22 +115,79 @@ impl ExprTree {
         }
     }
 
-    fn tsort_deps(&mut self) {
-        self.tsorted_deps.clear();
+    fn node_deps(&self, node_id: ExprNodeId) -> Vec<ExprNodeId> {
+        self.deps
+            .iter()
+            .filter(|e| e.source == node_id)
+            .map(|e| e.target)
+            .collect()
     }
 
-    /// sorts dependencies and recalculates all
-    pub fn evaluate_all(&mut self) -> Result<(), ()> {
-        self.tsort_deps();
+    fn visit_node(
+        &mut self,
+        node_id: ExprNodeId,
+        permanent: &mut HashSet<ExprNodeId>,
+        temp: &mut HashSet<ExprNodeId>,
+    ) -> Result<(), ()> {
+        if permanent.contains(&node_id) {
+            return Ok(());
+        }
+        if temp.contains(&node_id) {
+            return Err(());
+        }
+        temp.insert(node_id);
+
+        for d in self.node_deps(node_id) {
+            self.visit_node(d, permanent, temp)?;
+        }
+
+        temp.remove(&node_id);
+        permanent.insert(node_id);
+        self.tsorted_deps.push(node_id);
+
         Ok(())
+    }
+
+    /// fails if circular dependency detected
+    fn tsort_deps(&mut self) -> Result<(), ()> {
+        self.tsorted_deps.clear();
+
+        let mut permanent = HashSet::<ExprNodeId>::new();
+        let mut temp = HashSet::<ExprNodeId>::new();
+
+        let deps: Vec<_> = self.deps.iter().map(|d| d.target).collect();
+        for n in deps {
+            self.visit_node(n, &mut permanent, &mut temp)?;
+        }
+
+        // TODO reverse result?
+        Ok(())
+    }
+
+    /// sorts dependencies and recalculates all, fails if circular deps detected.
+    /// must be called first time to initialize and proceeed with calculations.
+    pub fn evaluate_all(&mut self) -> Result<(), ()> {
+        self.tsort_deps()?;
+        Ok(())
+    }
+
+    /// call when only literals have been updated, i.e. graph has not been changed.
+    /// returns updated cells.
+    pub fn evaluate_partially(&mut self, updated_ids: &[ExprNodeId]) -> Vec<ExprNodeId> {
+        let mut result = Vec::new();
+
+        result
     }
 }
 
 fn main() {
     let mut tree = ExprTree::new();
+    tree.add_node(ExprNode::new_literal(LiteralValue::Integer(777)));
     let node_a_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(3)));
+    tree.add_node(ExprNode::new_literal(LiteralValue::Integer(888)));
     let node_b_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(5)));
     let node_c_id = tree.add_node(ExprNode::new_sub(node_a_id, node_b_id));
-    println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
+    tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
     println!("{:?}", tree.evaluate_all());
+    println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
 }
