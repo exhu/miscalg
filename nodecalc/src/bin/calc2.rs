@@ -211,3 +211,56 @@ fn main() {
     println!("{:?}", tree.evaluate_all());
     println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_recursion() {
+        let mut tree = ExprTree::new();
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(777)));
+        let node_a_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(3)));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(888)));
+        let node_b_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(5)));
+        let node_c_id = tree.add_node(ExprNode::new_sub(node_a_id, node_b_id));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
+        let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
+        tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
+        match &mut tree.nodes[node_d_id] {
+            ExprNode::Binary { args, .. } => { args[0] = node_c_id },
+            _ => {},
+        }
+        match &mut tree.nodes[node_c_id] {
+            ExprNode::Binary { args, .. } => { args[0] = node_d_id },
+            _ => {},
+        }
+
+        let result = tree.evaluate_all();
+        println!("{:?}", result);
+        println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ok() {
+        let mut tree = ExprTree::new();
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(777)));
+        let node_a_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(3)));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(888)));
+        let node_b_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(5)));
+        let node_c_id = tree.add_node(ExprNode::new_sub(node_a_id, node_b_id));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
+        let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
+        tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
+        let result = tree.evaluate_all();
+        println!("{:?}", result);
+        println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
+
+        assert!(result.is_ok());
+        assert_eq!(tree.tsorted_deps, [4,6,7]);
+    }
+
+
+}
