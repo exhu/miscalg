@@ -86,6 +86,7 @@ impl ExprTree {
     pub fn add_node(&mut self, node: ExprNode) -> ExprNodeId {
         let node_id = self.nodes.len();
         self.nodes.push(node);
+        // TODO add deps as the last step, remove from here
         self.add_deps(node_id);
         node_id
     }
@@ -118,8 +119,15 @@ impl ExprTree {
     fn node_deps(&self, node_id: ExprNodeId) -> Vec<ExprNodeId> {
         self.deps
             .iter()
-            .filter(|e| e.source == node_id)
-            .map(|e| e.target)
+            .filter(|e| {
+                e.target == node_id
+                    && if let ExprNode::Literal{..} = self.nodes[e.source] {
+                        false
+                    } else {
+                        true
+                    }
+            })
+            .map(|e| e.source)
             .collect()
     }
 
@@ -188,6 +196,8 @@ fn main() {
     let node_b_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(5)));
     let node_c_id = tree.add_node(ExprNode::new_sub(node_a_id, node_b_id));
     tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
+    let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
+    tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
     println!("{:?}", tree.evaluate_all());
     println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
 }
