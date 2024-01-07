@@ -1,6 +1,11 @@
 /// Calculation Tree, assuming it is semantically correct. It is not and AST, but
-/// the final calculation machinery.
+/// the final calculation machinery suitable for e.g. spreadsheets, or interactive
+/// data modelling.
 ///
+///
+
+// TODO better architecture, support conditional nodes
+
 use std::collections::HashSet;
 
 type ExprNodeId = usize;
