@@ -393,4 +393,42 @@ mod tests {
             assert!(false);
         }
     }
+
+    #[test]
+    fn test_recalculate_partial() {
+        let mut tree = ExprTree::new();
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(777)));
+        let node_a_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(3)));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(888)));
+        let node_b_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(5)));
+        let node_c_id = tree.add_node(ExprNode::new_sub(node_a_id, node_b_id));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
+        let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
+        tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
+        let result = tree.evaluate_all();
+        println!("{:?}", result);
+        println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
+
+        assert!(result.is_ok());
+        let nodes_to_recalc = result.unwrap();
+        assert_eq!(nodes_to_recalc, [4, 6, 7]);
+
+        tree.recalculate_nodes(&nodes_to_recalc);
+        println!("updated tree={:?}", tree);
+
+        if let ExprNode::Literal { value } = &mut tree.nodes[node_a_id] {
+            *value = LiteralValue::Integer(9);
+        }
+
+        let result = tree.evaluate_partially(&[node_a_id]);
+        tree.recalculate_nodes(&result);
+
+        println!("updated tree2={:?}", tree);
+
+        if let ExprNode::Binary { cached_value, .. } = &tree.nodes[node_c_id] {
+            assert_eq!(*cached_value, Some(LiteralValue::Integer(9 - 5)));
+        } else {
+            assert!(false);
+        }
+    }
 }
