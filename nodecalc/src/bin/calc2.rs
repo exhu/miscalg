@@ -5,12 +5,21 @@ use std::collections::HashSet;
 
 type ExprNodeId = usize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum LiteralValue {
     Integer(i64),
     Float(f64),
     String(String),
     Bool(bool),
+}
+
+impl LiteralValue {
+    fn integer(&self) -> Option<i64> {
+        match self {
+            LiteralValue::Integer(i) => Some(*i),
+            _ => None
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -56,6 +65,14 @@ impl ExprNode {
             cached_value: None,
             args: [a, b],
             operation: BinaryOp::IntSub,
+        }
+    }
+
+    fn integer(&self) -> Option<i64> {
+        match self {
+            ExprNode::Literal{value} => Some(value.integer().unwrap()),
+            ExprNode::Binary{cached_value, ..} => cached_value.as_ref().unwrap().integer(),
+            _ => None
         }
     }
 }
@@ -180,14 +197,13 @@ impl ExprTree {
 
     /// sorts dependencies and recalculates all, fails if circular deps detected.
     /// must be called first time to initialize and proceeed with calculations.
-    pub fn evaluate_all(&mut self) -> Result<(), String> {
+    pub fn evaluate_all(&mut self) -> Result<Vec<ExprNodeId>, String> {
         self.deps.clear();
         for i in 0..self.nodes.len() {
             self.add_deps(i);
         }
         self.tsort_deps()?;
-        // TODO notify Cell
-        Ok(())
+        Ok(self.tsorted_deps.clone())
     }
 
     fn visit_node_for_update(&mut self, node_id: ExprNodeId, result: &mut Vec<ExprNodeId>) {
@@ -221,6 +237,31 @@ impl ExprTree {
             .into_iter()
             .filter(|&e| unique_items.insert(e))
             .collect()
+    }
+
+    pub fn recalculate_nodes(&mut self, node_ids: &[ExprNodeId]) {
+        // TODO make the code below manageable, looks ugly...
+        for n_id in node_ids {
+            let node = &self.nodes[*n_id];
+            match node {
+                ExprNode::Binary {
+                    cached_value,
+                    args,
+                    operation,
+                } => {
+                    if let BinaryOp::IntSub = operation {
+                        let a = self.nodes[args[0]].integer();
+                        let b = self.nodes[args[1]].integer();
+                        let sub = a.unwrap() - b.unwrap();
+                        if let ExprNode::Binary{cached_value,..} = &mut self.nodes[*n_id] {
+                            *cached_value = Some(LiteralValue::Integer(sub));
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
     }
 }
 
@@ -295,6 +336,7 @@ mod tests {
         println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
 
         assert!(result.is_ok());
+        assert_eq!(result.unwrap(), [4, 6, 7]);
         assert_eq!(tree.tsorted_deps, [4, 6, 7]);
     }
 
@@ -321,5 +363,34 @@ mod tests {
 
         let result = tree.evaluate_partially(&[node_a_id]);
         assert_eq!(result, [node_c_id, node_last, node_d_id]);
+    }
+
+    #[test]
+    fn test_recalculate_all() {
+        let mut tree = ExprTree::new();
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(777)));
+        let node_a_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(3)));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(888)));
+        let node_b_id = tree.add_node(ExprNode::new_literal(LiteralValue::Integer(5)));
+        let node_c_id = tree.add_node(ExprNode::new_sub(node_a_id, node_b_id));
+        tree.add_node(ExprNode::new_literal(LiteralValue::Integer(999)));
+        let node_d_id = tree.add_node(ExprNode::new_sub(node_c_id, node_b_id));
+        tree.add_node(ExprNode::new_sub(node_c_id, node_d_id));
+        let result = tree.evaluate_all();
+        println!("{:?}", result);
+        println!("hello! tree={:?}, node_c_id={}", tree, node_c_id);
+
+        assert!(result.is_ok());
+        let nodes_to_recalc = result.unwrap();
+        assert_eq!(nodes_to_recalc, [4, 6, 7]);
+
+        tree.recalculate_nodes(&nodes_to_recalc);
+        println!("updated tree={:?}", tree);
+
+        if let ExprNode::Binary { cached_value, .. } = &tree.nodes[node_c_id] {
+            assert_eq!(*cached_value, Some(LiteralValue::Integer(3 - 5)));
+        } else {
+            assert!(false);
+        }
     }
 }
