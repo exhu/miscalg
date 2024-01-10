@@ -3,9 +3,7 @@
 /// data modelling.
 ///
 ///
-
 // TODO better architecture, support conditional nodes
-
 use std::collections::HashSet;
 
 type ExprNodeId = usize;
@@ -22,7 +20,7 @@ impl LiteralValue {
     fn integer(&self) -> Option<i64> {
         match self {
             LiteralValue::Integer(i) => Some(*i),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -75,10 +73,36 @@ impl ExprNode {
 
     fn integer(&self) -> Option<i64> {
         match self {
-            ExprNode::Literal{value} => Some(value.integer().unwrap()),
-            ExprNode::Binary{cached_value, ..} => cached_value.as_ref().unwrap().integer(),
-            _ => None
+            ExprNode::Literal { value } => Some(value.integer().unwrap()),
+            ExprNode::Binary { cached_value, .. } => cached_value.as_ref().unwrap().integer(),
+            _ => None,
         }
+    }
+
+
+    fn evaluate(&self, nodes: &[ExprNode]) -> Self {
+        let mut updated = self.clone();
+
+        match self {
+            ExprNode::Binary {
+                args,
+                operation,
+                ..
+            } => {
+                if let BinaryOp::IntSub = operation {
+                    let a = nodes[args[0]].integer();
+                    let b = nodes[args[1]].integer();
+                    let sub = a.unwrap() - b.unwrap();
+                    if let ExprNode::Binary { cached_value, .. } = &mut updated {
+                        *cached_value = Some(LiteralValue::Integer(sub));
+                    }
+                }
+            }
+
+            _ => {}
+        }
+
+        updated
     }
 }
 
@@ -245,27 +269,10 @@ impl ExprTree {
     }
 
     pub fn recalculate_nodes(&mut self, node_ids: &[ExprNodeId]) {
-        // TODO make the code below manageable, looks ugly...
         for n_id in node_ids {
             let node = &self.nodes[*n_id];
-            match node {
-                ExprNode::Binary {
-                    cached_value,
-                    args,
-                    operation,
-                } => {
-                    if let BinaryOp::IntSub = operation {
-                        let a = self.nodes[args[0]].integer();
-                        let b = self.nodes[args[1]].integer();
-                        let sub = a.unwrap() - b.unwrap();
-                        if let ExprNode::Binary{cached_value,..} = &mut self.nodes[*n_id] {
-                            *cached_value = Some(LiteralValue::Integer(sub));
-                        }
-                    }
-                }
-
-                _ => {}
-            }
+            let updated = node.evaluate(&self.nodes);
+            self.nodes[*n_id] = updated;
         }
     }
 }
