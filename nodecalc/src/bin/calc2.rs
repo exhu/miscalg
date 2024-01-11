@@ -80,7 +80,7 @@ impl ExprNode {
     }
 
 
-    fn evaluate(&self, nodes: &[ExprNode]) -> Self {
+    fn calculate(&self, nodes: &[ExprNode]) -> Self {
         let mut updated = self.clone();
 
         match self {
@@ -224,8 +224,9 @@ impl ExprTree {
         }
     }
 
-    /// sorts dependencies and recalculates all, fails if circular deps detected.
-    /// must be called first time to initialize and proceeed with calculations.
+    /// Discovers and sorts dependencies, fails if circular deps detected.
+    /// Must be called first time to initialize and proceed with calculations.
+    /// Returs nodes in the order for proper calculation.
     pub fn evaluate_all(&mut self) -> Result<Vec<ExprNodeId>, String> {
         self.deps.clear();
         for i in 0..self.nodes.len() {
@@ -252,8 +253,9 @@ impl ExprTree {
         }
     }
 
-    /// call when only literals have been updated, i.e. graph has not been changed.
-    /// returns updated cells.
+    /// Accepts nodes that changed their values, returns nodes that are affected
+    /// by the changes, and need to be recalculated (see recalculate_nodes).
+    /// Call when only literals have been updated, i.e. graph has not been changed.
     pub fn evaluate_partially(&mut self, updated_ids: &[ExprNodeId]) -> Vec<ExprNodeId> {
         let mut result = Vec::new();
 
@@ -268,10 +270,11 @@ impl ExprTree {
             .collect()
     }
 
+    /// Performs calculation on the listed nodes.
     pub fn recalculate_nodes(&mut self, node_ids: &[ExprNodeId]) {
         for n_id in node_ids {
             let node = &self.nodes[*n_id];
-            let updated = node.evaluate(&self.nodes);
+            let updated = node.calculate(&self.nodes);
             self.nodes[*n_id] = updated;
         }
     }
