@@ -18,10 +18,10 @@ module Graph = struct
         type edges = edge list
         type t = { edges: edges ; nodes_count: int }
 
-let from_edges edges =
-        let nodes_count = List.fold_left (fun a c -> max a c) 0 edges in
-                (* edges ; nodes_count *)
-        ()
+let from_edges (e: edges) =
+        let nodes_count = List.fold_left (fun a c -> max a (max c.from_cell c.to_cell)) 0 e in
+                { edges = e ; nodes_count }
+
 end
 
 
