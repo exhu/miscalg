@@ -48,17 +48,34 @@ end
        mark n with a permanent mark add n to head of L
 *)
 
-let sorted_l = []
-let perm_marked = []
-let temp_marked = []
+type sort_context = {
+  sorted_l : int list;
+  perm_marked : int list;
+  temp_marked : int list;
+}
+
+let rec visit n (ctx : sort_context) =
+  match List.find ctx.perm_marked ~f:(( = ) n) with
+  | Some _ -> Some ctx
+  | None -> (
+      match List.find ctx.temp_marked ~f:(( = ) n) with
+      | Some _ -> None
+      | None -> (
+          let ctx = { ctx with temp_marked = n :: ctx.temp_marked } in
+          (* TODO visit all targets from n: *)
+          let ctx = visit n ctx in
+          match ctx with
+          | None -> None
+          | Some ctx ->
+              Some
+                {
+                  ctx with
+                  sorted_l = n :: ctx.sorted_l;
+                  perm_marked = n :: ctx.perm_marked;
+                }))
 
 let source_nodes (e : Graph.edges) =
   Array.map ~f:Graph.from_cell e |> List.of_array
-
-let visit n perm_marked temp_marked sorted_l =
-  match List.find perm_marked ~f:(( = ) n) with
-  | Some _ -> Some sorted_l
-  | None -> None (*todo*)
 
 let sorted_or_none = []
 
