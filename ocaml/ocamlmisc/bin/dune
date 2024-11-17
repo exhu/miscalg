@@ -1,4 +1,4 @@
 (executable
  (public_name ocamlmisc)
  (name main)
- (libraries ocamlmisc))
+ (libraries ocamlmisc base))

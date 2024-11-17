@@ -1,2 +1,3 @@
 (library
- (name ocamlmisc))
+ (name ocamlmisc)
+ (libraries base stdio))
