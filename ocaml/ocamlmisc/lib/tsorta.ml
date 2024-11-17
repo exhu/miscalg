@@ -28,6 +28,10 @@ module Graph = struct
       let e = t.edges.(i) in
       Stdio.printf "edge %d -> %d\n" e.from_cell e.to_cell
     done
+
+  let all_dest_from t n =
+    Array.filter_map t.edges ~f:(fun a ->
+        if a.from_cell = n then Some a.to_cell else None)
 end
 
 (* depth first
@@ -49,29 +53,37 @@ end
 
 module Sort_depth_first = struct
   type sort_context = {
+    graph : Graph.t;
     sorted_l : int list;
     perm_marked : int list;
     temp_marked : int list;
   }
 
-  let is_perm n ctx =
+  let is_perm ctx n =
     match List.find ctx.perm_marked ~f:(( = ) n) with
     | Some _ -> true
     | None -> false
 
-  let is_temp n ctx =
+  let is_temp ctx n =
     match List.find ctx.temp_marked ~f:(( = ) n) with
     | Some _ -> true
     | None -> false
 
-  let rec visit n (ctx : sort_context) =
-    if is_perm n ctx then Some ctx
-    else if is_temp n ctx then None
+  let rec visit (ctx : sort_context) n =
+    if is_perm ctx n then Some ctx
+    else if is_temp ctx n then None
     else
       let ctx = { ctx with temp_marked = n :: ctx.temp_marked } in
-      (* TODO visit all targets from n: *)
       (* TODO is it possible to do tail rec? *)
-      let ctx = visit n ctx in
+      let rec visit_leaves ctx leaves =
+        match leaves with
+        | hd :: tl -> (
+            let ctx = visit ctx hd in
+            match ctx with Some ctx -> visit_leaves ctx tl | None -> None)
+        | [] -> Some ctx
+      in
+      let leaves = Graph.all_dest_from ctx.graph n |> Array.to_list in
+      let ctx = visit_leaves ctx leaves in
       match ctx with
       | None -> None
       | Some ctx ->
@@ -81,12 +93,16 @@ module Sort_depth_first = struct
               sorted_l = n :: ctx.sorted_l;
               perm_marked = n :: ctx.perm_marked;
             }
+
+  let source_nodes (e : Graph.edges) =
+    Array.map ~f:Graph.from_cell e |> List.of_array
+
+  let sorted_or_none (graph : Graph.t) =
+    let ctx = { graph; perm_marked = []; temp_marked = []; sorted_l = [] } in
+  let src_nodes = source_nodes ctx.graph.edges in
+(* TODO for all src_nodes call visit, fail early on None *)
+    let ctx = visit ctx src_nodes
 end
-
-let source_nodes (e : Graph.edges) =
-  Array.map ~f:Graph.from_cell e |> List.of_array
-
-let sorted_or_none = []
 
 (* let depth_first a:Graph.t = let unmarked_nodes = List.range 0
    (Graph.nodes_count a) in unmarked_nodes
