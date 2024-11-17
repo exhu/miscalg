@@ -38,8 +38,7 @@ end
 
    function visit(node n)
    if n has a permanent mark then return
-   if n has a
-   temporary mark then stop   (graph has at least one cycle)
+   if n has a temporary mark then stop   (graph has at least one cycle)
 
        mark n with a temporary mark
 
@@ -48,31 +47,41 @@ end
        mark n with a permanent mark add n to head of L
 *)
 
-type sort_context = {
-  sorted_l : int list;
-  perm_marked : int list;
-  temp_marked : int list;
-}
+module Sort_depth_first = struct
+  type sort_context = {
+    sorted_l : int list;
+    perm_marked : int list;
+    temp_marked : int list;
+  }
 
-let rec visit n (ctx : sort_context) =
-  match List.find ctx.perm_marked ~f:(( = ) n) with
-  | Some _ -> Some ctx
-  | None -> (
-      match List.find ctx.temp_marked ~f:(( = ) n) with
-      | Some _ -> None
-      | None -> (
-          let ctx = { ctx with temp_marked = n :: ctx.temp_marked } in
-          (* TODO visit all targets from n: *)
-          let ctx = visit n ctx in
-          match ctx with
-          | None -> None
-          | Some ctx ->
-              Some
-                {
-                  ctx with
-                  sorted_l = n :: ctx.sorted_l;
-                  perm_marked = n :: ctx.perm_marked;
-                }))
+  let is_perm n ctx =
+    match List.find ctx.perm_marked ~f:(( = ) n) with
+    | Some _ -> true
+    | None -> false
+
+  let is_temp n ctx =
+    match List.find ctx.temp_marked ~f:(( = ) n) with
+    | Some _ -> true
+    | None -> false
+
+  let rec visit n (ctx : sort_context) =
+    if is_perm n ctx then Some ctx
+    else if is_temp n ctx then None
+    else
+      let ctx = { ctx with temp_marked = n :: ctx.temp_marked } in
+      (* TODO visit all targets from n: *)
+      (* TODO is it possible to do tail rec? *)
+      let ctx = visit n ctx in
+      match ctx with
+      | None -> None
+      | Some ctx ->
+          Some
+            {
+              ctx with
+              sorted_l = n :: ctx.sorted_l;
+              perm_marked = n :: ctx.perm_marked;
+            }
+end
 
 let source_nodes (e : Graph.edges) =
   Array.map ~f:Graph.from_cell e |> List.of_array
