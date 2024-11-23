@@ -97,11 +97,17 @@ module Sort_depth_first = struct
   let source_nodes (e : Graph.edges) =
     Array.map ~f:Graph.from_cell e |> List.of_array
 
+  let rec visit_all ctx src_nodes =
+    match src_nodes with
+    | [] -> None
+    | hd :: tl -> (
+        let ctx = visit ctx hd in
+        match ctx with None -> None | Some c -> visit_all c tl)
+
   let sorted_or_none (graph : Graph.t) =
     let ctx = { graph; perm_marked = []; temp_marked = []; sorted_l = [] } in
-  let src_nodes = source_nodes ctx.graph.edges in
-(* TODO for all src_nodes call visit, fail early on None *)
-    let ctx = visit ctx src_nodes
+    let src_nodes = source_nodes ctx.graph.edges in
+    visit_all ctx src_nodes
 end
 
 (* let depth_first a:Graph.t = let unmarked_nodes = List.range 0
