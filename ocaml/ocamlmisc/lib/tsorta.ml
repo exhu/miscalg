@@ -70,8 +70,11 @@ module Sort_depth_first = struct
     | None -> false
 
   let rec visit (ctx : sort_context) n =
+    let () = Stdio.printf "visit with list %i" (List.length ctx.sorted_l) in
     if is_perm ctx n then Some ctx
-    else if is_temp ctx n then None
+    else if is_temp ctx n then
+      let () = Stdio.print_endline "error, cycle!" in
+      None
     else
       let ctx = { ctx with temp_marked = n :: ctx.temp_marked } in
       (* TODO is it possible to do tail rec? *)
@@ -83,10 +86,12 @@ module Sort_depth_first = struct
         | [] -> Some ctx
       in
       let leaves = Graph.all_dest_from ctx.graph n |> Array.to_list in
+      let () = Stdio.printf "leaves count = %i\n" (List.length leaves) in
       let ctx = visit_leaves ctx leaves in
       match ctx with
       | None -> None
       | Some ctx ->
+          let () = Stdio.printf "some from visit, %i" n in
           Some
             {
               ctx with
@@ -99,16 +104,28 @@ module Sort_depth_first = struct
 
   let rec visit_all ctx src_nodes =
     match src_nodes with
-    | [] -> None
+    | [] -> Some ctx
     | hd :: tl -> (
         let ctx = visit ctx hd in
-        match ctx with None -> None | Some c -> visit_all c tl)
+        match ctx with
+        | None ->
+            let () = Stdio.print_endline "NONE!" in
+            None
+        | Some c ->
+            let () =
+              Stdio.printf "sorted len = %i\n" (List.length c.sorted_l)
+            in
+            visit_all c tl)
 
   let sorted_or_none (graph : Graph.t) =
     let ctx = { graph; perm_marked = []; temp_marked = []; sorted_l = [] } in
     let src_nodes = source_nodes ctx.graph.edges in
     let ctx = visit_all ctx src_nodes in
-    match ctx with None -> [] | Some lst -> lst.sorted_l
+    match ctx with
+    | None ->
+        let () = Stdio.print_endline "NONE!!!" in
+        []
+    | Some lst -> lst.sorted_l
 end
 
 (* let depth_first a:Graph.t = let unmarked_nodes = List.range 0

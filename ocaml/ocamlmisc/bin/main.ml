@@ -9,4 +9,4 @@ let () =
   let () = Graph.dump g in
   let sorted = Sort_depth_first.sorted_or_none g in
   print_endline "sorted result=";
-  List.iter (fun item -> Printf.printf "%i" item) sorted
+  List.iter (fun item -> Printf.printf "%i\n" item) sorted
