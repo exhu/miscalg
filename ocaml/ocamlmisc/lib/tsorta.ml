@@ -107,7 +107,8 @@ module Sort_depth_first = struct
   let sorted_or_none (graph : Graph.t) =
     let ctx = { graph; perm_marked = []; temp_marked = []; sorted_l = [] } in
     let src_nodes = source_nodes ctx.graph.edges in
-    visit_all ctx src_nodes
+    let ctx = visit_all ctx src_nodes in
+    match ctx with None -> [] | Some lst -> lst.sorted_l
 end
 
 (* let depth_first a:Graph.t = let unmarked_nodes = List.range 0
