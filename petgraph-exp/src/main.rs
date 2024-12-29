@@ -1,8 +1,7 @@
-use std::ops::Index;
-
 use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
 use petgraph::visit::GraphBase;
+use std::collections::HashMap;
 
 type MyGraph = DiGraph<&'static str, ()>;
 type NodeId = <MyGraph as GraphBase>::NodeId;
@@ -34,8 +33,19 @@ impl Context {
         }
     }
 
+    /// construct a list of affected nodes preserving topological sorting.
     pub fn invalidate_node(&self, name: &str) {
-        // construct a list of affected nodes preserving topological sorting
+        // find node by name
+
+        let index_to_order = self
+            .toposorted
+            .iter()
+            .enumerate()
+            .map(|i| (i.1, i.0))
+            .collect::<HashMap<_, _>>();
+
+        // construct a list of dependent nodes
+        // sort using index_to_order
     }
 }
 
