@@ -15,7 +15,7 @@ struct Context {
 
 impl Context {
     pub fn new() -> Context {
-        let g = make_graph();
+        let g = Self::make_graph();
 
         let sorted = toposort(&g, None);
         let sorted = match sorted {
@@ -58,21 +58,21 @@ impl Context {
         });
         nodes
     }
-}
 
-fn make_graph() -> MyGraph {
-    let mut g = MyGraph::new();
-    let a = g.add_node("a");
-    let b = g.add_node("b");
-    let c = g.add_node("c");
-    let d = g.add_node("d");
-    let e = g.add_node("e");
-    g.add_edge(a, b, ());
-    g.add_edge(a, c, ());
-    g.add_edge(b, c, ());
-    g.add_edge(d, e, ());
+    fn make_graph() -> MyGraph {
+        let mut g = MyGraph::new();
+        let a = g.add_node("a");
+        let b = g.add_node("b");
+        let c = g.add_node("c");
+        let d = g.add_node("d");
+        let e = g.add_node("e");
+        g.add_edge(a, b, ());
+        g.add_edge(a, c, ());
+        g.add_edge(b, c, ());
+        g.add_edge(d, e, ());
 
-    g
+        g
+    }
 }
 
 fn main() {
