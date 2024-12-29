@@ -1,6 +1,6 @@
 use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
-use petgraph::visit::GraphBase;
+use petgraph::visit::{Bfs, GraphBase, Walker};
 use std::collections::HashMap;
 
 type MyGraph = DiGraph<&'static str, ()>;
@@ -10,6 +10,7 @@ type NodeId = <MyGraph as GraphBase>::NodeId;
 struct Context {
     graph: MyGraph,
     toposorted: Vec<NodeId>,
+    // TODO map NodeId to names
 }
 
 impl Context {
@@ -34,8 +35,9 @@ impl Context {
     }
 
     /// construct a list of affected nodes preserving topological sorting.
-    pub fn invalidate_node(&self, name: &str) {
+    pub fn invalidate_node(&self, node: NodeId) -> Vec<NodeId> {
         // find node by name
+        //self.graph.neighbors(node)
 
         let index_to_order = self
             .toposorted
@@ -45,7 +47,16 @@ impl Context {
             .collect::<HashMap<_, _>>();
 
         // construct a list of dependent nodes
+        let mut nodes: Vec<NodeId> = Bfs::new(&self.graph, node).iter(&self.graph).collect();
+
         // sort using index_to_order
+        nodes.sort_by(|a, b| {
+            let ia = index_to_order[a];
+            let ib = index_to_order[b];
+
+            ia.cmp(&ib)
+        });
+        nodes
     }
 }
 
@@ -66,7 +77,7 @@ fn make_graph() -> MyGraph {
 
 fn main() {
     let c = Context::new();
-    c.invalidate_node("a");
+    let result = c.invalidate_node(NodeId::from(0));
 
-    println!("Hello, world! {:?}", c);
+    println!("Hello, world! {:?}, result = {:?}", c, result);
 }
