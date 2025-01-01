@@ -1,3 +1,8 @@
+/// Framework to be used for reactive ViewModel, e.g. developing UIs that
+/// are not source code based, but with a graphical tool, spreadsheet apps etc.
+/// The model has input values, calculation nodes, and events. All calculation
+/// is driven by the input values updates, evaluated following the dependency
+/// graph.
 use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
 use petgraph::visit::{Bfs, GraphBase, Walker};
