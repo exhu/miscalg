@@ -3,9 +3,10 @@
 /// The model has input values, calculation nodes, and events. All calculation
 /// is driven by the input values updates, evaluated following the dependency
 /// graph.
-use petgraph::algo::toposort;
+//use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
-use petgraph::visit::{Bfs, GraphBase, Walker};
+//use petgraph::visit::{Bfs, GraphBase, Walker};
+use petgraph::visit::GraphBase;
 use std::collections::HashMap;
 
 pub enum ExprType {
@@ -69,11 +70,11 @@ pub struct Model {
     // model input values
     input: HashMap<String, CalcNode>,
     // local variables/consts for ui expressions
-    locals: HashMap<String, CalcNode>,
+    //locals: HashMap<String, CalcNode>,
 
     // evaluation order
-    toposorted: Vec<NodeId>,
-    graph: ModelGraph,
+    //toposorted: Vec<NodeId>,
+    //graph: ModelGraph,
 }
 
 impl Model {
@@ -89,9 +90,9 @@ impl Model {
 // constructs a model from a UI definition, validates
 pub struct ModelBuilder {
     // model input values
-    input: HashMap<String, CalcNode>,
+    //input: HashMap<String, CalcNode>,
     // local variables/consts for ui expressions
-    locals: HashMap<String, CalcNode>,
+    //locals: HashMap<String, CalcNode>,
 }
 
 // TODO validate node tree, e.g. cannot insert Float32Literal node into FnCall
