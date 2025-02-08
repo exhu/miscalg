@@ -34,11 +34,16 @@ impl Context {
         }
     }
 
+    // TODO invalidate several input nodes, then merge the arrays of affected
+    // and topologically resort using index_to_order, use invalidate_node as
+    // example.
+
     /// construct a list of affected nodes preserving topological sorting.
     pub fn invalidate_node(&self, node: NodeId) -> Vec<NodeId> {
         // find node by name
         //self.graph.neighbors(node)
 
+        // TODO move to a method
         let index_to_order = self
             .toposorted
             .iter()

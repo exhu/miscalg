@@ -97,3 +97,18 @@ pub struct ModelBuilder {
 
 // TODO validate node tree, e.g. cannot insert Float32Literal node into FnCall
 // that accepts strings
+//
+
+pub fn ret_err(a: i32) -> Result<i32, ()> {
+    if a != 0 {
+        Ok(a * 3)
+    } else {
+        Err(())
+    }
+}
+
+pub fn ignore_err(a: i32) {
+    if let Ok(i) = ret_err(a) {
+        println!("{}", i)
+    }
+}
