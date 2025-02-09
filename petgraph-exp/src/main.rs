@@ -8,9 +8,9 @@ type NodeId = <MyGraph as GraphBase>::NodeId;
 
 #[derive(Debug)]
 struct Context {
-    graph: MyGraph,
-    toposorted: Vec<NodeId>,
-    node_to_data: HashMap<NodeId, String>,
+    pub graph: MyGraph,
+    pub node_to_data: HashMap<NodeId, String>,
+    index_to_order: HashMap<NodeId, usize>,
 }
 
 impl Context {
@@ -28,10 +28,17 @@ impl Context {
                 Vec::new()
             }
         };
+
+        let index_to_order = sorted
+            .iter()
+            .enumerate()
+            .map(|i| (i.1.clone(), i.0))
+            .collect::<HashMap<_, _>>();
+
         Context {
             graph: g,
-            toposorted: sorted,
             node_to_data: h,
+            index_to_order,
         }
     }
 
@@ -47,41 +54,36 @@ impl Context {
             .collect()
     }
 
-    // TODO invalidate several input nodes, then merge the arrays of affected
-    // and topologically resort using index_to_order, use invalidate_node as
-    // example.
+    fn order_from_index(&self, i: NodeId) -> usize {
+        self.index_to_order[&i]
+    }
 
-    /// construct a list of affected nodes preserving topological sorting.
+    pub fn toposorted_inplace(&self, nodes: &mut Vec<NodeId>) {
+        nodes.sort_by(|a, b| {
+            let ia = self.order_from_index(*a);
+            let ib = self.order_from_index(*b);
+
+            ia.cmp(&ib)
+        });
+    }
+
+    /// construct a list of affected nodes, topological sorting not preserved.
     pub fn invalidate_node(&self, node: NodeId) -> Vec<NodeId> {
         // find node by name
         //self.graph.neighbors(node)
 
-        // TODO move to a method
-        let index_to_order = self
-            .toposorted
-            .iter()
-            .enumerate()
-            .map(|i| (i.1, i.0))
-            .collect::<HashMap<_, _>>();
-
         // construct a list of dependent nodes
-        let mut nodes: Vec<NodeId> = Bfs::new(&self.graph, node).iter(&self.graph).collect();
-
-        // sort using index_to_order
-        nodes.sort_by(|a, b| {
-            let ia = index_to_order[a];
-            let ib = index_to_order[b];
-
-            ia.cmp(&ib)
-        });
+        let nodes: Vec<NodeId> = Bfs::new(&self.graph, node).iter(&self.graph).collect();
         nodes
     }
 
     fn make_graph() -> (MyGraph, HashMap<NodeId, String>) {
         let mut g = MyGraph::new();
         let mut h = HashMap::new();
+        // 0
         let a = g.add_node(());
         h.insert(a, "a".to_owned());
+        // 1
         let b = g.add_node(());
         h.insert(b, "b".to_owned());
         let c = g.add_node(());
@@ -99,13 +101,27 @@ impl Context {
     }
 }
 
+// invalidate several input nodes, then merge the arrays of affected
+// and topologically resort, use invalidate_node as
+// example.
 fn main() {
     let c = Context::new();
-    let result = c.invalidate_node(NodeId::from(0));
+    let result1 = c.invalidate_node(NodeId::from(0));
+    //c.toposorted_inplace(&mut result1);
+
+    let result2 = c.invalidate_node(NodeId::from(1));
+    //c.toposorted_inplace(&mut result2);
+
+    let mut result3: Vec<NodeId> = Vec::from(result1.clone());
+    result3.extend_from_slice(&result2);
+    c.toposorted_inplace(&mut result3);
+    result3.dedup();
 
     println!(
-        "Hello, world! {:?}, result = {:?}",
+        "Hello, world! {:?},\n result1 = {:?},\n result2 = {:?},\n result3 = {:?}",
         c,
-        c.indexes_to_data(&result)
+        c.indexes_to_data(&result1),
+        c.indexes_to_data(&result2),
+        c.indexes_to_data(&result3)
     );
 }
