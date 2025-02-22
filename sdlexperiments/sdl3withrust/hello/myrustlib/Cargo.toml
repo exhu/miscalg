@@ -1,0 +1,11 @@
+[package]
+name = "myrustlib"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "myrustlib"
+#crate-type = ["cdylib"]      # Creates dynamic lib
+crate-type = ["staticlib"] # Creates static lib
+
+[dependencies]

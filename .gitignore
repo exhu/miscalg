@@ -5,3 +5,7 @@
 /cache_friendly/jcache1/build/
 /cache_friendly/jcache1/dist/
 /calc-r/target
+sdlexperiments/sdl3withrust/hello/myrustlib/target
+sdlexperiments/sdl3withrust/hello/build
+.cache
+
