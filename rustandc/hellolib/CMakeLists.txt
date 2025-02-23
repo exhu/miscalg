@@ -17,3 +17,6 @@ target_include_directories(hellolib INTERFACE
   $<INSTALL_INTERFACE:include/hellolib>  # <prefix>/include/mylib
 )
 install(TARGETS hellolib)
+
+get_target_property(OUT hellolib LINK_LIBRARIES)
+message(STATUS hellolib dependencies = ${OUT})
