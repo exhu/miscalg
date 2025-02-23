@@ -1,0 +1,3 @@
+Main program is in C, calls rust code as a lib.
+Problems found:
+- cannot use rust tests, because it depends on linkage with the C program.
