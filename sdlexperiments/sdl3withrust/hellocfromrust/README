@@ -1,0 +1,10 @@
+Main program is in rust.
+C part is a lib linked by rust.
+SDL is used via C part.
+
+Pros:
+cargo as the driver, easily launch tests.
+
+Cons:
+Linkage, cmake details from rust.
+
