@@ -8,4 +8,4 @@
 sdlexperiments/sdl3withrust/hello/myrustlib/target
 sdlexperiments/sdl3withrust/hello/build
 .cache
-
+rustandc/**/target
