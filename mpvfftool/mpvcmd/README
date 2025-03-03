@@ -1,0 +1,23 @@
+This should support the features:
+- start mpv in IPC mode
+- handle events: pause, seek, eof
+- open file
+- seek to position
+
+Should use https://crates.io/crates/mpv-ipc crate ?
+
+
+Some mpv examples, console output etc:
+
+mpv --pause --keep-open=yes longvideo.webm  --input-ipc-server=/tmp/mpvsocket
+
+Observer 'pause' property change: https://github.com/mpv-player/mpv/issues/12379
+
+socat - /tmp/mpvsocket 
+{ "command": ["observe_property", 1, "pause"]}      
+{"request_id":0,"error":"success"}
+{"event":"property-change","id":1,"name":"pause","data":true}
+{"event":"property-change","id":1,"name":"pause","data":false}
+{"event":"audio-reconfig"}
+{"event":"video-reconfig"}
+{"event":"end-file","reason":"quit","playlist_entry_id":1}

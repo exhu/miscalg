@@ -1,0 +1,20 @@
+= vidcliptui
+
+== Features
+
+Planned features:
+
+* Run mpv in ipc mode, render timeline in the console, react to file seek, pause, time events
+from user activities in the mpv window.
+
+* Render timeline with user marks.
+
+* Allow to control mpv playback via vim-like keys, set marks, start loops to
+replay those marks.
+
+* Export marks to a file.
+
+* Generate ffmpeg command to cut the video file into clips:
+  * non-destructively
+  * via user settings (guided options to exclude audio, resize etc.)
+
