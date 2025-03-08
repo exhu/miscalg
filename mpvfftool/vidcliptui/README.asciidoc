@@ -18,3 +18,47 @@ replay those marks.
   * non-destructively
   * via user settings (guided options to exclude audio, resize etc.)
 
+== Controls
+
+* ? - help
+* q - exit
+* space - play/pause
+* hl - move timeline by default step (1/fps seconds or custom),
+  picture update is sent once a second, and not updated until mpv responds,
+  or after the key is released.
+* {float}[hl] - jump {float} default steps
+* {float}[jk] - jump {float} seconds
+* {float}[{}] jump by {float} minutes
+* {float}[()] jump by {float} 15 seconds
+* {[h:m:]s}g - jump to time
+* m{a-z} - set a mark at cursor position.
+* '{a-z} - jump to a mark
+* {float}s - set default jump step in seconds
+* ds - set default jump step
+* dl - clear loop (set to loop the whole file)
+* l{a-z}{a-z} - set loop marks
+* ww - write json with marks
+* a{a-z} - annotate mark (for easy reference later) 
+* wl - run default ffmpeg command for the current loop
+
+== Files
+
+Requires at least one argument -- video file. Optionally a json marks file.
+
+At exit asks to save marks to a file, if there are unsaved changes.
+
+Asks to type in marks file name if it was not passed via arguments, asks
+permission to overwrite, or a new file name.
+
+== Display
+
+* file name, json file name (with marks)
+* duration
+* fps
+* default step
+* current position
+* playing state
+* marks with annotations (if doesn't fit the display, then scrolled according to current play
+position.
+* status line (displays "Press ? for help.")
+
