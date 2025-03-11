@@ -1,5 +1,9 @@
 = vidcliptui
 
+TODO
+
+* Consider using clap (or picoargs) and ratatui for tui
+
 == Features
 
 Planned features:
@@ -17,6 +21,10 @@ replay those marks.
 * Generate ffmpeg command to cut the video file into clips:
   * non-destructively
   * via user settings (guided options to exclude audio, resize etc.)
+
+* Crop preview
+
+* Dynamic crop (https://ffmpeg.org/ffmpeg-filters.html#sendcmd_002c-asendcmd)
 
 == Controls
 
