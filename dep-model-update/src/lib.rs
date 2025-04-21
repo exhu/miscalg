@@ -3,6 +3,28 @@
 /// The model has input values, calculation nodes, and events. All calculation
 /// is driven by the input values updates, evaluated following the dependency
 /// graph.
+/// The evaluation graph supports switchable nodes, where node calculation is
+/// not necessary if the parent node decides so, e.g. to implement
+/// conditional variables, e.g. there are two subnodes for sum and
+/// multiplication in {a = when b is true: c+d, else e*f}. The multiplication
+/// evaluation is not necessary if b is false, so {e*f} is marked as inactive
+/// node, while the dependency graph still triggers {e*f} node evaluation,
+/// when either e or f is changed.
+/// Nodes: a, BRANCH, NB, SUM, MUL, b, c, d, e, f in the evaluation:
+/// a = BRANCH@{NB@{when c < 30}: SUM@{c+d}, else MUL@{e*f}}
+/// Dependencies:
+/// BRANCH -> a
+/// NB -> BRANCH
+/// SUM -> BRANCH
+/// MUL -> BRANCH
+/// c -> NB
+/// NB -> SUM
+/// NB -> MUL
+/// c -> SUM
+/// d -> SUM
+/// e -> MUL
+/// f -> MUL
+///
 //use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
 //use petgraph::visit::{Bfs, GraphBase, Walker};
