@@ -11,7 +11,7 @@
 /// node, while the dependency graph still triggers {e*f} node evaluation,
 /// when either e or f is changed.
 /// Nodes: a, BRANCH, NB, SUM, MUL, b, c, d, e, f in the evaluation:
-/// a = BRANCH@{NB@{when c < 30}: SUM@{c+d}, else MUL@{e*f}}
+/// a = BRANCH@{when NB@{c < 30}: SUM@{c+d}, else MUL@{e*f}}
 /// Dependencies:
 /// BRANCH -> a
 /// NB -> BRANCH
@@ -24,6 +24,14 @@
 /// d -> SUM
 /// e -> MUL
 /// f -> MUL
+///
+/// Types of nodes: immediate value,
+/// reference to value (node_id),
+/// unary operation (operation, node_id),
+/// binary operation (operation, node_id, node_id),
+/// branch(bool expression node_id, conditional node_id for true, conditional node_id for false),
+/// conditional node(node id of conditional expr, node_id for expression).
+///
 ///
 //use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
