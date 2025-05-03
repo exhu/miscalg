@@ -39,12 +39,51 @@
 ///     - repeat until there are no free items, or the end of list is reached.
 /// The queue is either empty or has items that can be executed in parallel.
 ///
+///
+/// Simplification of the graph (data conversion and calculations are
+/// implementation details for the user of the framework):
+///     - input node (no dependencies, those nodes are the only ones that trigger
+///     evaluation of the graph)
+///     - user node (function, dependencies = array of node_id)
+///     - boolean node (function -> bool, dependencies = array of node_id)
+///     - branch node (boolean node_id, branch a node_id, branch b node_id)
+///
+///
 //use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
 //use petgraph::visit::{Bfs, GraphBase, Walker};
 use petgraph::visit::GraphBase;
 use std::collections::HashMap;
 
+/// Dependencies are modelled by petgraph, so no fields in data
+pub struct UserNode {
+    pub evaluate: Box<dyn Fn()>,
+}
+
+pub struct BoolNode {
+    pub evaluate: Box<dyn Fn() -> bool>,
+}
+
+pub struct BranchNode {
+    pub bool_node_id: u32,
+    pub true_branch_node_id: u32,
+    pub false_branch_node_id: u32,
+}
+
+pub enum EvalNode {
+    Input,
+    User(UserNode),
+    Bool(BoolNode),
+    Branch(BranchNode),
+}
+
+// TODO finish simplified framework
+//
+
+// Below is a more complicated user model which should be implemented over
+// the simplified framework above and does not refer to graph implementation.
+
+// TODO delete
 pub enum ExprType {
     Error(String),
     Bool,
@@ -57,25 +96,31 @@ pub enum ExprType {
     Map,
 }
 
+// TODO delete
 pub type NodeList = Vec<CalcNode>;
 
+// TODO delete
 pub struct ArrayNode {
     pub contents: NodeList,
 }
 
+// TODO delete
 pub struct MapNode {
     pub contents: HashMap<String, CalcNode>,
 }
 
+// TODO delete
 pub struct FnCallNode {
     pub name: String,
     pub args: NodeList,
 }
 
+// TODO delete
 pub struct RefNode {
     pub name: String,
 }
 
+// TODO delete
 pub enum CalcNode {
     BoolLiteral(bool),
     I32Literal(i32),
@@ -98,9 +143,11 @@ impl CalcNode {
     }
 }
 
+// TODO map to new types
 type ModelGraph = DiGraph<CalcNode, ()>;
 type NodeId = <ModelGraph as GraphBase>::NodeId;
 
+// TODO delete
 // Model must be valid, constructed with ModelBuilder, otherwise would panic.
 pub struct Model {
     // model input values
@@ -123,6 +170,7 @@ impl Model {
     }
 }
 
+// TODO delete
 // constructs a model from a UI definition, validates
 pub struct ModelBuilder {
     // model input values
