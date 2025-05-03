@@ -32,6 +32,12 @@
 /// branch(bool expression node_id, conditional node_id for true, conditional node_id for false),
 /// conditional node(node id of conditional expr, node_id for expression).
 ///
+/// So there's a tsort list.
+/// And an execution queue, which can be processed by multiple threads.
+/// The queue population step:
+///     - take the next item from the list if its dependencies already calculated.
+///     - repeat until there are no free items, or the end of list is reached.
+/// The queue is either empty or has items that can be executed in parallel.
 ///
 //use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
