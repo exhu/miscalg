@@ -117,7 +117,7 @@ int main(string[] args)
     if (pathA.exists() && pathA.isDir() && pathBok)
     {
         const listA = gatherFiles(pathA);
-        const listB = pathB ? gatherFiles(pathB) : new PathsMap;
+        const PathsMap listB = pathB ? gatherFiles(pathB) : null;
         const dups = processDups(listA, listB);
         printDups(dups);
         return 0;
