@@ -64,6 +64,15 @@
 /// conditional_call node_id B if false;
 /// both A and B must return the same value_type which becomes the value_type of the branch node.
 
+/// Phases:
+/// - prepare:
+/// -- build node graph
+/// -- topological sort
+/// -- report and exclude cycle nodes
+/// - update:
+/// -- update immediate/input values
+/// -- run evaluation, read/store calculated values
+
 //use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
 //use petgraph::visit::{Bfs, GraphBase, Walker};
@@ -84,6 +93,12 @@ pub struct ImmediateNode {
 
 pub type CallBody = Box<dyn Fn(&[NodeId]) -> ValueType>;
 
+/// default function body to return the first argument as is,
+/// used to implement nested branches via ConditionalCallNode + BranchNode argument
+pub fn pass_argument(_args: &[NodeId]) -> ValueType {
+    todo!("return already evaluated value for args[0] from cache")
+}
+
 pub struct CallNode {
     pub value: ValueType,
     pub arguments: Vec<NodeId>,
@@ -100,8 +115,10 @@ pub struct ConditionalCallNode {
 
 pub struct BranchNode {
     pub expression: NodeId,
-    pub conditional_if_true: NodeId,
-    pub conditional_if_false: NodeId,
+    /// ImmediateNode or ConditionalCallNode
+    /// nested branches are implemented via ConditionalCallNode and pass_argument() as the body.
+    pub if_true: NodeId,
+    pub if_false: NodeId,
 }
 
 pub enum NodeVariant {
