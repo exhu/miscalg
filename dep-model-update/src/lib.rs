@@ -70,27 +70,51 @@ use petgraph::graph::DiGraph;
 use petgraph::visit::GraphBase;
 use std::collections::HashMap;
 
-/// Dependencies are modelled by petgraph, so no fields in data
-pub struct UserNode {
-    pub evaluate: Box<dyn Fn()>,
+// TODO map to new types
+type ModelGraph = DiGraph<CalcNode, ()>;
+type NodeId = <ModelGraph as GraphBase>::NodeId;
+pub enum ValueType {
+    Bool(bool),
+    User,
 }
 
-pub struct BoolNode {
-    pub evaluate: Box<dyn Fn() -> bool>,
+pub struct ImmediateNode {
+    pub value: ValueType,
+}
+
+pub type CallBody = Box<dyn Fn(&[NodeId]) -> ValueType>;
+
+pub struct CallNode {
+    pub value: ValueType,
+    pub arguments: Vec<NodeId>,
+    pub body: CallBody,
+}
+
+/// function is called if expression equals expected_value
+pub struct ConditionalCallNode {
+    pub expression: NodeId,
+    pub expected_value: bool,
+    pub arguments: Vec<NodeId>,
+    pub body: CallBody,
 }
 
 pub struct BranchNode {
-    pub bool_node_id: u32,
-    pub true_branch_node_id: u32,
-    pub false_branch_node_id: u32,
+    pub expression: NodeId,
+    pub conditional_if_true: NodeId,
+    pub conditional_if_false: NodeId,
 }
 
-pub enum EvalNode {
-    Input,
-    User(UserNode),
-    Bool(BoolNode),
+pub enum NodeVariant {
+    Immediate(ImmediateNode),
+    Call(CallNode),
+    ConditionalCall(ConditionalCallNode),
     Branch(BranchNode),
 }
+
+/// TODO write tests with conditionals etc.
+
+/// rework below:
+
 
 // TODO finish simplified framework
 //
@@ -158,9 +182,6 @@ impl CalcNode {
     }
 }
 
-// TODO map to new types
-type ModelGraph = DiGraph<CalcNode, ()>;
-type NodeId = <ModelGraph as GraphBase>::NodeId;
 
 // TODO delete
 // Model must be valid, constructed with ModelBuilder, otherwise would panic.
