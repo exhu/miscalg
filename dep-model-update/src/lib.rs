@@ -39,6 +39,9 @@
 ///     - repeat until there are no free items, or the end of list is reached.
 /// The queue is either empty or has items that can be executed in parallel.
 ///
+/// Because previous (leaf) nodes can take longer to evaluate, we cannot
+/// assume that those are resolved when taking next nodes further to the root.
+///
 ///
 /// Simplification of the graph (data conversion and calculations are
 /// implementation details for the user of the framework):
@@ -49,6 +52,18 @@
 ///     - branch node (boolean node_id, branch a node_id, branch b node_id)
 ///
 ///
+/// Simplification:
+/// value_type = boolean or user
+/// node variants:
+/// immediate value of value_type (e.g. a constant or a varying input value, no dependencies), 
+/// function_call (any expression is a function, return value is of value_type, arguments are
+/// node_ids which declare the dependencies),
+/// conditional_expression = immediate or function_call returning a boolean value
+/// conditional_call (node_id of conditional_expression, condition (true or false), arguments, return value_type)
+/// branch (node_id of conditional_expression, conditional_call node_id A if conditional_expression is true,
+/// conditional_call node_id B if false;
+/// both A and B must return the same value_type which becomes the value_type of the branch node.
+
 //use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
 //use petgraph::visit::{Bfs, GraphBase, Walker};
