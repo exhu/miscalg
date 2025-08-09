@@ -80,7 +80,7 @@ use petgraph::visit::GraphBase;
 use std::collections::HashMap;
 
 // TODO map to new types
-type ModelGraph = DiGraph<CalcNode, ()>;
+type ModelGraph = DiGraph<NodeVariant, ()>;
 type NodeId = <ModelGraph as GraphBase>::NodeId;
 pub enum ValueType {
     Bool(bool),
