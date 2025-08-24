@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/dchello
+dchello.so
+dchello.dylib
+dchello.dll
+dchello.a
+dchello.lib
+dchello-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
