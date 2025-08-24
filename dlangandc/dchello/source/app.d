@@ -1,8 +1,8 @@
 import std.stdio;
+import mymsg;
 
-extern(C) void myhello(const char *msg);
 void main()
 {
 	writeln("Edit source/app.d to start your project.");
-	myhello("hello from D!");
+	printmessage("hello from D!");
 }
