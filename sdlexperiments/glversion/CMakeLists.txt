@@ -26,6 +26,6 @@ project(
 add_subdirectory(../vendored/SDL3-3.2.20/ sdl3)
 
 add_executable(glversion main.c glad/src/glad.c)
-target_include_directories(glversion PRIVATE glad/include SDL3::SDL3)
+target_include_directories(glversion PRIVATE glad/include )
 #find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared PATHS ../vendored/sdlbuild/)
 target_link_libraries(glversion PRIVATE SDL3::SDL3)
