@@ -1,6 +1,4 @@
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_init.h>
-#include <SDL3/SDL_video.h>
+#include "sdlffclib.h"
 #include <stdio.h>
 
 #define PROJECT_NAME "sdlffc"
@@ -11,15 +9,9 @@ int main(int argc, char **argv) {
     return 1;
   }
   printf("This is project %s.\n", PROJECT_NAME);
-
-  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-  SDL_CreateWindow("hello sdl!", 1280, 720, SDL_WINDOW_OPENGL);
-  SDL_Event event;
-  while (SDL_WaitEvent(&event)) {
-    if (event.type == SDL_EVENT_QUIT)
-      break;
+  if (sdlffclib_init()) {
+    sdlffclib_main_loop();
   }
 
-  SDL_Quit();
   return 0;
 }

@@ -5,7 +5,7 @@ project('sdlffc', 'c',
 
 sdl_dep = dependency('sdl3')
 
-src = ['sdlffc.c']
+src = ['sdlffc.c', 'sdlffclib.c']
 
 exe = executable('sdlffc', src, 
   install : true, dependencies: sdl_dep)
