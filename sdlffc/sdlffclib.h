@@ -1,5 +1,9 @@
 #pragma once
 #include <stdbool.h>
 
-bool sdlffclib_init();
-void sdlffclib_main_loop();
+struct _SdlffContext;
+typedef struct _SdlffContext SdlffContext;
+
+bool sdlffclib_init(SdlffContext **out_context);
+void sdlffclib_done(SdlffContext **out_context);
+void sdlffclib_main_loop(SdlffContext *context);

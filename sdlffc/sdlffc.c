@@ -9,9 +9,11 @@ int main(int argc, char **argv) {
     return 1;
   }
   printf("This is project %s.\n", PROJECT_NAME);
-  if (sdlffclib_init()) {
-    sdlffclib_main_loop();
+  SdlffContext* context = NULL;
+  if (sdlffclib_init(&context)) {
+    sdlffclib_main_loop(context);
   }
+  sdlffclib_done(&context);
 
   return 0;
 }
