@@ -4,7 +4,7 @@
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
 
-#include <malloc.h>
+#include <memory.h>
 
 typedef struct _SdlffContext {
   SDL_Window *window;
@@ -12,10 +12,11 @@ typedef struct _SdlffContext {
 } SdlffContext;
 
 bool sdlffclib_init(SdlffContext **out_context) {
+  static SdlffContext global_context = { .window = NULL, .renderer = NULL, };
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
     return false;
 
-  SdlffContext *context = malloc(sizeof(SdlffContext));
+  SdlffContext *context = &global_context;
   *out_context = context;
 
   return SDL_CreateWindowAndRenderer("hello sdl!", 1280, 720, 0,
@@ -25,7 +26,7 @@ bool sdlffclib_init(SdlffContext **out_context) {
 void sdlffclib_done(SdlffContext **out_context) {
   SDL_DestroyRenderer((*out_context)->renderer);
   SDL_DestroyWindow((*out_context)->window);
-  free(*out_context);
+  memset(*out_context, 0, sizeof(SdlffContext));
   *out_context = NULL;
   SDL_Quit();
 }
