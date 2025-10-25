@@ -1,0 +1,7 @@
+* ffmpeg+sdl3 video clipping utility
+possibly use dearimgui for ui.
+
+* debian packages
+** libsdl3-dev
+** libimgui-dev
+** libstb-dev

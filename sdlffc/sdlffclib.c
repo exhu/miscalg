@@ -1,8 +1,5 @@
 #include "sdlffclib.h"
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_init.h>
-#include <SDL3/SDL_render.h>
-#include <SDL3/SDL_video.h>
+#include <SDL3/SDL.h>
 
 #include <memory.h>
 
@@ -13,14 +10,20 @@ typedef struct _SdlffContext {
 
 bool sdlffclib_init(SdlffContext **out_context) {
   static SdlffContext global_context = { .window = NULL, .renderer = NULL, };
-  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
+  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to init: %s", SDL_GetError());
     return false;
+  }
 
   SdlffContext *context = &global_context;
   *out_context = context;
 
-  return SDL_CreateWindowAndRenderer("hello sdl!", 1280, 720, 0,
-                                     &context->window, &context->renderer);
+  if (!SDL_CreateWindowAndRenderer("hello sdl!", 1280, 720, 0,
+                                     &context->window, &context->renderer)) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create window and renderer: %s", SDL_GetError());
+    return false;
+  }
+  return true;
 }
 
 void sdlffclib_done(SdlffContext **out_context) {
