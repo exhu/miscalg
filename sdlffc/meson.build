@@ -1,10 +1,10 @@
 # apt install libsdl3-dev
 project('sdlffc', 'c',
   version : '0.1',
-  default_options : ['warning_level=3', 'c_std=c99'],
+  default_options : ['warning_level=everything', 'c_std=c99'],
   meson_version: '>=1.7.0')
 
-add_project_arguments('-fanalyzer', language: 'c')
+#add_project_arguments('-fanalyzer', language: 'c')
 
 sdl_dep = dependency('sdl3')
 

@@ -45,7 +45,6 @@ bool sdlffclib_init(SdlffContext **out_context) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture: %s",
                  SDL_GetError());
   }
-
   // TODO https://github.com/libsdl-org/SDL/blob/main/test/testffmpeg.c
   return true;
 }
