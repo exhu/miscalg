@@ -4,6 +4,8 @@ project('sdlffc', 'c',
   default_options : ['warning_level=3', 'c_std=c99'],
   meson_version: '>=1.7.0')
 
+add_project_arguments('-fanalyzer', language: 'c')
+
 sdl_dep = dependency('sdl3')
 
 src = ['sdlffc.c', 'sdlffclib.c']
