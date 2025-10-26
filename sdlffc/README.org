@@ -1,0 +1,7 @@
+* sdl3 + ffmpeg video playback prototype
+
+* TODO load video, dump stream info
+* TODO playback video at correct rate
+* TODO rewind, fast forward
+* TODO play audio
+* TODO consider gui https://github.com/Immediate-Mode-UI/Nuklear/blob/master/demo/sdl_renderer/nuklear_sdl_renderer.h
