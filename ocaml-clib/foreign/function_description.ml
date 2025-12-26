@@ -9,10 +9,11 @@ module Functions (F : Ctypes.FOREIGN) = struct
   open F
 
   let myclib_init = foreign "myclib_init" (string @-> returning Types.myclib_ctx_t)
- (* let foo_init = foreign "foo_init" (void @-> returning int)
-
-  let foo_fnubar = foreign "foo_fnubar" (string_opt @-> returning int)
-
-  let foo_exit = foreign "foo_exit" (void @-> returning void)
+  let myclib_done = foreign "myclib_done" (Types.myclib_ctx_t @-> returning void)
+  let myclib_get_name = foreign "myclib_get_name" (Types.myclib_ctx_t @-> returning string)
+ (* 
+/// do not free returned pointer!
+const char* myclib_get_name(myclib_ctx_t *ctx);
+void myclib_done(myclib_ctx_t *ctx);
  *)
 end
