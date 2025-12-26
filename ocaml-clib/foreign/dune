@@ -17,9 +17,10 @@
   (name myclibbind)
    (libraries ctypes)
 (ctypes
-  (external_library_name libmyclib)
+  (deps libmyclib.so)
+ (external_library_name libmyclib)
  (build_flags_resolver (vendored (c_flags -Iclib)
-                        (c_library_flags -Lforeign -lmyclib))) 
+                        (c_library_flags -Lforeign -lmyclib -Wl,-rpath='$ORIGIN'))) 
   
  (headers (include "myclib/myclib.h"))
  (type_description
@@ -31,5 +32,3 @@
   (functor Function_description))
   (generated_types Types_generated)
    (generated_entry_point C)))
-
-
