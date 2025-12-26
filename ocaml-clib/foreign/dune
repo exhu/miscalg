@@ -1,0 +1,35 @@
+(data_only_dirs clib)
+; build original c-only lib
+(rule
+ (deps (source_tree clib))
+ (targets libmyclib.so)
+ (action
+ (no-infer
+  (progn
+   (chdir clib (run meson setup _build))
+   (chdir clib (run meson compile -C _build))
+   (copy clib/_build/libmyclib.so libmyclib.so)))))
+; build stubs/bindings
+;(library
+; (name myclibbind)
+; (foreign_stubs (language c) (names stubs) (flags -lmyclib)))
+(library
+  (name myclibbind)
+   (libraries ctypes)
+(ctypes
+  (external_library_name libmyclib)
+ (build_flags_resolver (vendored (c_flags -Iclib)
+                        (c_library_flags -Lforeign -lmyclib))) 
+  
+ (headers (include "myclib/myclib.h"))
+ (type_description
+  (instance Types)
+  (functor Type_description))
+ (function_description
+  (concurrency unlocked)
+  (instance Functions)
+  (functor Function_description))
+  (generated_types Types_generated)
+   (generated_entry_point C)))
+
+

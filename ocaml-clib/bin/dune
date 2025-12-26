@@ -1,4 +1,4 @@
 (executable
  (public_name ocaml-clib)
  (name main)
- (libraries ocaml_clib))
+ (libraries ocaml_clib myclibbind))

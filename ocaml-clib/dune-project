@@ -1,5 +1,5 @@
 (lang dune 3.20)
-
+(using ctypes 0.3)
 (name ocaml-clib)
 
 (generate_opam_files true)
