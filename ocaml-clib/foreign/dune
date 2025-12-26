@@ -8,7 +8,13 @@
   (progn
    (chdir clib (run meson setup _build))
    (chdir clib (run meson compile -C _build))
-   (copy clib/_build/libmyclib.so libmyclib.so)))))
+   (copy clib/_build/libmyclib.so libmyclib.so)
+))))
+
+(install
+  (files libmyclib.so)
+   (section bin)
+  )
 ; build stubs/bindings
 ;(library
 ; (name myclibbind)
@@ -21,7 +27,6 @@
  (external_library_name libmyclib)
  (build_flags_resolver (vendored (c_flags -Iclib)
                         (c_library_flags -Lforeign -lmyclib -Wl,-rpath='$ORIGIN'))) 
-  
  (headers (include "myclib/myclib.h"))
  (type_description
   (instance Types)
