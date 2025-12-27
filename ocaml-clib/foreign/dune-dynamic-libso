@@ -2,25 +2,31 @@
 ; build original c-only lib
 (rule
  (deps (source_tree clib))
- (targets libmyclib.a)
+ (targets libmyclib.so)
  (action
  (no-infer
   (progn
-   (chdir clib (run meson setup -Dprefix=/ -Dlibdir=/lib -Ddefault_library=static _build))
+   (chdir clib (run meson setup _build))
    (chdir clib (run meson compile -C _build))
-   (chdir clib (run meson install -C _build --destdir=_installed))
-   (copy clib/_build/_installed/lib/libmyclib.a libmyclib.a)
+   (copy clib/_build/libmyclib.so libmyclib.so)
 ))))
 
+(install
+  (files libmyclib.so)
+   (section bin)
+  )
 ; build stubs/bindings
+;(library
+; (name myclibbind)
+; (foreign_stubs (language c) (names stubs) (flags -lmyclib)))
 (library
   (name myclibbind)
    (libraries ctypes)
 (ctypes
-  (deps libmyclib.a)
+  (deps libmyclib.so)
  (external_library_name libmyclib)
  (build_flags_resolver (vendored (c_flags -Iclib)
-                        (c_library_flags -Lforeign -lmyclib))) 
+                        (c_library_flags -Lforeign -lmyclib -Wl,-rpath='$ORIGIN'))) 
  (headers (include "myclib/myclib.h"))
  (type_description
   (instance Types)

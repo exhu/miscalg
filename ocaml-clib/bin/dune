@@ -1,6 +1,11 @@
+; Does not solve the problem of .so not found:
+;(env
+; (dev (env-vars (LD_LIBRARY_PATH "./_build/default/foreign/"))))
+
 (executable
  (public_name ocaml-clib)
  (name main)
   ; seems to be a bug in dune, which appends '$ORIGIN' instead of $ORIGIN via ctypes section.
-(link_flags -cclib -Wl,-rpath=$ORIGIN)
+;(link_flags -cclib -Wl,-rpath=$ORIGIN)
  (libraries ocaml_clib myclibbind))
+
