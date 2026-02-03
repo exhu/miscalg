@@ -4,7 +4,10 @@ type program_settings_t = {
   input_files : string list ref;
 }
 
-let process _list1 _list2 _ignore_contents = ()
+let process list1 list2 _ignore_contents =
+  print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list1);
+  print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list2)
+(* TODO process lists *)
 
 let usage_msg =
   "find_dup_lists_ocaml [options] file1 file2\n\
@@ -39,18 +42,16 @@ let parse_args : program_settings_t =
 
 let read_lines fname =
   print_endline fname;
-  []
+  In_channel.with_open_text fname (fun c -> In_channel.input_lines c)
 
 let fnames_of_list = function
-  | [ first; second ] -> (first, second)
+  | [ second; first ] -> (first, second)
   | _ -> ("", "")
 
 let () =
   let psettings = parse_args in
   let input_files = !(psettings.input_files) in
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list input_files);
-  print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list [ "1"; "2" ]);
   let first, second = fnames_of_list input_files in
   print_endline (first ^ second);
   process (read_lines first) (read_lines second) !(psettings.ignore_contents)
-(* TODO figure out proper order of the arguments, i.e. the argument list is reversed *)
