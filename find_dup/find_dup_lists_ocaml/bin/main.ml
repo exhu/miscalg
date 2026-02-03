@@ -4,6 +4,8 @@ type program_settings_t = {
   input_files : string list ref;
 }
 
+let process _list1 _list2 _ignore_contents = ()
+
 let usage_msg =
   "find_dup_lists_ocaml [options] file1 file2\n\
    Where files contain absolute file names separated by new line.\n\
@@ -23,7 +25,7 @@ let spec_list (ignore_contents : bool ref) =
 let anon_fun (input_files : string list ref) filename =
   input_files := filename :: !input_files
 
-let parse_args =
+let parse_args : program_settings_t =
   let psettings = { ignore_contents = ref false; input_files = ref [] } in
   Arg.parse
     (spec_list psettings.ignore_contents)
@@ -35,7 +37,20 @@ let parse_args =
   end;
   psettings
 
+let read_lines fname =
+  print_endline fname;
+  []
+
+let fnames_of_list = function
+  | [ first; second ] -> (first, second)
+  | _ -> ("", "")
+
 let () =
   let psettings = parse_args in
-  print_endline
-    (Find_dup_lists_ocaml.Lib.string_of_string_list !(psettings.input_files))
+  let input_files = !(psettings.input_files) in
+  print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list input_files);
+  print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list [ "1"; "2" ]);
+  let first, second = fnames_of_list input_files in
+  print_endline (first ^ second);
+  process (read_lines first) (read_lines second) !(psettings.ignore_contents)
+(* TODO figure out proper order of the arguments, i.e. the argument list is reversed *)
