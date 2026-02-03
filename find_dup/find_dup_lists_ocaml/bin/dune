@@ -1,0 +1,4 @@
+(executable
+ (public_name find_dup_lists_ocaml)
+ (name main)
+ (libraries find_dup_lists_ocaml))

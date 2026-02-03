@@ -1,0 +1,4 @@
+(library
+ (name find_dup_lists_ocaml)
+ (preprocess
+  (pps ppx_deriving.show)))
