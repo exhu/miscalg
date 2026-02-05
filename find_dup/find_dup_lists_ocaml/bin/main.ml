@@ -4,6 +4,7 @@ type program_settings_t = {
   input_files : string list ref;
 }
 
+(* TODO unicode casefold *)
 let is_same_name a b = Filename.basename a = Filename.basename b
 
 module PathToGroup = Hashtbl.Make (String)
@@ -62,10 +63,10 @@ let process list1 list2 ignore_contents =
   PathToGroup.iter (fun k v -> append_kv v k) group.path_to_group;
 
   print_endline "matches:";
-  (* TODO dump list paths per v *)
   IntHashMap.iter
     (fun k v ->
-      print_endline (string_of_int k ^ "=" ^ Filename.basename (List.hd v)))
+      print_endline (string_of_int k ^ "=" ^ Filename.basename (List.hd v));
+      List.iter (fun i -> print_endline i) v)
     groups
 
 let usage_msg =
