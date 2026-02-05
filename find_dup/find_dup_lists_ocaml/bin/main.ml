@@ -4,10 +4,41 @@ type program_settings_t = {
   input_files : string list ref;
 }
 
-let process list1 list2 _ignore_contents =
+let is_same_name a b = String.equal (Filename.basename a) (Filename.basename b)
+
+module PathToGroup = Hashtbl.Make (String)
+
+type path_group = { number : int ref; path_to_group : int PathToGroup.t }
+
+let update_group g path_a path_b =
+  let get_group_for_path = PathToGroup.find g.path_to_group in
+  let update_path = PathToGroup.replace g.path_to_group in
+  let path_in_group = PathToGroup.mem g.path_to_group in
+  if not (path_in_group path_a) then begin
+    if not (path_in_group path_b) then begin
+      update_path path_a !(g.number);
+      update_path path_b !(g.number);
+      incr g.number
+    end
+    else update_path path_a (get_group_for_path path_b)
+  end
+  else begin
+    if not (path_in_group path_b) then
+      update_path path_b (get_group_for_path path_a)
+  end
+
+let same_file_contents _path_a _path_b = false
+
+let process list1 list2 ignore_contents =
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list1);
-  print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list2)
-(* TODO process lists *)
+  print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list2);
+  let group = {number = ref 0; path_to_group = PathToGroup.create (List.length list1)} in
+  let update_fn path_a path_b = if (is_same_name path_a path_b) && (ignore_contents || (same_file_contents path_a path_b)) then (update_group group path_a path_b) in
+  let path_b_filtered path_a = (List.filter (fun path_b -> not (String.equal path_a path_b)) list2) in  
+  let filtered_iter path_a = List.iter (update_fn path_a) (path_b_filtered path_a) in
+  List.iter filtered_iter list1;
+  print_endline "matches:";
+  PathToGroup.iter (fun k v -> print_endline (k ^ "=" ^ (string_of_int v))) group.path_to_group
 
 let usage_msg =
   "find_dup_lists_ocaml [options] file1 file2\n\
@@ -53,5 +84,4 @@ let () =
   let input_files = !(psettings.input_files) in
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list input_files);
   let first, second = fnames_of_list input_files in
-  print_endline (first ^ second);
   process (read_lines first) (read_lines second) !(psettings.ignore_contents)
