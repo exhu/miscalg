@@ -1,3 +1,8 @@
+(env
+ (release
+  (ocamlopt_flags
+   (:standard -compact))))
+
 (library
  (name find_dup_lists_ocaml)
  (preprocess

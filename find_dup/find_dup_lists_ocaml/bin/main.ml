@@ -4,9 +4,10 @@ type program_settings_t = {
   input_files : string list ref;
 }
 
-let is_same_name a b = String.equal (Filename.basename a) (Filename.basename b)
+let is_same_name a b = Filename.basename a = Filename.basename b
 
 module PathToGroup = Hashtbl.Make (String)
+module IntHashMap = Hashtbl.Make (Int)
 
 type path_group = { number : int ref; path_to_group : int PathToGroup.t }
 
@@ -34,7 +35,10 @@ let process list1 list2 ignore_contents =
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list1);
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list2);
   let group =
-    { number = ref 0; path_to_group = PathToGroup.create (List.length list1) }
+    {
+      number = ref 0;
+      path_to_group = PathToGroup.create (List.length list1 + List.length list2);
+    }
   in
   let update_fn path_a path_b =
     if
@@ -43,17 +47,26 @@ let process list1 list2 ignore_contents =
     then update_group group path_a path_b
   in
   let path_b_filtered path_a =
-    List.filter (fun path_b -> not (String.equal path_a path_b)) list2
+    List.filter (fun path_b -> not (path_a = path_b)) list2
   in
   let filtered_iter path_a =
     List.iter (update_fn path_a) (path_b_filtered path_a)
   in
   List.iter filtered_iter list1;
-  (* TODO by groups *)
+  let groups = IntHashMap.create !(group.number) in
+  let append_kv k v =
+    match IntHashMap.find_opt groups k with
+    | None -> IntHashMap.replace groups k [ v ]
+    | Some x -> IntHashMap.replace groups k (v :: x)
+  in
+  PathToGroup.iter (fun k v -> append_kv v k) group.path_to_group;
+
   print_endline "matches:";
-  PathToGroup.iter
-    (fun k v -> print_endline (k ^ "=" ^ string_of_int v))
-    group.path_to_group
+  (* TODO dump list paths per v *)
+  IntHashMap.iter
+    (fun k v ->
+      print_endline (string_of_int k ^ "=" ^ Filename.basename (List.hd v)))
+    groups
 
 let usage_msg =
   "find_dup_lists_ocaml [options] file1 file2\n\
