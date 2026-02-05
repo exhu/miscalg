@@ -27,18 +27,33 @@ let update_group g path_a path_b =
       update_path path_b (get_group_for_path path_a)
   end
 
+(* TODO *)
 let same_file_contents _path_a _path_b = false
 
 let process list1 list2 ignore_contents =
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list1);
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list2);
-  let group = {number = ref 0; path_to_group = PathToGroup.create (List.length list1)} in
-  let update_fn path_a path_b = if (is_same_name path_a path_b) && (ignore_contents || (same_file_contents path_a path_b)) then (update_group group path_a path_b) in
-  let path_b_filtered path_a = (List.filter (fun path_b -> not (String.equal path_a path_b)) list2) in  
-  let filtered_iter path_a = List.iter (update_fn path_a) (path_b_filtered path_a) in
+  let group =
+    { number = ref 0; path_to_group = PathToGroup.create (List.length list1) }
+  in
+  let update_fn path_a path_b =
+    if
+      is_same_name path_a path_b
+      && (ignore_contents || same_file_contents path_a path_b)
+    then update_group group path_a path_b
+  in
+  let path_b_filtered path_a =
+    List.filter (fun path_b -> not (String.equal path_a path_b)) list2
+  in
+  let filtered_iter path_a =
+    List.iter (update_fn path_a) (path_b_filtered path_a)
+  in
   List.iter filtered_iter list1;
+  (* TODO by groups *)
   print_endline "matches:";
-  PathToGroup.iter (fun k v -> print_endline (k ^ "=" ^ (string_of_int v))) group.path_to_group
+  PathToGroup.iter
+    (fun k v -> print_endline (k ^ "=" ^ string_of_int v))
+    group.path_to_group
 
 let usage_msg =
   "find_dup_lists_ocaml [options] file1 file2\n\
