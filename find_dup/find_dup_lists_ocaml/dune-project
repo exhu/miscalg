@@ -19,7 +19,7 @@
  (name find_dup_lists_ocaml)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml ppx_deriving)
+ (depends ocaml ppx_deriving uucp)
  (tags
   ("add topics" "to describe" your project)))
 

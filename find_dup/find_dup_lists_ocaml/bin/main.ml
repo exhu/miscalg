@@ -4,7 +4,30 @@ type program_settings_t = {
   input_files : string list ref;
 }
 
-(* TODO unicode casefold *)
+(** reversed list of uchars *)
+let uchars_of_string s =
+  (* TODO rewrite with tail rec? *)
+  let i = ref 0 in
+  let len = String.length s in
+  let out = ref [] in
+  while !i < len do
+    let decoded = String.get_utf_8_uchar s !i in
+    i := !i + Uchar.utf_decode_length decoded;
+    out := Uchar.utf_decode_uchar decoded :: !out
+  done;
+  !out
+
+(** accepts reversed list of uchars *)
+let casefold_uchars_of_uchars srclist = []
+
+(* TODO unicode casefold https://erratique.ch/software/uucp/doc/Uucp/index.html *)
+(*
+let casefold a = let outbuf = Buffer.create String.length a in
+  String.get_utf_8_uchar
+  Buffer.add_utf_8_uchar outbuf 'aa';
+  Buffer.contents outbuf
+       *)
+
 let is_same_name a b = Filename.basename a = Filename.basename b
 
 module PathToGroup = Hashtbl.Make (String)
