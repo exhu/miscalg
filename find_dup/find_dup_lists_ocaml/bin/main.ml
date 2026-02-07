@@ -69,7 +69,7 @@ let same_file_contents path_a path_b =
           let file_len = In_channel.length ca in
           let file_len_b = In_channel.length cb in
           let should_stop = ref (file_len <> file_len_b) in
-          let cur_pos = ref 0 in
+          let cur_pos = ref 0L in
           while not !should_stop do
             let read_count = In_channel.input ca temp_buf_a 0 chunk_len in
             let read_count2 = In_channel.input cb temp_buf_b 0 chunk_len in
@@ -77,8 +77,8 @@ let same_file_contents path_a path_b =
               read_count <> read_count2 || read_count = 0
               || temp_buf_a <> temp_buf_b
             then should_stop := true
-            else cur_pos := !cur_pos + read_count;
-            if Int64.of_int !cur_pos >= file_len then begin
+            else cur_pos := Int64.add !cur_pos (Int64.of_int read_count);
+            if !cur_pos >= file_len then begin
               should_stop := true;
               success := true
             end
@@ -127,8 +127,8 @@ let usage_msg =
    Where files contain absolute file names separated by new line.\n\
    You can generate those lists with 'fd -t f . /my-dir-to-list/subdir/'\n\n\
    Note: case folding is basic, i.e. no special rules are used for Greek, \
-   Germanetc. where letters not merely change case, but may be replaced with \
-   severalletters."
+   German etc. where letters not merely change case, but may be replaced with \
+   several letters."
 
 let spec_list (ignore_contents : bool ref) =
   [
