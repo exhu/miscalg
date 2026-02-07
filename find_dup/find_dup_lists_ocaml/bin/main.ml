@@ -71,15 +71,13 @@ let same_file_contents path_a path_b =
           let should_stop = ref (file_len <> file_len_b) in
           let cur_pos = ref 0 in
           while not !should_stop do
-            let read_count =
-              In_channel.input ca temp_buf_a 0 chunk_len
-            in
-            let read_count2 =
-              In_channel.input cb temp_buf_b 0 chunk_len
-            in
-            if read_count <> read_count2 || read_count = 0 then
-              should_stop := true;
-            cur_pos := !cur_pos + read_count;
+            let read_count = In_channel.input ca temp_buf_a 0 chunk_len in
+            let read_count2 = In_channel.input cb temp_buf_b 0 chunk_len in
+            if
+              read_count <> read_count2 || read_count = 0
+              || temp_buf_a <> temp_buf_b
+            then should_stop := true
+            else cur_pos := !cur_pos + read_count;
             if Int64.of_int !cur_pos >= file_len then begin
               should_stop := true;
               success := true
