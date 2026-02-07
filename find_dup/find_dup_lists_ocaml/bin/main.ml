@@ -59,8 +59,33 @@ let update_group g path_a path_b =
       update_path path_b (get_group_for_path path_a)
   end
 
-(* TODO *)
-let same_file_contents _path_a _path_b = false
+let same_file_contents path_a path_b =
+  let chunk_len = 4096 in
+  let temp_buf_a = Bytes.create chunk_len in
+  let temp_buf_b = Bytes.create chunk_len in
+  let success = ref false in
+  In_channel.with_open_bin path_a (fun ca ->
+      In_channel.with_open_bin path_b (fun cb ->
+          let file_len = In_channel.length ca in
+          let file_len_b = In_channel.length cb in
+          let should_stop = ref (file_len <> file_len_b) in
+          let cur_pos = ref 0 in
+          while not !should_stop do
+            let read_count =
+              In_channel.input ca temp_buf_a 0 chunk_len
+            in
+            let read_count2 =
+              In_channel.input cb temp_buf_b 0 chunk_len
+            in
+            if read_count <> read_count2 || read_count = 0 then
+              should_stop := true;
+            cur_pos := !cur_pos + read_count;
+            if Int64.of_int !cur_pos >= file_len then begin
+              should_stop := true;
+              success := true
+            end
+          done));
+  !success
 
 let process list1 list2 ignore_contents =
   print_endline (Find_dup_lists_ocaml.Lib.string_of_string_list list1);
