@@ -18,17 +18,24 @@ let uchars_of_string s =
   !out
 
 (** accepts reversed list of uchars *)
-let casefold_uchars_of_uchars srclist = []
+let casefold_uchars_of_uchars srclist =
+  List.map
+    (fun x ->
+      match Uucp.Case.Fold.fold x with `Self -> [ x ] | `Uchars y -> y)
+    srclist
 
-(* TODO unicode casefold https://erratique.ch/software/uucp/doc/Uucp/index.html *)
-(*
-let casefold a = let outbuf = Buffer.create String.length a in
-  String.get_utf_8_uchar
-  Buffer.add_utf_8_uchar outbuf 'aa';
+(* unicode casefold https://erratique.ch/software/uucp/doc/Uucp/index.html *)
+let casefold a =
+  let uchars = uchars_of_string a in
+  let casefold_uchars = casefold_uchars_of_uchars uchars in
+  let outbuf = Buffer.create (String.length a) in
+  List.iter
+    (fun lst -> List.iter (fun x -> Buffer.add_utf_8_uchar outbuf x) lst)
+    casefold_uchars;
   Buffer.contents outbuf
-       *)
 
-let is_same_name a b = Filename.basename a = Filename.basename b
+let is_same_name a b =
+  casefold (Filename.basename a) = casefold (Filename.basename b)
 
 module PathToGroup = Hashtbl.Make (String)
 module IntHashMap = Hashtbl.Make (Int)
