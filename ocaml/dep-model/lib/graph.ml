@@ -33,6 +33,14 @@ let all_dest_from t n =
   |> Seq.filter (fun e -> e.from_cell = n)
   |> Seq.map (fun e -> e.to_cell)
 
+let generate_dot_text name t =
+  let buf = Buffer.create 100 in
+  Printf.bprintf buf "digraph \"%s\" {\n" name;
+  edges t
+  |> Array.iter (fun i -> Printf.bprintf buf "%d -> %d\n" i.from_cell i.to_cell);
+  Printf.bprintf buf "}";
+  Buffer.contents buf
+
 (* https://en.wikipedia.org/wiki/Topological_sorting *)
 (* "...for every directed edge (u,v) from vertex u to vertex v, u comes before
    v in the ordering." *)
@@ -76,18 +84,22 @@ module Sort_depth_first = struct
     let sorted = sort_context.sorted_l in
     sorted := n :: !sorted
 
+  let mark_temp sort_context n =
+    let temp_marked = sort_context.temp_marked in
+    temp_marked := n :: !temp_marked
+
   let rec visit sort_context n =
     if List.mem n !(sort_context.perm_marked) then Continue
     else if List.mem n !(sort_context.temp_marked) then Stop_on_cycle n
     else begin
-      sort_context.temp_marked := n :: !(sort_context.temp_marked);
+      mark_temp sort_context n;
       let nodes_of_n = all_dest_from sort_context.graph n in
       let found_cycle =
-        Seq.find
+        Seq.find_map
           (fun m ->
             match visit sort_context m with
-            | Stop_on_cycle c -> true (* TODO propagate c value as cycle *)
-            | Continue -> false)
+            | Stop_on_cycle c -> Some c
+            | Continue -> None)
           nodes_of_n
       in
       mark_perm sort_context n;
@@ -110,8 +122,8 @@ module Sort_depth_first = struct
     let found_cycle =
       Printf.printf "nodes_count=%d\n" graph.nodes_count;
       Seq.ints 0 |> Seq.take graph.nodes_count
-      |> Seq.find (fun e ->
-          match visit ctx e with Continue -> false | Stop_on_cycle _ -> true)
+      |> Seq.find_map (fun e ->
+          match visit ctx e with Continue -> None | Stop_on_cycle c -> Some c)
     in
     match found_cycle with Some c -> Cycle c | None -> Sorted !(ctx.sorted_l)
 end
