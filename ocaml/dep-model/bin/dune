@@ -1,0 +1,4 @@
+(executable
+ (public_name dep-model)
+ (name main)
+ (libraries dep_model))
