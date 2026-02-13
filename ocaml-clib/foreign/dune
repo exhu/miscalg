@@ -1,33 +1,51 @@
 (data_only_dirs clib)
+
 ; build original c-only lib
+
 (rule
- (deps (source_tree clib))
+ (deps
+  (source_tree clib))
  (targets libmyclib.a)
  (action
- (no-infer
-  (progn
-   (chdir clib (run meson setup -Dprefix=/ -Dlibdir=/lib -Ddefault_library=static _build))
-   (chdir clib (run meson compile -C _build))
-   (chdir clib (run meson install -C _build --destdir=_installed))
-   (copy clib/_build/_installed/lib/libmyclib.a libmyclib.a)
-))))
+  (no-infer
+   (progn
+    (chdir
+     clib
+     (run
+      meson
+      setup
+      -Dprefix=/
+      -Dlibdir=/lib
+      -Ddefault_library=static
+      _build))
+    (chdir
+     clib
+     (run meson compile -C _build))
+    (chdir
+     clib
+     (run meson install -C _build --destdir=_installed))
+    (copy clib/_build/_installed/lib/libmyclib.a libmyclib.a)))))
 
 ; build stubs/bindings
+
 (library
-  (name myclibbind)
-   (libraries ctypes)
-(ctypes
+ (name myclibbind)
+ (libraries ctypes)
+ (ctypes
   (deps libmyclib.a)
- (external_library_name libmyclib)
- (build_flags_resolver (vendored (c_flags -Iclib)
-                        (c_library_flags -Lforeign -lmyclib))) 
- (headers (include "myclib/myclib.h"))
- (type_description
-  (instance Types)
-  (functor Type_description))
- (function_description
-  (concurrency unlocked)
-  (instance Functions)
-  (functor Function_description))
+  (external_library_name libmyclib)
+  (build_flags_resolver
+   (vendored
+    (c_flags -Iclib)
+    (c_library_flags -Lforeign -lmyclib)))
+  (headers
+   (include "myclib/myclib.h"))
+  (type_description
+   (instance Types)
+   (functor Type_description))
+  (function_description
+   (concurrency unlocked)
+   (instance Functions)
+   (functor Function_description))
   (generated_types Types_generated)
-   (generated_entry_point C)))
+  (generated_entry_point C)))

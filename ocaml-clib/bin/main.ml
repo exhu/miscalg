@@ -7,3 +7,8 @@ let name = Myclibbind.C.Functions.myclib_get_name ctx
 let () = Myclibbind.C.Functions.myclib_done ctx
 let () = print_endline name
 let () = print_endline "Hello, World!"
+
+(*module UTF8Casing = Camomile.CaseMap.Make (Camomile.UTF8)
+
+let () = print_endline (UTF8Casing.lowercase "ПРИВ")
+*)
