@@ -5,8 +5,8 @@ type program_settings_t = {
 }
 
 (** reversed list of uchars *)
-let uchars_of_string s =
-  (* TODO rewrite with tail rec? *)
+(*
+let uchars_of_string2 s =
   let i = ref 0 in
   let len = String.length s in
   let out = ref [] in
@@ -16,6 +16,20 @@ let uchars_of_string s =
     out := Uchar.utf_decode_uchar decoded :: !out
   done;
   !out
+   *)
+
+let uchars_of_string s =
+  let len = String.length s in
+  let rec uchar_next lst i =
+    if i >= len then lst
+    else begin
+      let decoded = String.get_utf_8_uchar s i in
+      uchar_next
+        (Uchar.utf_decode_uchar decoded :: lst)
+        (i + Uchar.utf_decode_length decoded)
+    end
+  in
+  uchar_next [] 0
 
 (** accepts reversed list of uchars *)
 let casefold_uchars_of_uchars srclist =
