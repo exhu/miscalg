@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/dep-model
+dep-model.so
+dep-model.dylib
+dep-model.dll
+dep-model.a
+dep-model.lib
+dep-model-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
