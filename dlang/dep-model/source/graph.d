@@ -1,3 +1,10 @@
+// TODO remove unused imports
+// TODO rename to follow D style
+// TODO clean up code
+// TODO try to use functional style -- non-member or static functions instead of methods
+// if only one field is used to simplify unit tests
+// TODO add impl using SumType
+
 import std.algorithm.iteration;
 import std.algorithm.comparison;
 import std.algorithm.searching;
@@ -56,7 +63,7 @@ struct Graph
         {
             writefln("top iter %d", i);
             //auto found_cycle = ctx.visit(i);
-            auto found_cycle = visit(ctx,i);
+            auto found_cycle = visit(ctx, i);
 
             if (found_cycle.selector is SortContext.VisitStatus.Selector.cycleFound)
             {
@@ -135,10 +142,10 @@ private struct SortContext
             selector = Selector.cycleFound;
         }
 
-      bool isCycle()
-      {
-	return selector is Selector.cycleFound;
-      }
+        bool isCycle()
+        {
+            return selector is Selector.cycleFound;
+        }
     }
 
     void mark_perm(CellIndex n)
@@ -190,6 +197,7 @@ private struct SortContext
 
         auto mapped = map!fvisit(nodes_of_n);
         writefln("%d mapped", n);
+        // here there's probably compiler bug, since it fails
         auto foundRange = find!is_cycle(mapped);
         //writefln("range: %s", foundRange);
         mark_perm(n);
@@ -200,6 +208,7 @@ private struct SortContext
             return VisitStatus(VisitStatus.Selector.continueVisiting);
         }
         auto foundCycle = foundRange.front;
+        // compiler bug if find over map range is used
         assert(foundCycle.selector is VisitStatus.Selector.cycleFound);
         writefln("%d ctx return cycle %s", n, foundCycle);
         return foundCycle;
@@ -211,35 +220,35 @@ SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
     writefln("%d visit", n);
     if (find(ctx.perm_marked, n).empty == false)
     {
-	writeln("already perm");
-	return SortContext.VisitStatus();
+        writeln("already perm");
+        return SortContext.VisitStatus();
     }
     else if (find(ctx.temp_marked, n).empty == false)
     {
-	writefln("%d early cycle", n);
-	return SortContext.VisitStatus(n);
+        writefln("%d early cycle", n);
+        return SortContext.VisitStatus(n);
     }
     ctx.mark_temp(n);
-        auto nodes_of_n = ctx.graph.all_dest_from(n);
-        writefln("%d nodes_of_n = %s", n, nodes_of_n);
+    auto nodes_of_n = ctx.graph.all_dest_from(n);
+    writefln("%d nodes_of_n = %s", n, nodes_of_n);
 
-	auto foundCycle = SortContext.VisitStatus();
-	foreach(i;nodes_of_n)
-	  {
-	    foundCycle = visit(ctx, i);
-	    if (foundCycle.isCycle)
-	      break;
-	  }
-        ctx.mark_perm(n);
-        ctx.add_to_sorted(n);
-        if (!foundCycle.isCycle)
-        {
-            writefln("%d ctx continue", n);
-            return SortContext.VisitStatus();
-        }
-        assert(foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound);
-        writefln("%d ctx return cycle %s", n, foundCycle);
-        return foundCycle;
+    auto foundCycle = SortContext.VisitStatus();
+    foreach (i; nodes_of_n)
+    {
+        foundCycle = visit(ctx, i);
+        if (foundCycle.isCycle)
+            break;
+    }
+    ctx.mark_perm(n);
+    ctx.add_to_sorted(n);
+    if (!foundCycle.isCycle)
+    {
+        writefln("%d ctx continue", n);
+        return SortContext.VisitStatus();
+    }
+    assert(foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound);
+    writefln("%d ctx return cycle %s", n, foundCycle);
+    return foundCycle;
 }
 
 unittest
@@ -262,103 +271,6 @@ unittest
     assert(found.front.selector is SortContext.VisitStatus.Selector.cycleFound);
 
 }
-// metaprogramming experiments
-version (none)
-{
-    private string generateMembers(E, Types...)()
-    {
-        string members;
-        assert(Types.length >= 1);
-        static foreach (i, t; Types)
-        {
-            members ~= "private " ~ t.stringof ~ " " ~ __traits(identifier, EnumMembers!E[i]) ~ ";";
-        }
-        return members;
-    }
-
-    private string generateAccessors(E, Types...)()
-    {
-        string members;
-        assert(Types.length >= 1);
-        foreach (i, t; Types)
-        {
-            auto eId = __traits(identifier, EnumMembers!E[i]);
-            auto eName = __traits(identifier, E);
-            auto funcName = "get_" ~ eId;
-            members ~= t.stringof ~ " " ~ funcName ~ "(){" ~ "assert(selector == "
-                ~ eName ~ "." ~ eId ~ ", \"" ~ funcName ~ "\");" ~ "return " ~ eId ~ ";}";
-        }
-        return members;
-    }
-
-    template adtUnion(E, Types...) if (EnumMembers!E.length == Types.length)
-    {
-        enum string adtUnion = "private " ~ E.stringof ~ " selector; union{" ~ generateMembers!(E,
-                    Types)() ~ "}" ~ E.stringof ~ " getTag() { return selector; }" ~ generateAccessors!(E,
-                    Types)();
-    }
-
-    template adtMembers(E, Types...) if (EnumMembers!E.length == Types.length)
-    {
-        enum string adtMembers = E.stringof ~ " selector; " ~ generateMembers!(E, Types)();
-    }
-
-    struct TestAdt
-    {
-        enum Selector
-        {
-            first,
-            second,
-            empty,
-            fourth,
-            fifth,
-        }
-
-        struct First
-        {
-            int a = 1;
-        }
-
-        struct Second
-        {
-            int b = 2;
-        }
-
-        struct Empty
-        {
-        }
-
-        struct Fourth
-        {
-            string s = "fourth";
-        }
-
-        mixin(adtUnion!(Selector, First, Second, Empty, Fourth, Empty));
-        //mixin(adtMembers!(Selector, First, Second, Empty, Fourth, Empty));
-    }
-
-    unittest
-    {
-        import std.conv;
-
-        //writefln("%s", to!string(typeof(l)));
-        auto g = Graph.make_from_edges([Edge(0, 1), Edge(1, 2), Edge(3, 4)]);
-        assert(g.nodesCount == 5);
-
-        TestAdt a, b;
-        assert(a.selector == TestAdt.Selector.first);
-        b = a;
-        assert(a.first.a == 1);
-        a.fourth.s = "hh test";
-        writefln("first = %d, second = %d, third = %s", a.first.a, a.second.b, a.fourth.s);
-        string members = generateMembers!(TestAdt.Selector, TestAdt.First, TestAdt.Second);
-        writefln("%s", members);
-        a.getTag();
-        a.get_first();
-        a.get_second();
-    }
-
-} // version
 
 unittest
 {
