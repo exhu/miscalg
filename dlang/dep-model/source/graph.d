@@ -1,7 +1,7 @@
 import std.algorithm.iteration;
 import std.algorithm.comparison;
 import std.algorithm.searching;
-import std.stdio : writefln;
+import std.stdio;
 import std.format;
 import std.traits;
 import std.string;
@@ -52,17 +52,18 @@ struct Graph
     SortResult tsort()
     {
         auto ctx = SortContext(this);
-        auto visitf = (CellIndex i) => ctx.visit(i);
-        auto counter = iota(nodesCount);
-        auto mapped = map!visitf(counter);
-        auto findf = (SortContext.VisitStatus s) => s.selector
-            == SortContext.VisitStatus.Selector.cycleFound;
-        auto found_cycle = find!findf(mapped);
-        if (found_cycle.empty)
+        for (auto i = 0; i < nodesCount; ++i)
         {
-            return SortResult.makeSorted(ctx.sorted);
+            writefln("top iter %d", i);
+            auto found_cycle = ctx.visit(i);
+            if (found_cycle.selector is SortContext.VisitStatus.Selector.cycleFound)
+            {
+                writeln("cycle!");
+                return SortResult.makeCycle(found_cycle.cycle);
+            }
         }
-        return SortResult.makeCycle(found_cycle.front.cycle);
+        writeln("sorted!");
+        return SortResult.makeSorted(ctx.sorted);
     }
 }
 
@@ -114,7 +115,6 @@ private struct SortContext
 {
     Graph graph;
     CellIndex[] sorted, perm_marked, temp_marked;
-    //size_t perm_marked_count;
 
     struct VisitStatus
     {
@@ -124,8 +124,14 @@ private struct SortContext
             cycleFound,
         }
 
-        Selector selector;
-        CellIndex cycle;
+        Selector selector = Selector.continueVisiting;
+        CellIndex cycle = CellIndex.max;
+
+        this(CellIndex cycle)
+        {
+            this.cycle = cycle;
+            selector = Selector.cycleFound;
+        }
     }
 
     void mark_perm(CellIndex n)
@@ -145,32 +151,74 @@ private struct SortContext
 
     VisitStatus visit(CellIndex n)
     {
-        if (!find(perm_marked, n).empty)
+        writefln("%d visit", n);
+        if (find(perm_marked, n).empty == false)
         {
-            return VisitStatus(VisitStatus.Selector.continueVisiting);
+            writeln("already perm");
+            return VisitStatus();
         }
-        else if (!find(temp_marked, n).empty)
+        else if (find(temp_marked, n).empty == false)
         {
-            return VisitStatus(VisitStatus.Selector.cycleFound, n);
+            writefln("%d early cycle", n);
+            return VisitStatus(n);
         }
         mark_temp(n);
+        auto fvisit(CellIndex c)
+        {
+            writefln("%d ctx fvisit %d", n, c);
+            auto r = visit(c);
+            writefln("%d ctx fvisit result %s", n, r);
+            return r;
+        }
+
+        auto is_cycle(in VisitStatus s)
+        {
+            auto r = (s.selector is VisitStatus.Selector.cycleFound);
+            writefln("%d is_cycle %s", n, r);
+            return r;
+        }
+
         auto nodes_of_n = graph.all_dest_from(n);
-        auto fvisit = (CellIndex c) => visit(c);
+        writefln("%d nodes_of_n = %s", n, nodes_of_n);
+
         auto mapped = map!fvisit(nodes_of_n);
-        auto is_cycle = (VisitStatus s) => s.selector == VisitStatus.Selector.cycleFound;
-        auto found = find!is_cycle(mapped);
+        writefln("%d mapped", n);
+        auto foundRange = find!is_cycle(mapped);
+        //writefln("range: %s", foundRange);
         mark_perm(n);
         add_to_sorted(n);
-        if (found.empty)
+        if (foundRange.empty)
         {
+            writefln("%d ctx continue", n);
             return VisitStatus(VisitStatus.Selector.continueVisiting);
         }
-        return found.front;
+        auto foundCycle = foundRange.front;
+        assert(foundCycle.selector is VisitStatus.Selector.cycleFound);
+        writefln("%d ctx return cycle %s", n, foundCycle);
+        return foundCycle;
     }
 }
 
-// TODO sort
+unittest
+{
+    auto fvisit(CellIndex c)
+    {
+        if (c & 1)
+            return SortContext.VisitStatus();
+        return SortContext.VisitStatus(c);
+    }
 
+    auto isCycle(SortContext.VisitStatus s)
+    {
+        return s.selector is SortContext.VisitStatus.Selector.cycleFound;
+    }
+
+    auto mapped = map!fvisit([2]);
+    auto found = find!isCycle(mapped);
+    assert(!found.empty);
+    assert(found.front.selector is SortContext.VisitStatus.Selector.cycleFound);
+
+}
 // metaprogramming experiments
 version (none)
 {
@@ -268,3 +316,14 @@ version (none)
     }
 
 } // version
+
+unittest
+{
+    immutable edges = [Edge(0, 1), Edge(2, 1), Edge(1, 3), Edge(3, 2)];
+    auto graph = Graph.make_from_edges(edges);
+    graph.dump();
+    auto gv = graph.generate_dot_text("mygr");
+    toFile(gv, "temp.gv");
+    auto sorted = graph.tsort();
+    writefln("sorted: %s", sorted.result);
+}
