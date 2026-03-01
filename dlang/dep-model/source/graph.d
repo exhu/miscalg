@@ -5,6 +5,7 @@ import std.stdio : writefln;
 import std.format;
 import std.traits;
 import std.string;
+import std.range;
 
 alias CellIndex = size_t;
 
@@ -47,6 +48,22 @@ struct Graph
         buf ~= "}";
         return buf;
     }
+
+    SortResult tsort()
+    {
+        auto ctx = SortContext(this);
+        auto visitf = (CellIndex i) => ctx.visit(i);
+        auto counter = iota(nodesCount);
+        auto mapped = map!visitf(counter);
+        auto findf = (SortContext.VisitStatus s) => s.selector
+            == SortContext.VisitStatus.Selector.cycleFound;
+        auto found_cycle = find!findf(mapped);
+        if (found_cycle.empty)
+        {
+            return SortResult.makeSorted(ctx.sorted);
+        }
+        return SortResult.makeCycle(found_cycle.front.cycle);
+    }
 }
 
 void print_edges(const Edges edges)
@@ -66,8 +83,30 @@ struct SortResult
     Selector result;
     union
     {
-        Edges sorted;
+        CellIndex[] sorted;
         CellIndex cycle;
+    }
+
+    this(CellIndex cycle)
+    {
+        result = Selector.cycle;
+        this.cycle = cycle;
+    }
+
+    this(CellIndex[] sorted)
+    {
+        this.sorted = sorted;
+        result = Selector.sorted;
+    }
+
+    static SortResult makeCycle(CellIndex c)
+    {
+        return SortResult(c);
+    }
+
+    static SortResult makeSorted(CellIndex[] s)
+    {
+        return SortResult(s);
     }
 }
 
@@ -85,38 +124,49 @@ private struct SortContext
             cycleFound,
         }
 
-      Selector selector;
+        Selector selector;
         CellIndex cycle;
     }
 
-  void mark_perm(CellIndex n)
-  {
-    perm_marked ~= n;
-  }
+    void mark_perm(CellIndex n)
+    {
+        perm_marked ~= n;
+    }
 
-  void add_to_sorted(CellIndex n)
-  {
-    sorted ~= n;
-  }
+    void add_to_sorted(CellIndex n)
+    {
+        sorted ~= n;
+    }
 
-  void mark_temp(CellIndex n)
-  {
-    temp_marked ~= n;
-  }
+    void mark_temp(CellIndex n)
+    {
+        temp_marked ~= n;
+    }
 
-  VisitStatus visit(CellIndex n)
-  {
-    if (!find(perm_marked, n).empty) { return VisitStatus(VisitStatus.Selector.continueVisiting); } else if (!find(temp_marked, n).empty) {
-      return VisitStatus(VisitStatus.Selector.cycleFound, n);}
-    mark_temp(n);
-    auto nodes_of_n = graph.all_dest_from(n);
-    auto is_cycle = (CellIndex c) => visit(c).selector == VisitStatus.Selector.cycleFound;
-
-    // TODO map and find
-    //    auto found = find!(is_cycle)(nodes_of_n);
-    
-
-  }
+    VisitStatus visit(CellIndex n)
+    {
+        if (!find(perm_marked, n).empty)
+        {
+            return VisitStatus(VisitStatus.Selector.continueVisiting);
+        }
+        else if (!find(temp_marked, n).empty)
+        {
+            return VisitStatus(VisitStatus.Selector.cycleFound, n);
+        }
+        mark_temp(n);
+        auto nodes_of_n = graph.all_dest_from(n);
+        auto fvisit = (CellIndex c) => visit(c);
+        auto mapped = map!fvisit(nodes_of_n);
+        auto is_cycle = (VisitStatus s) => s.selector == VisitStatus.Selector.cycleFound;
+        auto found = find!is_cycle(mapped);
+        mark_perm(n);
+        add_to_sorted(n);
+        if (found.empty)
+        {
+            return VisitStatus(VisitStatus.Selector.continueVisiting);
+        }
+        return found.front;
+    }
 }
 
 // TODO sort
