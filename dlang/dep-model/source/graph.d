@@ -55,7 +55,9 @@ struct Graph
         for (auto i = 0; i < nodesCount; ++i)
         {
             writefln("top iter %d", i);
-            auto found_cycle = ctx.visit(i);
+            //auto found_cycle = ctx.visit(i);
+            auto found_cycle = visit(ctx,i);
+
             if (found_cycle.selector is SortContext.VisitStatus.Selector.cycleFound)
             {
                 writeln("cycle!");
@@ -132,6 +134,11 @@ private struct SortContext
             this.cycle = cycle;
             selector = Selector.cycleFound;
         }
+
+      bool isCycle()
+      {
+	return selector is Selector.cycleFound;
+      }
     }
 
     void mark_perm(CellIndex n)
@@ -197,6 +204,42 @@ private struct SortContext
         writefln("%d ctx return cycle %s", n, foundCycle);
         return foundCycle;
     }
+}
+
+SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
+{
+    writefln("%d visit", n);
+    if (find(ctx.perm_marked, n).empty == false)
+    {
+	writeln("already perm");
+	return SortContext.VisitStatus();
+    }
+    else if (find(ctx.temp_marked, n).empty == false)
+    {
+	writefln("%d early cycle", n);
+	return SortContext.VisitStatus(n);
+    }
+    ctx.mark_temp(n);
+        auto nodes_of_n = ctx.graph.all_dest_from(n);
+        writefln("%d nodes_of_n = %s", n, nodes_of_n);
+
+	auto foundCycle = SortContext.VisitStatus();
+	foreach(i;nodes_of_n)
+	  {
+	    foundCycle = visit(ctx, i);
+	    if (foundCycle.isCycle)
+	      break;
+	  }
+        ctx.mark_perm(n);
+        ctx.add_to_sorted(n);
+        if (!foundCycle.isCycle)
+        {
+            writefln("%d ctx continue", n);
+            return SortContext.VisitStatus();
+        }
+        assert(foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound);
+        writefln("%d ctx return cycle %s", n, foundCycle);
+        return foundCycle;
 }
 
 unittest
