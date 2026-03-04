@@ -1,4 +1,3 @@
-// TODO rename to follow D style
 // TODO clean up code
 // TODO try to use functional style -- non-member or static functions instead of methods
 // if only one field is used to simplify unit tests
@@ -14,7 +13,7 @@ alias CellIndex = size_t;
 
 struct Edge
 {
-    CellIndex from_cell, to_cell;
+    CellIndex fromCell, toCell;
 }
 
 alias Edges = Edge[];
@@ -24,29 +23,29 @@ struct Graph
     immutable Edges edges;
     immutable size_t nodesCount;
 
-    static Graph make_from_edges(immutable Edges edges)
+    static Graph makeFromEdges(immutable Edges edges)
     {
-        immutable max_node = fold!((a, c) => max(a, max(c.from_cell, c.to_cell)))(edges, 0L);
-        return Graph(edges, max_node + 1);
+        immutable maxNode = fold!((a, c) => max(a, max(c.fromCell, c.toCell)))(edges, 0L);
+        return Graph(edges, maxNode + 1);
     }
 
     void dump()
     {
-        print_edges(edges);
+        printEdges(edges);
     }
 
-    auto all_dest_from(CellIndex n)
+    auto allDestFrom(CellIndex n)
     {
-        auto f = (const Edge e) => e.from_cell == n;
-        auto m = (const Edge e) => e.to_cell;
+        auto f = (const Edge e) => e.fromCell == n;
+        auto m = (const Edge e) => e.toCell;
         return filter!(f)(edges).map!m();
     }
 
-    string generate_dot_text(string name)
+    string generateDotText(string name)
     {
         string buf;
         buf ~= format("digraph \"%s\" {\n", name);
-        auto e = (const Edge e) => buf ~= format("%d -> %d\n", e.from_cell, e.to_cell);
+        auto e = (const Edge e) => buf ~= format("%d -> %d\n", e.fromCell, e.toCell);
         each!e(edges);
         buf ~= "}";
         return buf;
@@ -58,12 +57,12 @@ struct Graph
         for (auto i = 0; i < nodesCount; ++i)
         {
             writefln("top iter %d", i);
-            auto found_cycle = visit(ctx, i);
+            const foundCycle = visit(ctx, i);
 
-            if (found_cycle.selector is SortContext.VisitStatus.Selector.cycleFound)
+            if (foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound)
             {
                 writeln("cycle!");
-                return SortResult.makeCycle(found_cycle.cycle);
+                return SortResult.makeCycle(foundCycle.cycle);
             }
         }
         writeln("sorted!");
@@ -71,9 +70,9 @@ struct Graph
     }
 }
 
-void print_edges(const Edges edges)
+void printEdges(const Edges edges)
 {
-    auto f = (const Edge n) => writefln("edge %d -> %d", n.from_cell, n.to_cell);
+    auto f = (const Edge n) => writefln("edge %d -> %d", n.fromCell, n.toCell);
     each!(f)(edges);
 }
 
@@ -118,7 +117,7 @@ struct SortResult
 private struct SortContext
 {
     Graph graph;
-    CellIndex[] sorted, perm_marked, temp_marked;
+    CellIndex[] sorted, permMarked, tempMarked;
 
     struct VisitStatus
     {
@@ -143,37 +142,38 @@ private struct SortContext
         }
     }
 
-    void mark_perm(CellIndex n)
+    void markPerm(CellIndex n)
     {
-        perm_marked ~= n;
+        permMarked ~= n;
     }
 
-    void add_to_sorted(CellIndex n)
+    void addToSorted(CellIndex n)
     {
         sorted ~= n;
     }
 
-    void mark_temp(CellIndex n)
+    void markTemp(CellIndex n)
     {
-        temp_marked ~= n;
+        tempMarked ~= n;
     }
 
+    // there's weird bug either in the function or the compiler regarding recursive fvisit()
     version (none)
     {
         VisitStatus visit(CellIndex n)
         {
             writefln("%d visit", n);
-            if (find(perm_marked, n).empty == false)
+            if (find(permMarked, n).empty == false)
             {
                 writeln("already perm");
                 return VisitStatus();
             }
-            else if (find(temp_marked, n).empty == false)
+            else if (find(tempMarked, n).empty == false)
             {
                 writefln("%d early cycle", n);
                 return VisitStatus(n);
             }
-            mark_temp(n);
+            markTemp(n);
             auto fvisit(CellIndex c)
             {
                 writefln("%d ctx fvisit %d", n, c);
@@ -189,16 +189,16 @@ private struct SortContext
                 return r;
             }
 
-            auto nodes_of_n = graph.all_dest_from(n);
-            writefln("%d nodes_of_n = %s", n, nodes_of_n);
+            auto nodesOfN = graph.allDestFrom(n);
+            writefln("%d nodesOfN = %s", n, nodesOfN);
 
-            auto mapped = map!fvisit(nodes_of_n);
+            auto mapped = map!fvisit(nodesOfN);
             writefln("%d mapped", n);
             // here there's probably compiler bug, since it fails
             auto foundRange = find!is_cycle(mapped);
             //writefln("range: %s", foundRange);
-            mark_perm(n);
-            add_to_sorted(n);
+            markPerm(n);
+            addToSorted(n);
             if (foundRange.empty)
             {
                 writefln("%d ctx continue", n);
@@ -216,29 +216,29 @@ private struct SortContext
 SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
 {
     writefln("%d visit", n);
-    if (find(ctx.perm_marked, n).empty == false)
+    if (find(ctx.permMarked, n).empty == false)
     {
         writeln("already perm");
         return SortContext.VisitStatus();
     }
-    else if (find(ctx.temp_marked, n).empty == false)
+    else if (find(ctx.tempMarked, n).empty == false)
     {
         writefln("%d early cycle", n);
         return SortContext.VisitStatus(n);
     }
-    ctx.mark_temp(n);
-    auto nodes_of_n = ctx.graph.all_dest_from(n);
-    writefln("%d nodes_of_n = %s", n, nodes_of_n);
+    ctx.markTemp(n);
+    auto nodesOfN = ctx.graph.allDestFrom(n);
+    writefln("%d nodesOfN = %s", n, nodesOfN);
 
     auto foundCycle = SortContext.VisitStatus();
-    foreach (i; nodes_of_n)
+    foreach (i; nodesOfN)
     {
         foundCycle = visit(ctx, i);
         if (foundCycle.isCycle)
             break;
     }
-    ctx.mark_perm(n);
-    ctx.add_to_sorted(n);
+    ctx.markPerm(n);
+    ctx.addToSorted(n);
     if (!foundCycle.isCycle)
     {
         writefln("%d ctx continue", n);
@@ -267,15 +267,14 @@ unittest
     auto found = find!isCycle(mapped);
     assert(!found.empty);
     assert(found.front.selector is SortContext.VisitStatus.Selector.cycleFound);
-
 }
 
 unittest
 {
     immutable edges = [Edge(0, 1), Edge(2, 1), Edge(1, 3), Edge(3, 2)];
-    auto graph = Graph.make_from_edges(edges);
+    auto graph = Graph.makeFromEdges(edges);
     graph.dump();
-    auto gv = graph.generate_dot_text("mygr");
+    auto gv = graph.generateDotText("mygr");
     toFile(gv, "temp.gv");
     auto sorted = graph.tsort();
     writefln("sorted: %s", sorted.result);
