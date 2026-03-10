@@ -80,11 +80,11 @@ public:
             if (foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound)
             {
                 debugPrintln("cycle!");
-                return SortResult(CycleDetected(foundCycle.cycle));
+                return SortResult.makeCycle(foundCycle.cycle);
             }
         }
         debugPrintln("sorted!");
-        return SortResult(SortedCells(ctx.sorted));
+        return SortResult.makeSorted(ctx.sorted);
     }
 
     private static void printEdges(const Edges edges)
@@ -94,66 +94,50 @@ public:
     }
 }
 
-/// Sorted data if result is sorted.
-struct SortedCells
-{
-    CellIndex[] sorted;
-}
-
-/// First spotted node to be in a cycle.
-struct CycleDetected
-{
-    CellIndex cycle;
-}
 
 /// Topological sort result.
-alias SortResult = SumType!(SortedCells, CycleDetected);
-
-version(none)
+struct SortResult
 {
-    struct SortResult
+    /// One of the outcomes.
+    enum Selector
     {
-        /// One of the outcomes.
-        enum Selector
-        {
-            sorted,
-            cycle,
-        }
-
-        /// Data selector.
-        Selector result;
-
-        union
-        {
-            /// Sorted data if result is sorted.
-            CellIndex[] sorted;
-            /// First spotted node to be in a cycle.
-            CellIndex cycle;
-        }
-
-        private this(CellIndex cycle)
-        {
-            result = Selector.cycle;
-            this.cycle = cycle;
-        }
-
-        private this(CellIndex[] sorted)
-        {
-            this.sorted = sorted;
-            result = Selector.sorted;
-        }
-
-        private static SortResult makeCycle(CellIndex c)
-        {
-            return SortResult(c);
-        }
-
-        private static SortResult makeSorted(CellIndex[] s)
-        {
-            return SortResult(s);
-        }
+        sorted,
+        cycle,
     }
- } // version
+
+    /// Data selector.
+    Selector result;
+
+    union
+    {
+        /// Sorted data if result is sorted.
+        CellIndex[] sorted;
+        /// First spotted node to be in a cycle.
+        CellIndex cycle;
+    }
+
+    private this(CellIndex cycle)
+    {
+        result = Selector.cycle;
+        this.cycle = cycle;
+    }
+
+    private this(CellIndex[] sorted)
+    {
+        this.sorted = sorted;
+        result = Selector.sorted;
+    }
+
+    private static SortResult makeCycle(CellIndex c)
+    {
+        return SortResult(c);
+    }
+
+    private static SortResult makeSorted(CellIndex[] s)
+    {
+        return SortResult(s);
+    }
+}
 
 private struct SortContext
 {
@@ -197,7 +181,62 @@ private struct SortContext
     {
         tempMarked ~= n;
     }
-} // SortContext
+
+    // there's weird bug either in the function or the compiler regarding recursive fvisit()
+    version (none)
+    {
+        VisitStatus visit(CellIndex n)
+        {
+            writefln("%d visit", n);
+            if (find(permMarked, n).empty == false)
+            {
+                writeln("already perm");
+                return VisitStatus();
+            }
+            else if (find(tempMarked, n).empty == false)
+            {
+                writefln("%d early cycle", n);
+                return VisitStatus(n);
+            }
+            markTemp(n);
+            auto fvisit(CellIndex c)
+            {
+                writefln("%d ctx fvisit %d", n, c);
+                auto r = visit(c);
+                writefln("%d ctx fvisit result %s", n, r);
+                return r;
+            }
+
+            auto is_cycle(in VisitStatus s)
+            {
+                auto r = (s.selector is VisitStatus.Selector.cycleFound);
+                writefln("%d is_cycle %s", n, r);
+                return r;
+            }
+
+            auto nodesOfN = graph.allDestFrom(n);
+            writefln("%d nodesOfN = %s", n, nodesOfN);
+
+            auto mapped = map!fvisit(nodesOfN);
+            writefln("%d mapped", n);
+            // here there's probably compiler bug, since it fails
+            const foundRange = find!is_cycle(mapped);
+            //writefln("range: %s", foundRange);
+            markPerm(n);
+            addToSorted(n);
+            if (foundRange.empty)
+            {
+                writefln("%d ctx continue", n);
+                return VisitStatus(VisitStatus.Selector.continueVisiting);
+            }
+            auto foundCycle = foundRange.front;
+            // compiler bug if find over map range is used
+            assert(foundCycle.selector is VisitStatus.Selector.cycleFound);
+            writefln("%d ctx return cycle %s", n, foundCycle);
+            return foundCycle;
+        }
+    }
+}
 
 private SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
 {
@@ -263,5 +302,5 @@ unittest
     auto gv = graph.generateDotText("mygr");
     toFile(gv, "temp.gv");
     auto sorted = graph.tsort();
-    writefln("sorted: %s", sorted);
+    writefln("sorted: %s", sorted.result);
 }
