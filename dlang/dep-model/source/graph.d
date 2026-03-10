@@ -1,5 +1,3 @@
-// TODO try to use functional style -- non-member or static functions instead of methods
-// if only one field is used to simplify unit tests
 // TODO add impl using SumType
 
 import std.algorithm.iteration;
