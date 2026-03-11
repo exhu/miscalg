@@ -18,14 +18,17 @@ struct Edge
 
 alias Edges = Edge[];
 
-version(unittest)
+version (unittest)
 {
     private alias debugPrintln = writeln;
     private alias debugPrintfln = writefln;
 }
 else
 {
-    private void debugPrintln(A...)(A _) {}
+    private void debugPrintln(A...)(A _)
+    {
+    }
+
     alias debugPrintfln = debugPrintln;
 }
 
@@ -44,13 +47,13 @@ public:
     }
 
     /// Print to stdout.
-    void dump() 
+    void dump()
     {
         printEdges(edges);
     }
 
     /// Get all destination nodes from n.
-    auto allDestFrom(CellIndex n)
+    auto allDestFrom(CellIndex n) const
     {
         const f = (const Edge e) => e.fromCell == n;
         const m = (const Edge e) => e.toCell;
@@ -75,7 +78,7 @@ public:
         for (auto i = 0; i < nodesCount; ++i)
         {
             debugPrintfln("top iter %d", i);
-            const foundCycle = visit(ctx, i);
+            const foundCycle = SortContext.visit(ctx, i);
 
             if (foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound)
             {
@@ -93,7 +96,6 @@ public:
         each!(f)(edges);
     }
 }
-
 
 /// Topological sort result.
 struct SortResult
@@ -185,52 +187,72 @@ private struct SortContext
     // there's weird bug either in the function or the compiler regarding recursive fvisit()
     version (none)
     {
-        VisitStatus visit(CellIndex n)
+    }
+    else
+    {
+        static VisitStatus visit(ref SortContext ctx, CellIndex n)
         {
             writefln("%d visit", n);
-            if (find(permMarked, n).empty == false)
+            if (find(ctx.permMarked, n).empty == false)
             {
                 writeln("already perm");
                 return VisitStatus();
             }
-            else if (find(tempMarked, n).empty == false)
+            else if (find(ctx.tempMarked, n).empty == false)
             {
                 writefln("%d early cycle", n);
                 return VisitStatus(n);
             }
-            markTemp(n);
-            auto fvisit(CellIndex c)
+            ctx.markTemp(n);
+            VisitStatus fvisit(CellIndex c)
             {
-                writefln("%d ctx fvisit %d", n, c);
-                auto r = visit(c);
+                writefln("%d ctx fvisit %d, ctx = %x", n, c, &ctx);
+                auto r = visit(ctx, c);
                 writefln("%d ctx fvisit result %s", n, r);
                 return r;
             }
 
-            auto is_cycle(in VisitStatus s)
+            bool is_cycle(in VisitStatus s)
             {
                 auto r = (s.selector is VisitStatus.Selector.cycleFound);
                 writefln("%d is_cycle %s", n, r);
                 return r;
             }
 
-            auto nodesOfN = graph.allDestFrom(n);
+            import std.array;
+
+            auto nodesOfN = ctx.graph.allDestFrom(n);
             writefln("%d nodesOfN = %s", n, nodesOfN);
 
             auto mapped = map!fvisit(nodesOfN);
             writefln("%d mapped", n);
             // here there's probably compiler bug, since it fails
-            const foundRange = find!is_cycle(mapped);
+            auto foundRange = find!is_cycle(mapped);
+            version(none)
+            {
+                VisitStatus found;
+                foreach (i; mapped)
+                {
+                    found = i;
+                    if (is_cycle(i))
+                    {
+                        break;
+                    }
+                }
+            }
             //writefln("range: %s", foundRange);
-            markPerm(n);
-            addToSorted(n);
+            ctx.markPerm(n);
+            ctx.addToSorted(n);
+            //if (!is_cycle(found))//foundRange.empty)
             if (foundRange.empty)
             {
                 writefln("%d ctx continue", n);
                 return VisitStatus(VisitStatus.Selector.continueVisiting);
             }
+            //auto foundCycle = found;//foundRange.front;
             auto foundCycle = foundRange.front;
             // compiler bug if find over map range is used
+            writefln("VisitStatus = %s", foundCycle);
             assert(foundCycle.selector is VisitStatus.Selector.cycleFound);
             writefln("%d ctx return cycle %s", n, foundCycle);
             return foundCycle;
@@ -238,40 +260,43 @@ private struct SortContext
     }
 }
 
-private SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
+version (none)
 {
-    debugPrintfln("%d visit", n);
-    if (find(ctx.permMarked, n).empty == false)
+    private SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
     {
-        debugPrintln("already perm");
-        return SortContext.VisitStatus();
-    }
-    else if (find(ctx.tempMarked, n).empty == false)
-    {
-        debugPrintfln("%d early cycle", n);
-        return SortContext.VisitStatus(n);
-    }
-    ctx.markTemp(n);
-    auto nodesOfN = ctx.graph.allDestFrom(n);
-    debugPrintfln("%d nodesOfN = %s", n, nodesOfN);
+        debugPrintfln("%d visit", n);
+        if (find(ctx.permMarked, n).empty == false)
+        {
+            debugPrintln("already perm");
+            return SortContext.VisitStatus();
+        }
+        else if (find(ctx.tempMarked, n).empty == false)
+        {
+            debugPrintfln("%d early cycle", n);
+            return SortContext.VisitStatus(n);
+        }
+        ctx.markTemp(n);
+        auto nodesOfN = ctx.graph.allDestFrom(n);
+        debugPrintfln("%d nodesOfN = %s", n, nodesOfN);
 
-    auto foundCycle = SortContext.VisitStatus();
-    foreach (i; nodesOfN)
-    {
-        foundCycle = visit(ctx, i);
-        if (foundCycle.isCycle)
-            break;
+        auto foundCycle = SortContext.VisitStatus();
+        foreach (i; nodesOfN)
+        {
+            foundCycle = visit(ctx, i);
+            if (foundCycle.isCycle)
+                break;
+        }
+        ctx.markPerm(n);
+        ctx.addToSorted(n);
+        if (!foundCycle.isCycle)
+        {
+            debugPrintfln("%d ctx continue", n);
+            return SortContext.VisitStatus();
+        }
+        assert(foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound);
+        debugPrintfln("%d ctx return cycle %s", n, foundCycle);
+        return foundCycle;
     }
-    ctx.markPerm(n);
-    ctx.addToSorted(n);
-    if (!foundCycle.isCycle)
-    {
-        debugPrintfln("%d ctx continue", n);
-        return SortContext.VisitStatus();
-    }
-    assert(foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound);
-    debugPrintfln("%d ctx return cycle %s", n, foundCycle);
-    return foundCycle;
 }
 
 unittest
