@@ -1,11 +1,10 @@
-// TODO add impl using SumType
-
 import std.algorithm.iteration;
 import std.algorithm.comparison;
 import std.algorithm.searching;
 import std.stdio;
 import std.string;
 import std.sumtype;
+import std.typecons : Nullable;
 
 alias CellIndex = size_t;
 
@@ -77,10 +76,14 @@ public:
             debugPrintfln("top iter %d", i);
             const foundCycle = visit(ctx, i);
 
-            if (foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound)
+            Nullable!CellIndex cycle = foundCycle.match!(
+                (SortContext.CycleFound c) => Nullable!CellIndex(c.cycle),
+                _ => Nullable!CellIndex());
+
+            if (!cycle.isNull())
             {
                 debugPrintln("cycle!");
-                return SortResult(CycleDetected(foundCycle.cycle));
+                return SortResult(CycleDetected(cycle.get()));
             }
         }
         debugPrintln("sorted!");
@@ -109,80 +112,18 @@ struct CycleDetected
 /// Topological sort result.
 alias SortResult = SumType!(SortedCells, CycleDetected);
 
-version(none)
-{
-    struct SortResult
-    {
-        /// One of the outcomes.
-        enum Selector
-        {
-            sorted,
-            cycle,
-        }
-
-        /// Data selector.
-        Selector result;
-
-        union
-        {
-            /// Sorted data if result is sorted.
-            CellIndex[] sorted;
-            /// First spotted node to be in a cycle.
-            CellIndex cycle;
-        }
-
-        private this(CellIndex cycle)
-        {
-            result = Selector.cycle;
-            this.cycle = cycle;
-        }
-
-        private this(CellIndex[] sorted)
-        {
-            this.sorted = sorted;
-            result = Selector.sorted;
-        }
-
-        private static SortResult makeCycle(CellIndex c)
-        {
-            return SortResult(c);
-        }
-
-        private static SortResult makeSorted(CellIndex[] s)
-        {
-            return SortResult(s);
-        }
-    }
- } // version
-
 private struct SortContext
 {
     Graph graph;
     CellIndex[] sorted, permMarked, tempMarked;
 
-    struct VisitStatus
+    struct ContinueVisiting {}
+    struct CycleFound
     {
-        enum Selector
-        {
-            continueVisiting,
-            cycleFound,
-        }
-
-        Selector selector = Selector.continueVisiting;
         CellIndex cycle = CellIndex.max;
-
-        this(CellIndex cycle)
-        {
-            this.cycle = cycle;
-            selector = Selector.cycleFound;
-        }
-
-        bool isCycle()
-        {
-            return selector is Selector.cycleFound;
-        }
     }
-
+    alias VisitStatus = SumType!(ContinueVisiting, CycleFound);
+    
     void markPerm(CellIndex n)
     {
         permMarked ~= n;
@@ -199,6 +140,12 @@ private struct SortContext
     }
 } // SortContext
 
+private bool isCycle(SortContext.VisitStatus status)
+{
+    return status.match!((SortContext.CycleFound) => true,
+                         _ => false);
+}
+
 private SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
 {
     debugPrintfln("%d visit", n);
@@ -210,7 +157,7 @@ private SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
     else if (find(ctx.tempMarked, n).empty == false)
     {
         debugPrintfln("%d early cycle", n);
-        return SortContext.VisitStatus(n);
+        return SortContext.VisitStatus(SortContext.CycleFound(n));
     }
     ctx.markTemp(n);
     auto nodesOfN = ctx.graph.allDestFrom(n);
@@ -220,17 +167,19 @@ private SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
     foreach (i; nodesOfN)
     {
         foundCycle = visit(ctx, i);
-        if (foundCycle.isCycle)
+        if (isCycle(foundCycle))
+        {
             break;
+        }
     }
     ctx.markPerm(n);
     ctx.addToSorted(n);
-    if (!foundCycle.isCycle)
+    if (!isCycle(foundCycle))
     {
         debugPrintfln("%d ctx continue", n);
         return SortContext.VisitStatus();
     }
-    assert(foundCycle.selector is SortContext.VisitStatus.Selector.cycleFound);
+    assert(isCycle(foundCycle));
     debugPrintfln("%d ctx return cycle %s", n, foundCycle);
     return foundCycle;
 }
@@ -240,19 +189,14 @@ unittest
     auto fvisit(in CellIndex c)
     {
         if (c & 1)
-            return SortContext.VisitStatus();
-        return SortContext.VisitStatus(c);
-    }
-
-    auto isCycle(in SortContext.VisitStatus s)
-    {
-        return s.selector is SortContext.VisitStatus.Selector.cycleFound;
+            return SortContext.VisitStatus(SortContext.ContinueVisiting());
+        return SortContext.VisitStatus(SortContext.CycleFound(c));
     }
 
     auto mapped = map!fvisit([2]);
     auto found = find!isCycle(mapped);
     assert(!found.empty());
-    assert(found.front.selector is SortContext.VisitStatus.Selector.cycleFound);
+    assert(isCycle(found.front));
 }
 
 unittest
