@@ -68,7 +68,7 @@ public:
     }
 
     /// Return topological sort result.
-    SortResult tsort()
+    SortResult topoSort()
     {
         auto ctx = SortContext(this);
         for (auto i = 0; i < nodesCount; ++i)
@@ -146,7 +146,7 @@ private bool isCycle(SortContext.VisitStatus status)
                          _ => false);
 }
 
-private SortContext.VisitStatus visit(SortContext ctx, CellIndex n)
+private SortContext.VisitStatus visit(ref SortContext ctx, CellIndex n)
 {
     debugPrintfln("%d visit", n);
     if (find(ctx.permMarked, n).empty == false)
@@ -206,6 +206,6 @@ unittest
     graph.dump();
     auto gv = graph.generateDotText("mygr");
     toFile(gv, "temp.gv");
-    auto sorted = graph.tsort();
+    auto sorted = graph.topoSort();
     writefln("sorted: %s", sorted);
 }
