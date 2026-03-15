@@ -125,3 +125,45 @@ struct Node
     
 
 }
+
+unittest
+{
+    /*
+      b = 0
+      g = 0
+      d = b>g
+      h = 1
+      c = h/b
+      e = 0
+      f = if d then c else e
+      a = f
+
+digraph "ifthen" {
+f -> a
+d -> f
+b -> d
+g -> d
+h -> c
+b -> c
+c -> f
+e -> f
+}
+
+so evaluation of 'c' and 'e' branches depends on evaluation of 'd'.
+
+So for each node in the graph there are flags: "is part of a conditional branch",
+"is part of unconditional branch".
+If part of "unconditinal branch", then need to always evaluate.
+If only part of a conditional then need to evaluate only when the conditional node is true.
+
+But if it's part of a conditional, it can be part of several conditions, so it needs to be evaluated after
+the conditions, and only if all the conditions are true.
+
+Then if we do not evaluate disabled nodes, we need to reevaluate them when then become enabled again because
+of the condition change.
+
+What if we allow invalid operations to simply set node values to 'error' and simply ignore?
+
+     */
+
+}
