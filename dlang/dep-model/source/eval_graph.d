@@ -152,17 +152,34 @@ struct NodeConditinalRefs
 {
     struct ConditionalRef
     {
-        NodeIndex condition;
+        NodeIndex conditionIndex;
         bool expectedValue;
     }
     ConditionalRef[] conditions;
 
-    bool isActive(bool delegate(NodeIndex) indexToValue) const
+    enum OtherValue
+    {
+        trueValue,
+        falseValue,
+        inactive,
+    }
+
+    bool isActive(OtherValue delegate(NodeIndex) indexToValue) const
     {
         foreach(c;conditions)
         {
-            if (c.expectedValue == indexToValue(c.condition))
-                return true;
+            final switch(indexToValue(c.conditionIndex))
+            {
+            case OtherValue.trueValue:
+                if (c.expectedValue == true)
+                    return true;
+                break;
+            case OtherValue.falseValue:
+                if (c.expectedValue == false)
+                    return true;
+                break;
+            case OtherValue.inactive: {}
+            }
         }
         return false;
     }
