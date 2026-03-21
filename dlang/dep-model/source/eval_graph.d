@@ -96,12 +96,17 @@ struct BoolNode
     bool value;
 }
 
-alias CellIndexes = graph.CellIndex[];
+struct UserValueNode(T)
+{
+    NodeValue!T value;
+}
+
+alias NodeIndexes = graph.NodeIndex[];
     
 struct BoolFunctionNode(T)
 {
     bool delegate(in NodeValue!(T)[] arguments) func;
-    CellIndexes dependencies;
+    NodeIndexes dependencies;
 }
 
 struct BranchNode
@@ -110,7 +115,7 @@ struct BranchNode
     /// BranchNode depends on 
     /// condition, onTrue, onFalse
     /// and branches depend on condition
-    graph.CellIndex condition, onTrue, onFalse;
+    graph.NodeIndex condition, onTrue, onFalse;
 }
 
 // TODO how to adjust node update order regarding topologically sorted list?
@@ -118,12 +123,79 @@ struct BranchNode
 // inactive nodes may stand before active ones in order...
 
 /// During graph evaluation BranchNode adds onTrue or onFalse to inactive
-alias DisabledNodes = CellIndexes;
+alias DisabledNodes = NodeIndexes;
 
-struct Node
+/// T = user value type
+struct Node(T)
 {
-    
+    string name;
+    enum NodeType
+    {
+        branch,
+        boolFunc,
+        boolValue,
+        userValue,
+    }
 
+    NodeType nodeType;
+    
+    union
+    {
+        BranchNode branch;
+        BoolFunctionNode!T boolFunc;
+        BoolNode boolValue;
+        UserValueNode userValue;
+    }
+}
+
+struct NodeConditinalRefs
+{
+    struct ConditionalRef
+    {
+        NodeIndex condition;
+        bool expectedValue;
+    }
+    ConditionalRef[] conditions;
+
+    bool isActive(bool delegate(NodeIndex) indexToValue) const
+    {
+        foreach(c;conditions)
+        {
+            if (c.expectedValue == indexToValue(c.condition))
+                return true;
+        }
+        return false;
+    }
+}
+
+alias IndexToConditionsMap = NodeConditinalRefs[NodeIndex];
+
+struct EvaluatedResult(T)
+{
+    /// generation is updated when value is updated, and must be the same as
+    /// the dependencies, i.e. if generation != generation values of the dependencies
+    /// the value needs recalculation.
+    size_t generation;
+    NodeValue!T value;
+
+    size_t update(NodeValue!T v)
+    {
+        value = v;
+        generation+=1;
+    }
+}
+
+alias ResultsMap(T) = EvaluatedResult!(T)[];
+
+alias Nodes(T) = Node!(T)[];
+
+struct EvaluationContext(T)
+{
+    Nodes!T nodes;
+    NodeIndexes toposorted;
+    NodeIndexes activeIndexes;
+    IndexToConditionsMap conditionsMap;
+    ResultsMap!T resultsMap;
 }
 
 unittest

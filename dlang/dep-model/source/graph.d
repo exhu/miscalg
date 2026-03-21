@@ -6,13 +6,13 @@ import std.string;
 import std.sumtype;
 import std.typecons : Nullable;
 
-alias CellIndex = size_t;
+alias NodeIndex = size_t;
 
 /// Graph item.
 struct Edge
 {
     /// Edge direction is fromCell -> toCell.
-    CellIndex fromCell, toCell;
+    NodeIndex fromCell, toCell;
 }
 
 alias Edges = Edge[];
@@ -49,7 +49,7 @@ public:
     }
 
     /// Get all destination nodes from n.
-    auto allDestFrom(CellIndex n)
+    auto allDestFrom(NodeIndex n)
     {
         const f = (const Edge e) => e.fromCell == n;
         const m = (const Edge e) => e.toCell;
@@ -76,9 +76,9 @@ public:
             debugPrintfln("top iter %d", i);
             const foundCycle = visit(ctx, i);
 
-            Nullable!CellIndex cycle = foundCycle.match!(
-                (SortContext.CycleFound c) => Nullable!CellIndex(c.cycle),
-                _ => Nullable!CellIndex());
+            Nullable!NodeIndex cycle = foundCycle.match!(
+                (SortContext.CycleFound c) => Nullable!NodeIndex(c.cycle),
+                _ => Nullable!NodeIndex());
 
             if (!cycle.isNull())
             {
@@ -100,13 +100,13 @@ public:
 /// Sorted data if result is sorted.
 struct SortedCells
 {
-    CellIndex[] sorted;
+    NodeIndex[] sorted;
 }
 
 /// First spotted node to be in a cycle.
 struct CycleDetected
 {
-    CellIndex cycle;
+    NodeIndex cycle;
 }
 
 /// Topological sort result.
@@ -115,26 +115,26 @@ alias SortResult = SumType!(SortedCells, CycleDetected);
 private struct SortContext
 {
     Graph graph;
-    CellIndex[] sorted, permMarked, tempMarked;
+    NodeIndex[] sorted, permMarked, tempMarked;
 
     struct ContinueVisiting {}
     struct CycleFound
     {
-        CellIndex cycle = CellIndex.max;
+        NodeIndex cycle = NodeIndex.max;
     }
     alias VisitStatus = SumType!(ContinueVisiting, CycleFound);
     
-    void markPerm(CellIndex n)
+    void markPerm(NodeIndex n)
     {
         permMarked ~= n;
     }
 
-    void addToSorted(CellIndex n)
+    void addToSorted(NodeIndex n)
     {
         sorted ~= n;
     }
 
-    void markTemp(CellIndex n)
+    void markTemp(NodeIndex n)
     {
         tempMarked ~= n;
     }
@@ -146,7 +146,7 @@ private bool isCycle(SortContext.VisitStatus status)
                          _ => false);
 }
 
-private SortContext.VisitStatus visit(ref SortContext ctx, CellIndex n)
+private SortContext.VisitStatus visit(ref SortContext ctx, NodeIndex n)
 {
     debugPrintfln("%d visit", n);
     if (find(ctx.permMarked, n).empty == false)
@@ -186,7 +186,7 @@ private SortContext.VisitStatus visit(ref SortContext ctx, CellIndex n)
 
 unittest
 {
-    auto fvisit(in CellIndex c)
+    auto fvisit(in NodeIndex c)
     {
         if (c & 1)
             return SortContext.VisitStatus(SortContext.ContinueVisiting());
