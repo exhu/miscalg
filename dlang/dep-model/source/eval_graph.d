@@ -118,13 +118,6 @@ struct BranchNode
     graph.NodeIndex condition, onTrue, onFalse;
 }
 
-// TODO how to adjust node update order regarding topologically sorted list?
-// TODO how to propagate node inactivity via branches of branches? toposorted is inverted, so
-// inactive nodes may stand before active ones in order...
-
-/// During graph evaluation BranchNode adds onTrue or onFalse to inactive
-alias DisabledNodes = NodeIndexes;
-
 /// T = user value type
 struct Node(T)
 {
@@ -156,6 +149,84 @@ struct Node(T)
         return node;
     }
 }
+
+// TODO how to adjust node update order regarding topologically sorted list?
+// TODO how to propagate node inactivity via branches of branches? toposorted is inverted, so
+// inactive nodes may stand before active ones in order...
+
+    /*
+      b = 0
+      g = 0
+      d = b>g
+      h = 1
+      c = h/b
+      e = 0
+      f = if d then c else e
+      a = f
+
+digraph "ifthen" {
+f -> a
+d -> f
+b -> d
+g -> d
+h -> c
+b -> c
+c -> f
+e -> f
+}
+
+so evaluation of 'c' and 'e' branches depends on evaluation of 'd'.
+
+This way 'c', 'e' and all their dependencies need to be dependent on
+'d' condition. In case of another condition down the hierarchy, it's
+dependencies should be marked only with that second condition, and
+only evaluated if that second conditon has been evaluated.
+
+So each node has an optional condition reference with a boolean value
+of the condition to mean the node needs evaluation, and only evaluated
+if that condition has been evaluated (active).
+
+Each node can be a part of multiple branches, so any of the conditional
+references triggers evaluation.
+
+So for each node in the graph there are flags: "is part of a
+conditional branch", "is part of unconditional branch".  If part of
+"unconditinal branch", then need to always evaluate.  If only part of
+a conditional then need to evaluate only when the conditional node is
+true.
+
+But if it's part of a conditional, it can be part of several
+conditions, so it needs to be evaluated after the conditions, and only
+if all the conditions are true.
+
+However a node may be part of different conditinal roots, then it needs to
+match either conditions within one branch, or all conditions within another.
+
+Then if we do not evaluate disabled nodes, we need to reevaluate them
+when then become enabled again because of the condition change.
+
+What if we allow invalid operations to simply set node values to
+'error' and simply ignore?
+
+Evaluating everything disregarding branching could be bad for complex
+graphs, e.g. a UI with a lot of resizable elements inside tabs/pages
+where only one is visible, and playing an animation.
+
+Conditionals seem to be a sort of synchronization points.
+
+sorted_all = List of all nodes toposorted.
+
+Evaluation order: unconditional nodes, conditional1, conditional2...
+
+TODO create functions to build a program tree with conditionals, then that tree is converted into
+dependency graph, and toposorted.
+
+TODO evaluate calculation based on toposorted order and conditionals
+
+TODO incremental update
+
+*/
+
 
 struct NodeConditinalRefs
 {
@@ -254,77 +325,4 @@ unittest
 
 unittest
 {
-    /*
-      b = 0
-      g = 0
-      d = b>g
-      h = 1
-      c = h/b
-      e = 0
-      f = if d then c else e
-      a = f
-
-digraph "ifthen" {
-f -> a
-d -> f
-b -> d
-g -> d
-h -> c
-b -> c
-c -> f
-e -> f
-}
-
-so evaluation of 'c' and 'e' branches depends on evaluation of 'd'.
-
-This way 'c', 'e' and all their dependencies need to be dependent on
-'d' condition. In case of another condition down the hierarchy, it's
-dependencies should be marked only with that second condition, and
-only evaluated if that second conditon has been evaluated.
-
-So each node has an optional condition reference with a boolean value
-of the condition to mean the node needs evaluation, and only evaluated
-if that condition has been evaluated (active).
-
-Each node can be a part of multiple branches, so any of the conditional
-references triggers evaluation.
-
-So for each node in the graph there are flags: "is part of a
-conditional branch", "is part of unconditional branch".  If part of
-"unconditinal branch", then need to always evaluate.  If only part of
-a conditional then need to evaluate only when the conditional node is
-true.
-
-But if it's part of a conditional, it can be part of several
-conditions, so it needs to be evaluated after the conditions, and only
-if all the conditions are true.
-
-However a node may be part of different conditinal roots, then it needs to
-match either conditions within one branch, or all conditions within another.
-
-Then if we do not evaluate disabled nodes, we need to reevaluate them
-when then become enabled again because of the condition change.
-
-What if we allow invalid operations to simply set node values to
-'error' and simply ignore?
-
-Evaluating everything disregarding branching could be bad for complex
-graphs, e.g. a UI with a lot of resizable elements inside tabs/pages
-where only one is visible, and playing an animation.
-
-Conditionals seem to be a sort of synchronization points.
-
-sorted_all = List of all nodes toposorted.
-
-Evaluation order: unconditional nodes, conditional1, conditional2...
-
-TODO create functions to build a program tree with conditionals, then that tree is converted into
-dependency graph, and toposorted.
-
-TODO evaluate calculation based on toposorted order and conditionals
-
-TODO incremental update
-
-*/
-
 }
