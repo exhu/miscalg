@@ -144,7 +144,16 @@ struct Node(T)
         BranchNode branch;
         BoolFunctionNode!T boolFunc;
         BoolNode boolValue;
-        UserValueNode userValue;
+        UserValueNode!T userValue;
+    }
+
+    static Node!T makeBool(string name, bool value)
+    {
+        Node!T node;
+        node.name = name;
+        node.nodeType = NodeType.boolValue;
+        node.boolValue.value = value;
+        return node;
     }
 }
 
@@ -213,6 +222,34 @@ struct EvaluationContext(T)
     NodeIndexes activeIndexes;
     IndexToConditionsMap conditionsMap;
     ResultsMap!T resultsMap;
+}
+
+struct GraphBuilder(T)
+{
+    private Nodes!T nodes;
+
+    NodeIndex append(in Node!T node)
+    {
+        auto newIndex = nodes.length;
+        nodes ~= node;
+        return newIndex;
+    }
+
+    Nodes!T build()
+    {
+        // TODO check for unique names?
+        return nodes;
+    }
+}
+
+unittest
+{
+    GraphBuilder!int b;
+    auto indexA = b.append(Node!int.makeBool("a", true));
+    auto indexB = b.append(Node!int.makeBool("b", true));
+    assert(indexA == 0);
+    assert(indexB == 1);
+    assert(b.build().length == 2);
 }
 
 unittest
