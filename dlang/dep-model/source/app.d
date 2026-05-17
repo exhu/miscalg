@@ -1,4 +1,7 @@
 import std.stdio;
+import graph;
+import eval_graph;
+
 
 void main()
 {

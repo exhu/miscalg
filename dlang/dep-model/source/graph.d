@@ -28,7 +28,7 @@ else
     alias debugPrintfln = debugPrintln;
 }
 
-/// Directional graph where nodes a zero-based integers.
+/// Directional graph where nodes are zero-based integers.
 struct Graph
 {
 private:

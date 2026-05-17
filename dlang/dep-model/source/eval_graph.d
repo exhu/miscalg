@@ -225,6 +225,11 @@ TODO evaluate calculation based on toposorted order and conditionals
 
 TODO incremental update
 
+
+All nodes inside branches have to be tagged with references to conditional nodes.
+And evaluated after the conditions.
+
+
 */
 
 
@@ -235,6 +240,10 @@ struct NodeConditinalRefs
         NodeIndex conditionIndex;
         bool expectedValue;
     }
+    // TODO if conditional node is calculated before the branch,
+    // then do we need to store multiple conditions up the hierarchy?
+    // TODO during node evaluation we set its value to undefined/inactive
+    // if the linked conditional does not match.
     ConditionalRef[] conditions;
 
     enum OtherValue
@@ -246,22 +255,24 @@ struct NodeConditinalRefs
 
     bool isActive(OtherValue delegate(NodeIndex) indexToValue) const
     {
+        // all conditions must be met
         foreach(c;conditions)
         {
             final switch(indexToValue(c.conditionIndex))
             {
             case OtherValue.trueValue:
-                if (c.expectedValue == true)
-                    return true;
+                if (c.expectedValue != true)
+                    return false;
                 break;
             case OtherValue.falseValue:
-                if (c.expectedValue == false)
-                    return true;
+                if (c.expectedValue != false)
+                    return false;
                 break;
-            case OtherValue.inactive: {}
+            case OtherValue.inactive:
+                return false;
             }
         }
-        return false;
+        return true;
     }
 }
 
@@ -293,6 +304,15 @@ struct EvaluationContext(T)
     NodeIndexes activeIndexes;
     IndexToConditionsMap conditionsMap;
     ResultsMap!T resultsMap;
+
+    /// null if fails to toposort
+    static Nullable!(EvaluationContext!T) makeFromNodes(ref Nodes!T nodes)
+    {
+        EvaluationContext!T ctx;
+        ctx.nodes = nodes;
+        // TODO toposort
+        return ctx;
+    }
 }
 
 struct GraphBuilder(T)
