@@ -1,1 +1,2 @@
-CompilationDatabase: ./_build
+CompileFlags:
+    CompilationDatabase: ./_build
