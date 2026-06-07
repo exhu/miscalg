@@ -119,7 +119,8 @@ bool sdlffclib_fileinfo(const char *file_path) {
       double duration = (double)(stream->duration * stream->time_base.num) / stream->time_base.den;
       SDL_Log("Duration on time base: %f", duration);
       SDL_Log("Frame rate: %d/%d", stream->r_frame_rate.num, stream->r_frame_rate.den);
-      SDL_Log("AVClass: %s", stream->av_class->class_name);
+      const enum AVMediaType media_type = stream->codecpar->codec_type;
+      SDL_Log("Codec type: %d, %s", media_type, media_type == AVMEDIA_TYPE_AUDIO ? "audio" : media_type == AVMEDIA_TYPE_VIDEO ? "video" : "other" );
     }
 
     avformat_close_input(&ic);
