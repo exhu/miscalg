@@ -6,7 +6,11 @@
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
+
+#include <libavformat/avformat.h>
+
 #include <memory.h>
+#include <stdbool.h>
 
 bool sdlffclib_init(SdlffContext **out_context) {
   static SdlffContext global_context = {
@@ -76,4 +80,25 @@ void sdlffclib_main_loop(SdlffContext *context) {
       sdlffclib_render(context);
   }
   SDL_Log("Quit.");
+}
+
+bool sdlffclib_fileinfo(const char *file_path) {
+    AVFormatContext *ic = NULL;
+    int result = avformat_open_input(&ic, file_path, NULL, NULL);
+    if (result < 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't open %s: %d", file_path, result);
+	return false;
+    }
+    result = avformat_find_stream_info(ic, NULL);
+    if (result < 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't read stream info %s: %d", file_path, result);
+	return false;
+    }
+    SDL_Log("Long name: %s", ic->iformat->long_name);
+    SDL_Log("Name: %s", ic->iformat->name);
+    SDL_Log("Mime: %s", ic->iformat->mime_type);
+    SDL_Log("Extensions: %s", ic->iformat->extensions);
+
+    avformat_close_input(&ic);
+    return true;
 }

@@ -6,6 +6,10 @@
 * TODO play audio
 * TODO consider gui https://github.com/Immediate-Mode-UI/Nuklear/blob/master/demo/sdl_renderer/nuklear_sdl_renderer.h
 
+* Build
+meson _build ./
+ninja
+
 * sdl3 3.4.10
 Install from https://github.com/libsdl-org/SDL/releases/tag/release-3.4.10
 e.g. by setting install path to ~/.local
@@ -18,3 +22,4 @@ pipx install meson
 ** libimgui-dev ?
 ** libstb-dev ?
 sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+

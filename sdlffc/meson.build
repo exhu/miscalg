@@ -10,6 +10,7 @@ project('sdlffc', 'c',
 #add_project_arguments('-fanalyzer', language: 'c')
 
 # DEPENDENCIES
+# sdl3 3.4.10, ffmpeg libs 6.1.1
 # libsdl.org
 sdl_dep = dependency('sdl3')
 
