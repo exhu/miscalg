@@ -6,9 +6,12 @@
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
+#include <SDL3/SDL_dialog.h>
 
 #include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
 
+#include <libavutil/rational.h>
 #include <memory.h>
 #include <stdbool.h>
 
@@ -71,7 +74,16 @@ static void sdlffclib_render(SdlffContext *context) {
   SDL_RenderPresent(context->renderer);
 }
 
+static void dialog_cb(void *userdata, const char * const *filelist, int filter) {
+  if (filelist != NULL) {
+    SDL_Log("Selected '%s'", filelist[0]);
+  } else {
+    SDL_Log("Nothing selected.");
+  }
+}
+
 void sdlffclib_main_loop(SdlffContext *context) {
+  //SDL_ShowOpenFileDialog(dialog_cb, NULL, context->window, NULL, 0, NULL, false);
   SDL_Event event;
   while (SDL_WaitEvent(&event)) {
     if (event.type == SDL_EVENT_QUIT)
@@ -98,7 +110,19 @@ bool sdlffclib_fileinfo(const char *file_path) {
     SDL_Log("Name: %s", ic->iformat->name);
     SDL_Log("Mime: %s", ic->iformat->mime_type);
     SDL_Log("Extensions: %s", ic->iformat->extensions);
+    SDL_Log("Streams: %d", ic->nb_streams);
+    for (unsigned i = 0; i < ic->nb_streams; ++i) {
+      SDL_Log("Stream: %d", i);
+      AVStream *stream = ic->streams[i];
+      SDL_Log("Time base: %d/%d", stream->time_base.num, stream->time_base.den);
+      SDL_Log("Duration: %ld", stream->duration);
+      double duration = (double)(stream->duration * stream->time_base.num) / stream->time_base.den;
+      SDL_Log("Duration on time base: %f", duration);
+      SDL_Log("Frame rate: %d/%d", stream->r_frame_rate.num, stream->r_frame_rate.den);
+      SDL_Log("AVClass: %s", stream->av_class->class_name);
+    }
 
     avformat_close_input(&ic);
+
     return true;
 }
