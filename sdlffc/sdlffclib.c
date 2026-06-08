@@ -1,4 +1,5 @@
 #include "sdlffclib.h"
+#include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_scancode.h"
 #include "sdlffclib_private.h"
 #include <SDL3/SDL_dialog.h>
@@ -17,11 +18,8 @@
 #include <stdbool.h>
 
 bool sdlffclib_init(SdlffContext **out_context) {
-  static SdlffContext global_context = {
-      .window = NULL,
-      .renderer = NULL,
-      .streaming_texture = NULL,
-  };
+  static SdlffContext global_context;
+  memset(&global_context, 0, sizeof(SdlffContext));
 
   SDL_SetAppMetadata("rdlffc", "0.1", "com.github.exhu.miscalg.sdlffc");
 
@@ -57,10 +55,29 @@ bool sdlffclib_init(SdlffContext **out_context) {
   return true;
 }
 
+/// free ffmpeg resources
+static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
+  if (ctx->ic) {
+    // TODO
+    #if 0
+    av_frame_free(&ctx->frame);
+    av_packet_free(&ctx->pkt);
+    avcodec_free_context(&ctx->audio_context);
+    #endif
+    avcodec_free_context(&ctx->video_context);
+    avformat_close_input(&ctx->ic);
+  }
+}
+
 void sdlffclib_done(SdlffContext **out_context) {
-  SDL_DestroyTexture((*out_context)->streaming_texture);
-  SDL_DestroyRenderer((*out_context)->renderer);
-  SDL_DestroyWindow((*out_context)->window);
+  SdlffContext *context = *out_context;
+
+  sdlffclib_free_video_file_ctx(&context->video_file_ctx);
+
+  /// free sdl resources
+  SDL_DestroyTexture(context->streaming_texture);
+  SDL_DestroyRenderer(context->renderer);
+  SDL_DestroyWindow(context->window);
   memset(*out_context, 0, sizeof(SdlffContext));
   *out_context = NULL;
   SDL_Quit();
@@ -99,7 +116,7 @@ void sdlffclib_main_loop(SdlffContext *context) {
       sdlffclib_render(context);
       break;
     case SDL_EVENT_KEY_DOWN:
-      if (event.key.scancode == SDL_SCANCODE_Q) {
+      if (event.key.key == SDLK_Q) {
         should_break = true;
         break;
       }
@@ -108,6 +125,62 @@ void sdlffclib_main_loop(SdlffContext *context) {
     }
   }
   SDL_Log("Quit.");
+}
+
+
+/// based on OpenVideoStream from testffmpeg.c
+static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream, const AVCodec *codec)
+{
+    AVStream *st = ic->streams[stream];
+    AVCodecParameters *codecpar = st->codecpar;
+    AVCodecContext *context;
+    const AVCodecHWConfig *config;
+    int i;
+    int result;
+
+    SDL_Log("Video stream: %s %dx%d", avcodec_get_name(codec->id), codecpar->width, codecpar->height);
+
+    context = avcodec_alloc_context3(NULL);
+    if (!context) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_alloc_context3 failed");
+        return NULL;
+    }
+
+    result = avcodec_parameters_to_context(context, ic->streams[stream]->codecpar);
+    if (result < 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_parameters_to_context failed: %s", av_err2str(result));
+        avcodec_free_context(&context);
+        return NULL;
+    }
+    context->pkt_timebase = ic->streams[stream]->time_base;
+
+    // TODO skip hw device for now, software decoder only
+
+    return context;
+}
+
+bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
+  SdlffVideoFileContext *ctx = &context->video_file_ctx;
+  ctx->ic = NULL;
+  int result = avformat_open_input(&ctx->ic, file_path, NULL, NULL);
+  if (result < 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't open %s: %d",
+                 file_path, result);
+    return false;
+  }
+  ctx->video_stream = av_find_best_stream(ctx->ic, AVMEDIA_TYPE_VIDEO, -1, -1,
+                                          &ctx->video_codec, 0);
+  if (ctx->video_stream < 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't find video stream %s",
+                 file_path);
+    return false;
+  }
+
+  ctx->video_context = open_video_stream(ctx->ic, ctx->video_stream, ctx->video_codec);
+  if (ctx->video_context)
+    return true;
+
+  return false;
 }
 
 bool sdlffclib_fileinfo(const char *file_path) {

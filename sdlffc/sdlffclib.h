@@ -12,3 +12,5 @@ void sdlffclib_main_loop(SdlffContext *context);
 // video/media section
 /// dumps file info to log
 bool sdlffclib_fileinfo(const char *file_path);
+/// open file for playback
+bool sdlffclib_open_video(SdlffContext *context, const char *file_path);

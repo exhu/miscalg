@@ -1,9 +1,25 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_render.h>
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+
+typedef struct {
+  /// input context
+  AVFormatContext *ic;
+  const AVCodec *audio_codec;
+  const AVCodec *video_codec;
+  AVCodecContext *audio_context;
+  AVCodecContext *video_context;
+  AVPacket *pkt;
+  AVFrame *frame;
+  int audio_stream;
+  int video_stream;
+} SdlffVideoFileContext;
 
 struct _SdlffContext {
   SDL_Window *window;
   SDL_Renderer *renderer;
   SDL_Texture *streaming_texture;
+  SdlffVideoFileContext video_file_ctx;
 };
