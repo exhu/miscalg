@@ -1,4 +1,5 @@
 #include "sdlffclib.h"
+#include "SDL3/SDL_scancode.h"
 #include "sdlffclib_private.h"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_hints.h>
@@ -74,22 +75,36 @@ static void sdlffclib_render(SdlffContext *context) {
   SDL_RenderPresent(context->renderer);
 }
 
+#if 0
 static void dialog_cb(void *userdata, const char * const *filelist, int filter) {
   if (filelist != NULL) {
     SDL_Log("Selected '%s'", filelist[0]);
   } else {
-    SDL_Log("Nothing selected.");
+    SDL_Log("Error.");
   }
 }
+#endif
 
 void sdlffclib_main_loop(SdlffContext *context) {
   //SDL_ShowOpenFileDialog(dialog_cb, NULL, context->window, NULL, 0, NULL, false);
   SDL_Event event;
-  while (SDL_WaitEvent(&event)) {
-    if (event.type == SDL_EVENT_QUIT)
+  bool should_break = false;
+  while (!should_break && SDL_WaitEvent(&event)) {
+    switch (event.type) {
+    case SDL_EVENT_QUIT:
+      should_break = true;
       break;
-    if (event.type == SDL_EVENT_WINDOW_EXPOSED)
+    case SDL_EVENT_WINDOW_EXPOSED:
       sdlffclib_render(context);
+      break;
+    case SDL_EVENT_KEY_DOWN:
+      if (event.key.scancode == SDL_SCANCODE_Q) {
+	should_break = true;
+	break;
+      }
+
+    default:;
+    }
   }
   SDL_Log("Quit.");
 }
@@ -103,6 +118,7 @@ bool sdlffclib_fileinfo(const char *file_path) {
     }
     result = avformat_find_stream_info(ic, NULL);
     if (result < 0) {
+	avformat_close_input(&ic);
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't read stream info %s: %d", file_path, result);
 	return false;
     }
@@ -124,6 +140,5 @@ bool sdlffclib_fileinfo(const char *file_path) {
     }
 
     avformat_close_input(&ic);
-
     return true;
 }
