@@ -11,7 +11,9 @@ int main(int argc, char **argv) {
   printf("This is project %s.\n", PROJECT_NAME);
   SdlffContext* context = NULL;
   if (sdlffclib_init(&context)) {
-    sdlffclib_fileinfo(argv[1]);
+    const char * file_path = argv[1];
+    sdlffclib_fileinfo(file_path);
+    sdlffclib_open_video(context, file_path);
     sdlffclib_main_loop(context);
   }
   sdlffclib_done(&context);

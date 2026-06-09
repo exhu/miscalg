@@ -1,4 +1,5 @@
 #include "sdlffclib.h"
+// sdl
 #include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_scancode.h"
 #include "sdlffclib_private.h"
@@ -10,10 +11,15 @@
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
 
+// ffmpeg
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+// #include <libavutil/mastering_display_metadata.h>
+#include <libavutil/pixdesc.h>
+// #include <libswscale/swscale.h>
 
-#include <libavutil/rational.h>
+// std
 #include <memory.h>
 #include <stdbool.h>
 
@@ -58,13 +64,15 @@ bool sdlffclib_init(SdlffContext **out_context) {
 /// free ffmpeg resources
 static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
   if (ctx->ic) {
-    // TODO
-    #if 0
+// TODO
+#if 0
     av_frame_free(&ctx->frame);
     av_packet_free(&ctx->pkt);
     avcodec_free_context(&ctx->audio_context);
-    #endif
-    avcodec_free_context(&ctx->video_context);
+#endif
+    if (ctx->video_context)
+      avcodec_free_context(&ctx->video_context);
+
     avformat_close_input(&ctx->ic);
   }
 }
@@ -127,36 +135,139 @@ void sdlffclib_main_loop(SdlffContext *context) {
   SDL_Log("Quit.");
 }
 
+/// copied GetTextureFormat from testffmpeg.c
+static SDL_PixelFormat get_texture_format(enum AVPixelFormat format) {
+  switch (format) {
+  case AV_PIX_FMT_RGB8:
+    return SDL_PIXELFORMAT_RGB332;
+  case AV_PIX_FMT_RGB444:
+    return SDL_PIXELFORMAT_XRGB4444;
+  case AV_PIX_FMT_RGB555:
+    return SDL_PIXELFORMAT_XRGB1555;
+  case AV_PIX_FMT_BGR555:
+    return SDL_PIXELFORMAT_XBGR1555;
+  case AV_PIX_FMT_RGB565:
+    return SDL_PIXELFORMAT_RGB565;
+  case AV_PIX_FMT_BGR565:
+    return SDL_PIXELFORMAT_BGR565;
+  case AV_PIX_FMT_RGB24:
+    return SDL_PIXELFORMAT_RGB24;
+  case AV_PIX_FMT_BGR24:
+    return SDL_PIXELFORMAT_BGR24;
+  case AV_PIX_FMT_0RGB32:
+    return SDL_PIXELFORMAT_XRGB8888;
+  case AV_PIX_FMT_0BGR32:
+    return SDL_PIXELFORMAT_XBGR8888;
+  case AV_PIX_FMT_NE(RGB0, 0BGR):
+    return SDL_PIXELFORMAT_RGBX8888;
+  case AV_PIX_FMT_NE(BGR0, 0RGB):
+    return SDL_PIXELFORMAT_BGRX8888;
+  case AV_PIX_FMT_RGB32:
+    return SDL_PIXELFORMAT_ARGB8888;
+  case AV_PIX_FMT_RGB32_1:
+    return SDL_PIXELFORMAT_RGBA8888;
+  case AV_PIX_FMT_BGR32:
+    return SDL_PIXELFORMAT_ABGR8888;
+  case AV_PIX_FMT_BGR32_1:
+    return SDL_PIXELFORMAT_BGRA8888;
+  case AV_PIX_FMT_YUV420P:
+    return SDL_PIXELFORMAT_IYUV;
+  case AV_PIX_FMT_YUYV422:
+    return SDL_PIXELFORMAT_YUY2;
+  case AV_PIX_FMT_UYVY422:
+    return SDL_PIXELFORMAT_UYVY;
+  case AV_PIX_FMT_NV12:
+    return SDL_PIXELFORMAT_NV12;
+  case AV_PIX_FMT_NV21:
+    return SDL_PIXELFORMAT_NV21;
+  case AV_PIX_FMT_P010:
+    return SDL_PIXELFORMAT_P010;
+  default:
+    return SDL_PIXELFORMAT_UNKNOWN;
+  }
+}
 
+static bool is_pixel_format_supported(enum AVPixelFormat format) {
+  return get_texture_format(format) != SDL_PIXELFORMAT_UNKNOWN;
+}
+
+/// copied from testffmpeg.c GetSupportedPixelFormat
+static enum AVPixelFormat
+get_supported_pixel_format_cb(AVCodecContext *s,
+                              const enum AVPixelFormat *pix_fmts) {
+  const enum AVPixelFormat *p;
+
+  for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(*p);
+
+    if (!(desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
+      /* We support all memory formats using swscale */
+      break;
+    }
+
+    if (is_pixel_format_supported(*p)) {
+      /* We support this format */
+      break;
+    }
+  }
+
+  if (*p == AV_PIX_FMT_NONE) {
+    SDL_Log("Couldn't find a supported pixel format:");
+    for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
+      SDL_Log("    %s", av_get_pix_fmt_name(*p));
+    }
+  }
+
+  return *p;
+}
 /// based on OpenVideoStream from testffmpeg.c
-static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream, const AVCodec *codec)
-{
-    AVStream *st = ic->streams[stream];
-    AVCodecParameters *codecpar = st->codecpar;
-    AVCodecContext *context;
-    const AVCodecHWConfig *config;
-    int i;
-    int result;
+static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream,
+                                         const AVCodec *codec) {
+  AVStream *st = ic->streams[stream];
+  AVCodecParameters *codecpar = st->codecpar;
+  AVCodecContext *context;
+  const AVCodecHWConfig *config;
+  int i;
+  int result;
 
-    SDL_Log("Video stream: %s %dx%d", avcodec_get_name(codec->id), codecpar->width, codecpar->height);
+  SDL_Log("Video stream: %s %dx%d", avcodec_get_name(codec->id),
+          codecpar->width, codecpar->height);
 
-    context = avcodec_alloc_context3(NULL);
-    if (!context) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_alloc_context3 failed");
-        return NULL;
-    }
+  context = avcodec_alloc_context3(NULL);
+  if (!context) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_alloc_context3 failed");
+    return NULL;
+  }
 
-    result = avcodec_parameters_to_context(context, ic->streams[stream]->codecpar);
-    if (result < 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_parameters_to_context failed: %s", av_err2str(result));
-        avcodec_free_context(&context);
-        return NULL;
-    }
-    context->pkt_timebase = ic->streams[stream]->time_base;
+  result =
+      avcodec_parameters_to_context(context, ic->streams[stream]->codecpar);
+  if (result < 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                 "avcodec_parameters_to_context failed: %s",
+                 av_err2str(result));
+    avcodec_free_context(&context);
+    return NULL;
+  }
+  context->pkt_timebase = ic->streams[stream]->time_base;
 
-    // TODO skip hw device for now, software decoder only
+// TODO add hw decoder support
+#if 0
+  /* Allow supported hardware accelerated pixel formats */
+  context->get_format = get_supported_pixel_format_cb;
+#endif
+  // skip hw device for now, software decoder only
+  result = avcodec_open2(context, codec, NULL);
+  if (result < 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't open codec %s: %s",
+                 avcodec_get_name(context->codec_id), av_err2str(result));
+    avcodec_free_context(&context);
+    return NULL;
+  }
 
-    return context;
+  // SDL_SetWindowSize(window, codecpar->width, codecpar->height);
+  SDL_Log("video w*h = %d x %d", codecpar->width, codecpar->height);
+
+  return context;
 }
 
 bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
@@ -176,7 +287,11 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
     return false;
   }
 
-  ctx->video_context = open_video_stream(ctx->ic, ctx->video_stream, ctx->video_codec);
+  ctx->video_context =
+      open_video_stream(ctx->ic, ctx->video_stream, ctx->video_codec);
+
+  // TODO
+
   if (ctx->video_context)
     return true;
 
