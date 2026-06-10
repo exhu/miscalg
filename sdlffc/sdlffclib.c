@@ -1,7 +1,7 @@
 #include "sdlffclib.h"
 // sdl
+#include "SDL3/SDL_keyboard.h"
 #include "SDL3/SDL_keycode.h"
-#include "SDL3/SDL_scancode.h"
 #include "sdlffclib_private.h"
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_events.h>
@@ -24,8 +24,8 @@
 #include <stdbool.h>
 
 bool sdlffclib_init(SdlffContext **out_context) {
-  static SdlffContext global_context;
-  memset(&global_context, 0, sizeof(SdlffContext));
+  static SdlffContext global_context = {0};
+  //memset(&global_context, 0, sizeof(SdlffContext));
 
   SDL_SetAppMetadata("rdlffc", "0.1", "com.github.exhu.miscalg.sdlffc");
 
@@ -45,7 +45,7 @@ bool sdlffclib_init(SdlffContext **out_context) {
                  "Failed to create window and renderer: %s", SDL_GetError());
     return false;
   }
-  SDL_SetWindowMinimumSize(context->window, 320, 200);
+  SDL_SetWindowMinimumSize(context->window, 320, 240);
   SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
 
   // TODO move create streaming texture for video somewhere else
@@ -110,6 +110,17 @@ static void dialog_cb(void *userdata, const char * const *filelist, int filter) 
 }
 #endif
 
+/// return true to quit
+static bool handle_key_should_quit(const SDL_KeyboardEvent *key) {
+  switch (key->key) {
+  case SDLK_Q:
+        return true;
+        break;
+  default:;
+  }
+  return false;
+}
+
 void sdlffclib_main_loop(SdlffContext *context) {
   // SDL_ShowOpenFileDialog(dialog_cb, NULL, context->window, NULL, 0, NULL,
   // false);
@@ -124,10 +135,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
       sdlffclib_render(context);
       break;
     case SDL_EVENT_KEY_DOWN:
-      if (event.key.key == SDLK_Q) {
-        should_break = true;
-        break;
-      }
+      should_break = handle_key_should_quit(&event.key);
+      SDL_Log("key down: %s, repeat %d", SDL_GetKeyName(event.key.key), event.key.repeat);
+      break;
 
     default:;
     }
