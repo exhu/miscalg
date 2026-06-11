@@ -15,6 +15,8 @@ typedef struct {
   AVFrame *frame;
   int audio_stream;
   int video_stream;
+  bool flushing;
+  double first_pts;
 } SdlffVideoFileContext;
 
 struct _SdlffContext {

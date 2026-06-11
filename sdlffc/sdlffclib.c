@@ -25,7 +25,7 @@
 
 bool sdlffclib_init(SdlffContext **out_context) {
   static SdlffContext global_context = {0};
-  //memset(&global_context, 0, sizeof(SdlffContext));
+  // memset(&global_context, 0, sizeof(SdlffContext));
 
   SDL_SetAppMetadata("rdlffc", "0.1", "com.github.exhu.miscalg.sdlffc");
 
@@ -47,6 +47,7 @@ bool sdlffclib_init(SdlffContext **out_context) {
   }
   SDL_SetWindowMinimumSize(context->window, 320, 240);
   SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
+  SDL_ShowWindow(context->window);
 
   // TODO move create streaming texture for video somewhere else
   context->streaming_texture =
@@ -64,16 +65,16 @@ bool sdlffclib_init(SdlffContext **out_context) {
 /// free ffmpeg resources
 static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
   if (ctx->ic) {
-// TODO
-#if 0
-    av_frame_free(&ctx->frame);
-    av_packet_free(&ctx->pkt);
-    avcodec_free_context(&ctx->audio_context);
-#endif
+    if (ctx->frame)
+      av_frame_free(&ctx->frame);
+    if (ctx->pkt)
+      av_packet_free(&ctx->pkt);
+    if (ctx->audio_context)
+      avcodec_free_context(&ctx->audio_context);
     if (ctx->video_context)
       avcodec_free_context(&ctx->video_context);
-
-    avformat_close_input(&ctx->ic);
+    if (ctx->ic)
+      avformat_close_input(&ctx->ic);
   }
 }
 
@@ -114,11 +115,77 @@ static void dialog_cb(void *userdata, const char * const *filelist, int filter) 
 static bool handle_key_should_quit(const SDL_KeyboardEvent *key) {
   switch (key->key) {
   case SDLK_Q:
-        return true;
-        break;
+    return true;
+    break;
   default:;
   }
   return false;
+}
+
+static bool process_next_file_frame(SdlffContext *context) {
+  int result;
+  SdlffVideoFileContext *ctx = &context->video_file_ctx;
+  if (!ctx->flushing) {
+    result = av_read_frame(ctx->ic, ctx->pkt);
+    if (result < 0) {
+      SDL_Log("End of stream, finishing decode");
+      if (ctx->audio_context) {
+        avcodec_flush_buffers(ctx->audio_context);
+      }
+      if (ctx->video_context) {
+        avcodec_flush_buffers(ctx->video_context);
+      }
+      ctx->flushing = true;
+    } else {
+      // TODO handle audio
+#if 0
+      if (ctx->pkt->stream_index == ctx->audio_stream) {
+                    result = avcodec_send_packet(ctx->audio_context, ctx->pkt);
+                    if (result < 0) {
+                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_send_packet(audio_context) failed: %s", av_err2str(result));
+                    }
+      } else
+#endif
+      if (ctx->pkt->stream_index == ctx->video_stream) {
+        result = avcodec_send_packet(ctx->video_context, ctx->pkt);
+        if (result < 0) {
+          SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                       "avcodec_send_packet(video_context) failed: %s",
+                       av_err2str(result));
+        }
+      }
+      av_packet_unref(ctx->pkt);
+    }
+  }
+  // TODO handle audio
+  bool decoded = false;
+  if (ctx->video_context) {
+    while (avcodec_receive_frame(ctx->video_context, ctx->frame) >= 0) {
+      double pts =
+          ((double)ctx->frame->pts * ctx->video_context->pkt_timebase.num) /
+          ctx->video_context->pkt_timebase.den;
+      if (ctx->first_pts < 0.0) {
+        ctx->first_pts = pts;
+      }
+      pts -= ctx->first_pts;
+
+      // TODO
+      // HandleVideoFrame(ctx->frame, pts);
+      decoded = true;
+    }
+  }
+  if (ctx->flushing && !decoded) {
+// TODO
+#if 0
+    if (SDL_GetAudioStreamQueued(audio) > 0) {
+        /* Wait a little bit for the audio to finish */
+        SDL_Delay(10);
+    } else {
+        done = true;
+    }
+#endif
+  }
+  return ctx->flushing;
 }
 
 void sdlffclib_main_loop(SdlffContext *context) {
@@ -126,6 +193,12 @@ void sdlffclib_main_loop(SdlffContext *context) {
   // false);
   SDL_Event event;
   bool should_break = false;
+
+  SDL_Rect area = {0, 0, 200, 30};
+  int cursor = 0;
+  // SDL_SetTextInputArea(context->window, &area, cursor);
+  // SDL_StartTextInput(context->window);
+
   while (!should_break && SDL_WaitEvent(&event)) {
     switch (event.type) {
     case SDL_EVENT_QUIT:
@@ -136,12 +209,17 @@ void sdlffclib_main_loop(SdlffContext *context) {
       break;
     case SDL_EVENT_KEY_DOWN:
       should_break = handle_key_should_quit(&event.key);
-      SDL_Log("key down: %s, repeat %d", SDL_GetKeyName(event.key.key), event.key.repeat);
+      SDL_Log("key down: %s, repeat %d", SDL_GetKeyName(event.key.key),
+              event.key.repeat);
+      break;
+    case SDL_EVENT_TEXT_INPUT:
+      SDL_Log("text input: %s", event.text.text);
       break;
 
     default:;
     }
   }
+  SDL_StopTextInput(context->window);
   SDL_Log("Quit.");
 }
 
@@ -300,8 +378,21 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
   ctx->video_context =
       open_video_stream(ctx->ic, ctx->video_stream, ctx->video_codec);
 
-  // TODO
+  // TODO audio
 
+  // reused packet data from demuxer (video/audio)
+  ctx->pkt = av_packet_alloc();
+  if (!ctx->pkt) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "av_packet_alloc failed");
+    return false;
+  }
+  // reused raw decompressed video/audio frame
+  ctx->frame = av_frame_alloc();
+  if (!ctx->frame) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "av_frame_alloc failed");
+    return false;
+  }
+  ctx->first_pts = -1.0;
   if (ctx->video_context)
     return true;
 
