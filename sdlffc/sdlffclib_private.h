@@ -22,6 +22,6 @@ typedef struct {
 struct _SdlffContext {
   SDL_Window *window;
   SDL_Renderer *renderer;
-  SDL_Texture *streaming_texture;
+  SDL_Texture *video_texture;
   SdlffVideoFileContext video_file_ctx;
 };
