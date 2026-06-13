@@ -1,14 +1,15 @@
 * sdl3 + ffmpeg video playback prototype
-
-* TODO load video, dump stream info
+Used code from SDL3-3.4.10/test/testffmpeg.c
+* DONE load video, dump stream info
 * TODO playback video at correct rate
 * TODO rewind, fast forward
 * TODO play audio
 * TODO consider gui https://github.com/Immediate-Mode-UI/Nuklear/blob/master/demo/sdl_renderer/nuklear_sdl_renderer.h
+* TODO enable hw decoding
 
 * Build
 meson _build ./
-ninja
+ninja -C _build
 
 * sdl3 3.4.10
 Install from https://github.com/libsdl-org/SDL/releases/tag/release-3.4.10
@@ -22,4 +23,3 @@ pipx install meson
 ** libimgui-dev ?
 ** libstb-dev ?
 sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
-
