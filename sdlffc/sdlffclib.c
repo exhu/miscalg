@@ -31,7 +31,7 @@
 #include <string.h>
 
 static int SDLCALL video_thread_cb(void *data) {
-  SdlffContext *context = (SdlffContext*)data;
+  SdlffContext *context = (SdlffContext *)data;
   /*
     loop while not quit:
       wait for condition to start;
@@ -80,10 +80,15 @@ bool sdlffclib_init(SdlffContext **out_context) {
     return false;
   }
 
-  mailbox_init(&context->main_thread_mailbox, &context->main_thread_mailbox_data);
-  mailbox_init(&context->video_thread_mailbox, &context->video_thread_mailbox_data);
+  mailbox_init(&context->main_thread_mailbox,
+               &context->main_thread_mailbox_data,
+               sizeof(context->main_thread_mailbox_data));
+  mailbox_init(&context->video_thread_mailbox,
+               &context->video_thread_mailbox_data,
+               sizeof(context->main_thread_mailbox_data));
 
-  context->video_thread = SDL_CreateThread(&video_thread_cb, "video-thread", context);
+  context->video_thread =
+      SDL_CreateThread(&video_thread_cb, "video-thread", context);
   SDL_SetWindowMinimumSize(context->window, 320, 240);
   SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
   SDL_ShowWindow(context->window);
@@ -107,15 +112,16 @@ static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
 }
 
 static bool is_video_finished(SdlffContext *context) {
-  return context->video_file_ctx.flushing || (context->video_file_ctx.ic == NULL);
+  return context->video_file_ctx.flushing ||
+         (context->video_file_ctx.ic == NULL);
 }
 
 void sdlffclib_done(SdlffContext **out_context) {
   SdlffContext *context = *out_context;
 
   sdlffclib_free_video_file_ctx(&context->video_file_ctx);
-  context->video_thread_mailbox_data = VTC_QUIT;
-  mailbox_send(&context->video_thread_mailbox);
+  VideoThreadCommand command = VTC_QUIT;
+  mailbox_send(&context->video_thread_mailbox, &command, sizeof(command));
   SDL_WaitThread(context->video_thread, NULL);
   mailbox_done(&context->main_thread_mailbox);
   mailbox_done(&context->video_thread_mailbox);
@@ -289,18 +295,17 @@ static SDL_PropertiesID create_video_texture_properties(AVFrame *frame,
 }
 
 static const char *SWS_CONTEXT_CONTAINER_PROPERTY = "SWS_CONTEXT_CONTAINER";
-struct SwsContextContainer
-{
-    struct SwsContext *context;
+struct SwsContextContainer {
+  struct SwsContext *context;
 };
 
-static void SDLCALL FreeSwsContextContainer(void *userdata, void *value)
-{
-    struct SwsContextContainer *sws_container = (struct SwsContextContainer *)value;
-    if (sws_container->context) {
-        sws_freeContext(sws_container->context);
-    }
-    SDL_free(sws_container);
+static void SDLCALL FreeSwsContextContainer(void *userdata, void *value) {
+  struct SwsContextContainer *sws_container =
+      (struct SwsContextContainer *)value;
+  if (sws_container->context) {
+    sws_freeContext(sws_container->context);
+  }
+  SDL_free(sws_container);
 }
 
 static bool get_texture_for_memory_frame(SdlffContext *context, AVFrame *frame,
@@ -331,10 +336,10 @@ static bool get_texture_for_memory_frame(SdlffContext *context, AVFrame *frame,
     SDL_PropertiesID props;
     if (frame_format == SDL_PIXELFORMAT_UNKNOWN) {
       props = create_video_texture_properties(frame, SDL_PIXELFORMAT_ARGB8888,
-                                           SDL_TEXTUREACCESS_STREAMING);
+                                              SDL_TEXTUREACCESS_STREAMING);
     } else {
       props = create_video_texture_properties(frame, frame_format,
-                                           SDL_TEXTUREACCESS_STREAMING);
+                                              SDL_TEXTUREACCESS_STREAMING);
     }
     *texture = SDL_CreateTextureWithProperties(context->renderer, props);
     SDL_DestroyProperties(props);
@@ -534,10 +539,10 @@ static bool process_next_file_frame(SdlffContext *context) {
   return !ctx->flushing;
 }
 
-static const Uint32 default_timer_interval = 1000/240;
+static const Uint32 default_timer_interval = 1000 / 240;
 
 static Uint32 SDLCALL timer_cb(void *userdata, SDL_TimerID timerID,
-                                   Uint32 interval) {
+                               Uint32 interval) {
   SdlffContext *context = (SdlffContext *)userdata;
   if (!is_video_finished(context)) {
     SDL_Event event;
