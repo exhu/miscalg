@@ -5,7 +5,7 @@
 // sdl
 #include "SDL3/SDL_keyboard.h"
 #include "SDL3/SDL_keycode.h"
-#include "SDL3/SDL_oldnames.h"
+#include "SDL3/SDL_thread.h"
 #include "SDL3/SDL_timer.h"
 #include "sdlffclib_private.h"
 #include <SDL3/SDL_dialog.h>
@@ -28,6 +28,43 @@
 #include <memory.h>
 #include <stdbool.h>
 #include <string.h>
+
+/// commands that main thread expects:
+typedef enum {
+  /// create texture from the active frame data, and lock pixel pointer
+  MTC_CREATE_TEXTURE_FOR_FRAME,
+  /// unlock texture pointer and render it
+  MTC_RENDER_FRAME,
+  /// end of stream reached
+  MTC_VIDEO_END,
+} MainThreadCommand;
+
+/// commands that video thread expects:
+typedef enum {
+  /// exit from stream function
+  VTC_QUIT,
+  /// start playing the stream
+  VTC_PLAY,
+  /// write to the locked texture buffer
+  VTC_FILL_TEXTURE,
+} VideoThreadCommand;
+
+static int SDLCALL video_thread_cb(void *data) {
+  SdlffContext *context = (SdlffContext*)data;
+  /*
+    loop while not quit:
+      wait for condition to start;
+      loop while not quit or video end:
+        demux,
+        decode,
+        request texture from main thread,
+        wait message with texture or quit message,
+        scale/copy,
+        request frame rendering.
+   */
+
+  return 0;
+}
 
 bool sdlffclib_init(SdlffContext **out_context) {
   static SdlffContext global_context = {0};
@@ -53,6 +90,7 @@ bool sdlffclib_init(SdlffContext **out_context) {
                  "Failed to create window and renderer: %s", SDL_GetError());
     return false;
   }
+  context->video_thread = SDL_CreateThread(&video_thread_cb, "video-thread", context);
   SDL_SetWindowMinimumSize(context->window, 320, 240);
   SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
   SDL_ShowWindow(context->window);
@@ -83,6 +121,7 @@ void sdlffclib_done(SdlffContext **out_context) {
   SdlffContext *context = *out_context;
 
   sdlffclib_free_video_file_ctx(&context->video_file_ctx);
+  SDL_WaitThread(context->video_thread, NULL);
 
   /// free sdl resources
   SDL_DestroyRenderer(context->renderer);

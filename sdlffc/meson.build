@@ -39,9 +39,10 @@ deps = [sdl_dep,
 
 src = ['sdlffc.c',
        'sdlffclib.c',
+       'mailbox.c',
       ]
 
-exe = executable('sdlffc', src, 
+exe = executable('sdlffc', src,
                  install : true,
                  dependencies: deps)
 
