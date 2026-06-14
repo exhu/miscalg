@@ -7,6 +7,7 @@
 #include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_thread.h"
 #include "SDL3/SDL_timer.h"
+#include "mailbox.h"
 #include "sdlffclib_private.h"
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_events.h>
@@ -29,26 +30,6 @@
 #include <stdbool.h>
 #include <string.h>
 
-/// commands that main thread expects:
-typedef enum {
-  /// create texture from the active frame data, and lock pixel pointer
-  MTC_CREATE_TEXTURE_FOR_FRAME,
-  /// unlock texture pointer and render it
-  MTC_RENDER_FRAME,
-  /// end of stream reached
-  MTC_VIDEO_END,
-} MainThreadCommand;
-
-/// commands that video thread expects:
-typedef enum {
-  /// exit from stream function
-  VTC_QUIT,
-  /// start playing the stream
-  VTC_PLAY,
-  /// write to the locked texture buffer
-  VTC_FILL_TEXTURE,
-} VideoThreadCommand;
-
 static int SDLCALL video_thread_cb(void *data) {
   SdlffContext *context = (SdlffContext*)data;
   /*
@@ -62,7 +43,15 @@ static int SDLCALL video_thread_cb(void *data) {
         scale/copy,
         request frame rendering.
    */
+  while (true) {
+    if (!mailbox_receive_and_lock(&context->video_thread_mailbox, -1) ||
+        context->video_thread_mailbox_data == VTC_QUIT)
+      break;
 
+    // TODO
+  }
+
+  SDL_Log("video thread exit.");
   return 0;
 }
 
@@ -90,6 +79,10 @@ bool sdlffclib_init(SdlffContext **out_context) {
                  "Failed to create window and renderer: %s", SDL_GetError());
     return false;
   }
+
+  mailbox_init(&context->main_thread_mailbox, &context->main_thread_mailbox_data);
+  mailbox_init(&context->video_thread_mailbox, &context->video_thread_mailbox_data);
+
   context->video_thread = SDL_CreateThread(&video_thread_cb, "video-thread", context);
   SDL_SetWindowMinimumSize(context->window, 320, 240);
   SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
@@ -121,7 +114,11 @@ void sdlffclib_done(SdlffContext **out_context) {
   SdlffContext *context = *out_context;
 
   sdlffclib_free_video_file_ctx(&context->video_file_ctx);
+  context->video_thread_mailbox_data = VTC_QUIT;
+  mailbox_send(&context->video_thread_mailbox);
   SDL_WaitThread(context->video_thread, NULL);
+  mailbox_done(&context->main_thread_mailbox);
+  mailbox_done(&context->video_thread_mailbox);
 
   /// free sdl resources
   SDL_DestroyRenderer(context->renderer);

@@ -23,6 +23,27 @@ typedef struct {
   double first_pts;
 } SdlffVideoFileContext;
 
+/// commands that main thread expects:
+typedef enum {
+  /// create texture from the active frame data, and lock pixel pointer
+  MTC_CREATE_TEXTURE_FOR_FRAME,
+  /// unlock texture pointer and render it
+  MTC_RENDER_FRAME,
+  /// end of stream reached
+  MTC_VIDEO_END,
+} MainThreadCommand;
+
+/// commands that video thread expects:
+typedef enum {
+  /// exit from stream function
+  VTC_QUIT,
+  /// start playing the stream
+  VTC_PLAY,
+  /// write to the locked texture buffer
+  VTC_FILL_TEXTURE,
+} VideoThreadCommand;
+
+
 struct _SdlffContext {
   SDL_Window *window;
   SDL_Renderer *renderer;
@@ -33,4 +54,6 @@ struct _SdlffContext {
   SDL_Thread *video_thread;
   MailBox video_thread_mailbox;
   MailBox main_thread_mailbox;
+  MainThreadCommand main_thread_mailbox_data;
+  VideoThreadCommand video_thread_mailbox_data;
 };
