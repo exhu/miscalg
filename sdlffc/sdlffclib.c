@@ -336,6 +336,7 @@ static bool get_texture_for_memory_frame(SdlffContext *context, AVFrame *frame,
         frame->width, frame->height, AV_PIX_FMT_BGRA, SWS_POINT, NULL, NULL,
         NULL);
     if (sws_container->context) {
+      // TODO 1-3 are uninitialized?
       uint8_t *pixels[4];
       int pitch[4];
       if (SDL_LockTexture(*texture, NULL, (void **)&pixels[0], &pitch[0])) {
