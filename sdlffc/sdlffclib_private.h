@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_render.h>
+#include <SDL3/SDL_timer.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 
@@ -24,4 +25,6 @@ struct _SdlffContext {
   SDL_Renderer *renderer;
   SDL_Texture *video_texture;
   SdlffVideoFileContext video_file_ctx;
+  SDL_TimerID timer_id;
+  Uint32 main_thread_event;
 };

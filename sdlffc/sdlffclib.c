@@ -5,6 +5,8 @@
 // sdl
 #include "SDL3/SDL_keyboard.h"
 #include "SDL3/SDL_keycode.h"
+#include "SDL3/SDL_oldnames.h"
+#include "SDL3/SDL_timer.h"
 #include "sdlffclib_private.h"
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_events.h>
@@ -25,6 +27,7 @@
 // std
 #include <memory.h>
 #include <stdbool.h>
+#include <string.h>
 
 bool sdlffclib_init(SdlffContext **out_context) {
   static SdlffContext global_context = {0};
@@ -40,6 +43,8 @@ bool sdlffclib_init(SdlffContext **out_context) {
 
   SdlffContext *context = &global_context;
   *out_context = context;
+
+  context->main_thread_event = SDL_RegisterEvents(1);
 
   if (!SDL_CreateWindowAndRenderer("hello sdl!", 1280, 720,
                                    SDL_WINDOW_RESIZABLE, &context->window,
@@ -68,6 +73,10 @@ static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
     if (ctx->ic)
       avformat_close_input(&ctx->ic);
   }
+}
+
+static bool is_video_finished(SdlffContext *context) {
+  return context->video_file_ctx.flushing || (context->video_file_ctx.ic == NULL);
 }
 
 void sdlffclib_done(SdlffContext **out_context) {
@@ -488,6 +497,20 @@ static bool process_next_file_frame(SdlffContext *context) {
   return !ctx->flushing;
 }
 
+static const Uint32 default_timer_interval = 1000/240;
+
+static Uint32 SDLCALL timer_cb(void *userdata, SDL_TimerID timerID,
+                                   Uint32 interval) {
+  SdlffContext *context = (SdlffContext *)userdata;
+  if (!is_video_finished(context)) {
+    SDL_Event event;
+    memset(&event, 0, sizeof(event));
+    event.type = context->main_thread_event;
+    SDL_PushEvent(&event);
+  }
+
+  return default_timer_interval;
+}
 void sdlffclib_main_loop(SdlffContext *context) {
   // SDL_ShowOpenFileDialog(dialog_cb, NULL, context->window, NULL, 0, NULL,
   // false);
@@ -498,6 +521,8 @@ void sdlffclib_main_loop(SdlffContext *context) {
   int cursor = 0;
   // SDL_SetTextInputArea(context->window, &area, cursor);
   // SDL_StartTextInput(context->window);
+
+  context->timer_id = SDL_AddTimer(default_timer_interval, &timer_cb, context);
 
   while (!should_break && SDL_WaitEvent(&event)) {
     switch (event.type) {
@@ -511,16 +536,19 @@ void sdlffclib_main_loop(SdlffContext *context) {
       should_break = handle_key_should_quit(&event.key);
       SDL_Log("key down: %s, repeat %d", SDL_GetKeyName(event.key.key),
               event.key.repeat);
-      process_next_file_frame(context);
       break;
     case SDL_EVENT_TEXT_INPUT:
       SDL_Log("text input: %s", event.text.text);
       break;
-
-    default:;
+    default:
+      if (event.type == context->main_thread_event) {
+        process_next_file_frame(context);
+      }
+      break;
     }
   }
   SDL_StopTextInput(context->window);
+  SDL_RemoveTimer(context->timer_id);
   SDL_Log("Quit.");
 }
 
