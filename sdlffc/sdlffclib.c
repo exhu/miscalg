@@ -122,12 +122,12 @@ static int SDLCALL video_thread_cb(void *data) {
     default:;
     }
     if (playing) {
-      // if receiving_frames then receive new frame from codec and render, otherwise start next file frame
+      // if receiving_frames then receive new frame from codec and render, otherwise start next file frame/packet
       if (!receiving_frames) {
         read_and_decode_next_packet(context);
         receiving_frames = true;
       }
-      // TODO render frame
+      // TODO render frame, set receiving_frames to false if last frame
       receiving_frames = false;
     } // playing
   } // while
