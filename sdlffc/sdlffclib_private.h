@@ -42,6 +42,8 @@ typedef enum {
   VTC_PLAY,
   /// write to the locked texture buffer
   VTC_FILL_TEXTURE,
+  /// proceed to next frame,
+  VTC_NEXT_FRAME,
 } VideoThreadCommand;
 
 

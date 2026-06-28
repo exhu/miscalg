@@ -38,6 +38,44 @@ static void send_main_thread_event(SdlffContext *context) {
     SDL_PushEvent(&event);
 }
 
+
+static void read_and_decode_next_packet(SdlffContext *context) {
+  int result;
+  SdlffVideoFileContext *ctx = &context->video_file_ctx;
+  if (!ctx->flushing) {
+    result = av_read_frame(ctx->ic, ctx->pkt);
+    if (result < 0) {
+      SDL_Log("End of stream, finishing decode");
+      if (ctx->audio_context) {
+        avcodec_flush_buffers(ctx->audio_context);
+      }
+      if (ctx->video_context) {
+        avcodec_flush_buffers(ctx->video_context);
+      }
+      ctx->flushing = true;
+    } else {
+      // TODO handle audio
+#if 0
+      if (ctx->pkt->stream_index == ctx->audio_stream) {
+                    result = avcodec_send_packet(ctx->audio_context, ctx->pkt);
+                    if (result < 0) {
+                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_send_packet(audio_context) failed: %s", av_err2str(result));
+                    }
+      } else
+#endif
+      if (ctx->pkt->stream_index == ctx->video_stream) {
+        result = avcodec_send_packet(ctx->video_context, ctx->pkt);
+        if (result < 0) {
+          SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                       "avcodec_send_packet(video_context) failed: %s",
+                       av_err2str(result));
+        }
+      }
+      av_packet_unref(ctx->pkt);
+    }
+  }
+} // read_next_packet
+
 static int SDLCALL video_thread_cb(void *data) {
   SdlffContext *context = (SdlffContext *)data;
   /*
@@ -53,6 +91,12 @@ static int SDLCALL video_thread_cb(void *data) {
    */
   SDL_Log("video thread started.");
   bool playing = false;
+  // need to receive codec frames before taking next file frame
+  // (one file frame may contain several codec frames when decoded)
+  // although in ffmpeg comment it's stated that "For video, the packet contains
+  // exactly one frame" maybe the demo is written so that it works for both
+  // audio (multiple codec frames in single stream frame) and video
+  bool receiving_frames = false;
   while (true) {
     const bool has_msg = mailbox_receive_and_lock(&context->video_thread_mailbox, -1);
     const VideoThreadCommand cmd = context->video_thread_mailbox_data;
@@ -64,6 +108,7 @@ static int SDLCALL video_thread_cb(void *data) {
     switch (cmd) {
     case VTC_PLAY:
       playing = true;
+      receiving_frames = false;
       SDL_Log("video thread play command received.");
       break;
     case VTC_FILL_TEXTURE:
@@ -72,11 +117,20 @@ static int SDLCALL video_thread_cb(void *data) {
     case VTC_QUIT:
       // should never reach this
       break;
+    case VTC_NEXT_FRAME:
+      break;
     default:;
     }
     if (playing) {
-    }
-  }
+      // if receiving_frames then receive new frame from codec and render, otherwise start next file frame
+      if (!receiving_frames) {
+        read_and_decode_next_packet(context);
+        receiving_frames = true;
+      }
+      // TODO render frame
+      receiving_frames = false;
+    } // playing
+  } // while
 
   SDL_Log("video thread exit.");
   return 0;
@@ -503,6 +557,7 @@ static void handle_video_frame(SdlffContext *context, AVFrame *frame,
   SDL_RenderPresent(context->renderer);
 }
 
+// original from main-thread only decoding/presentation
 // true to continue
 static bool process_next_file_frame(SdlffContext *context) {
   int result;
@@ -595,6 +650,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
   // context->timer_id = SDL_AddTimer(default_timer_interval, &timer_cb,
   // context);
 
+  VideoThreadCommand command = VTC_PLAY;
+  mailbox_send(&context->video_thread_mailbox, &command, sizeof(command));
+
   while (!should_break && SDL_WaitEvent(&event)) {
     switch (event.type) {
     case SDL_EVENT_QUIT:
@@ -625,6 +683,7 @@ void sdlffclib_main_loop(SdlffContext *context) {
           case MTC_RENDER_FRAME:
             // TODO
             // process_next_file_frame(context);
+            // VTC_NEXT_FRAME
             break;
           case MTC_VIDEO_END:
             SDL_Log("main thread received video end command.");
