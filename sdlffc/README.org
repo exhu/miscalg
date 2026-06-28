@@ -2,6 +2,7 @@
 Used code from SDL3-3.4.10/test/testffmpeg.c
 * DONE load video, dump stream info
 * TODO move decoding to a thread, remove timer?
+split handle_next_frame into main thread parts and worker thread parts
 * TODO playback video at correct rate
 * TODO show frame time
 * TODO drop frames when slow

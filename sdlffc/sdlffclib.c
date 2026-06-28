@@ -30,6 +30,14 @@
 #include <stdbool.h>
 #include <string.h>
 
+/// notify main thread to read mailbox
+static void send_main_thread_event(SdlffContext *context) {
+    SDL_Event event;
+    memset(&event, 0, sizeof(event));
+    event.type = context->main_thread_event;
+    SDL_PushEvent(&event);
+}
+
 static int SDLCALL video_thread_cb(void *data) {
   SdlffContext *context = (SdlffContext *)data;
   /*
@@ -43,12 +51,31 @@ static int SDLCALL video_thread_cb(void *data) {
         scale/copy,
         request frame rendering.
    */
+  SDL_Log("video thread started.");
+  bool playing = false;
   while (true) {
-    if (!mailbox_receive_and_lock(&context->video_thread_mailbox, -1) ||
-        context->video_thread_mailbox_data == VTC_QUIT)
+    const bool has_msg = mailbox_receive_and_lock(&context->video_thread_mailbox, -1);
+    const VideoThreadCommand cmd = context->video_thread_mailbox_data;
+    mailbox_unlock(&context->video_thread_mailbox);
+    if (!has_msg || cmd == VTC_QUIT) {
       break;
+    }
 
-    // TODO
+    switch (cmd) {
+    case VTC_PLAY:
+      playing = true;
+      SDL_Log("video thread play command received.");
+      break;
+    case VTC_FILL_TEXTURE:
+      // TODO
+      break;
+    case VTC_QUIT:
+      // should never reach this
+      break;
+    default:;
+    }
+    if (playing) {
+    }
   }
 
   SDL_Log("video thread exit.");
@@ -90,7 +117,9 @@ bool sdlffclib_init(SdlffContext **out_context) {
   context->video_thread =
       SDL_CreateThread(&video_thread_cb, "video-thread", context);
   SDL_SetWindowMinimumSize(context->window, 320, 240);
-  SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
+  if (!SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE)) {
+    SDL_SetRenderVSync(context->renderer, 1);
+  }
   SDL_ShowWindow(context->window);
   return true;
 }
@@ -119,12 +148,13 @@ static bool is_video_finished(SdlffContext *context) {
 void sdlffclib_done(SdlffContext **out_context) {
   SdlffContext *context = *out_context;
 
-  sdlffclib_free_video_file_ctx(&context->video_file_ctx);
   VideoThreadCommand command = VTC_QUIT;
   mailbox_send(&context->video_thread_mailbox, &command, sizeof(command));
   SDL_WaitThread(context->video_thread, NULL);
   mailbox_done(&context->main_thread_mailbox);
   mailbox_done(&context->video_thread_mailbox);
+
+  sdlffclib_free_video_file_ctx(&context->video_file_ctx);
 
   /// free sdl resources
   SDL_DestroyRenderer(context->renderer);
@@ -545,10 +575,7 @@ static Uint32 SDLCALL timer_cb(void *userdata, SDL_TimerID timerID,
                                Uint32 interval) {
   SdlffContext *context = (SdlffContext *)userdata;
   if (!is_video_finished(context)) {
-    SDL_Event event;
-    memset(&event, 0, sizeof(event));
-    event.type = context->main_thread_event;
-    SDL_PushEvent(&event);
+    send_main_thread_event(context);
   }
 
   return default_timer_interval;
@@ -564,7 +591,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
   // SDL_SetTextInputArea(context->window, &area, cursor);
   // SDL_StartTextInput(context->window);
 
-  context->timer_id = SDL_AddTimer(default_timer_interval, &timer_cb, context);
+  // TODO remove timer
+  // context->timer_id = SDL_AddTimer(default_timer_interval, &timer_cb,
+  // context);
 
   while (!should_break && SDL_WaitEvent(&event)) {
     switch (event.type) {
@@ -584,7 +613,25 @@ void sdlffclib_main_loop(SdlffContext *context) {
       break;
     default:
       if (event.type == context->main_thread_event) {
-        process_next_file_frame(context);
+        const bool has_cmd = mailbox_receive_and_lock(&context->main_thread_mailbox,
+                                                     1000 / 60);
+        const MainThreadCommand cmd = context->main_thread_mailbox_data;
+        mailbox_unlock(&context->main_thread_mailbox);
+        if (has_cmd) {
+          switch (cmd) {
+          case MTC_CREATE_TEXTURE_FOR_FRAME:
+            // TODO create and send to video thread
+            break;
+          case MTC_RENDER_FRAME:
+            // TODO
+            // process_next_file_frame(context);
+            break;
+          case MTC_VIDEO_END:
+            SDL_Log("main thread received video end command.");
+            break;
+          default:;
+          }
+        }
       }
       break;
     }
