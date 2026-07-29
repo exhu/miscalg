@@ -12,7 +12,7 @@ split handle_next_frame into main thread parts and worker thread parts
 * TODO enable hw decoding
 
 * Build
-meson _build ./
+PKG_CONFIG_PATH=~/.local/lib/pkgconfig/ meson setup _build
 ninja -C _build
 
 * sdl3 3.4.10

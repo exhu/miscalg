@@ -7,10 +7,15 @@ project('sdlffc', 'c',
   default_options : ['warning_level=everything', 'c_std=c99'],
   meson_version: '>=1.7.0')
 
+# If locally installed libs (e.g. SDL3 in ~/.local) are not found, run via:
+#   ./build.sh
+# which prepends ~/.local/lib/pkgconfig to PKG_CONFIG_PATH before setup.
+
 #add_project_arguments('-fanalyzer', language: 'c')
 
 # DEPENDENCIES
 # sdl3 3.4.10, ffmpeg libs 6.1.1
+
 # libsdl.org
 sdl_dep = dependency('sdl3')
 
