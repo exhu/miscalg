@@ -51,12 +51,10 @@ static void read_and_decode_next_packet(SdlffContext *context) {
   if (!ctx->flushing) {
     result = av_read_frame(ctx->ic, ctx->pkt);
     if (result < 0) {
-      SDL_Log("End of stream, finishing decode");
-      if (ctx->audio_context) {
-        avcodec_flush_buffers(ctx->audio_context);
-      }
+      SDL_Log("End of stream reached, draining decoder...");
       if (ctx->video_context) {
-        avcodec_flush_buffers(ctx->video_context);
+        /* Send NULL packet to video decoder to signal EOF and drain remaining frames */
+        avcodec_send_packet(ctx->video_context, NULL);
       }
       ctx->flushing = true;
     } else {
@@ -103,37 +101,47 @@ static int SDLCALL video_thread_cb(void *data) {
   while (!SDL_GetAtomicInt(&context->quit_requested)) {
     bool decoded_frame = false;
 
-    while (!decoded_frame && !ctx->flushing &&
-           !SDL_GetAtomicInt(&context->quit_requested)) {
+    while (!decoded_frame && !SDL_GetAtomicInt(&context->quit_requested)) {
       read_and_decode_next_packet(context);
 
-      if (ctx->video_context &&
-          avcodec_receive_frame(ctx->video_context, ctx->frame) >= 0) {
-        decoded_frame = true;
+      if (ctx->video_context) {
+        int ret = avcodec_receive_frame(ctx->video_context, ctx->frame);
+        if (ret >= 0) {
+          decoded_frame = true;
 
-        double pts =
-            ((double)ctx->frame->pts * ctx->video_context->pkt_timebase.num) /
-            ctx->video_context->pkt_timebase.den;
-        if (ctx->first_pts < 0.0) {
-          ctx->first_pts = pts;
-        }
-        pts -= ctx->first_pts;
-
-        /* Ref the frame for queue ownership; avcodec may reuse ctx->frame */
-        AVFrame *qframe = av_frame_alloc();
-        if (qframe && av_frame_ref(qframe, ctx->frame) >= 0) {
-          if (!frame_queue_push(&context->frame_queue, qframe, pts,
-                                &context->quit_requested)) {
-            /* Push aborted: quit_requested was set while we waited */
-            av_frame_unref(qframe);
-            av_frame_free(&qframe);
+          int64_t pts_raw = (ctx->frame->pts != AV_NOPTS_VALUE)
+                                ? ctx->frame->pts
+                                : ctx->frame->best_effort_timestamp;
+          if (pts_raw == AV_NOPTS_VALUE) {
+            pts_raw = 0;
           }
-        } else {
-          av_frame_free(&qframe);
-          SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                       "av_frame_alloc/ref failed");
+          AVRational tb = ctx->ic->streams[ctx->video_stream]->time_base;
+          double pts = (double)pts_raw * av_q2d(tb);
+
+          if (ctx->first_pts < 0.0) {
+            ctx->first_pts = pts;
+          }
+          pts -= ctx->first_pts;
+
+          /* Ref the frame for queue ownership; avcodec may reuse ctx->frame */
+          AVFrame *qframe = av_frame_alloc();
+          if (qframe && av_frame_ref(qframe, ctx->frame) >= 0) {
+            if (!frame_queue_push(&context->frame_queue, qframe, pts,
+                                  &context->quit_requested)) {
+              /* Push aborted: quit_requested was set while we waited */
+              av_frame_unref(qframe);
+              av_frame_free(&qframe);
+            }
+          } else {
+            av_frame_free(&qframe);
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "av_frame_alloc/ref failed");
+          }
+          av_frame_unref(ctx->frame);
+        } else if (ret == AVERROR_EOF || (ctx->flushing && ret == AVERROR(EAGAIN))) {
+          /* Decoder is fully drained or requires no more input */
+          break;
         }
-        av_frame_unref(ctx->frame);
       }
     }
 
@@ -171,7 +179,10 @@ bool sdlffclib_init(SdlffContext **out_context) {
   *out_context = context;
 
   SDL_SetAtomicInt(&context->quit_requested, 0);
-  frame_queue_init(&context->frame_queue);
+  if (!frame_queue_init(&context->frame_queue)) {
+    SDL_Quit();
+    return false;
+  }
 
   context->main_thread_event = SDL_RegisterEvents(1);
 
@@ -180,18 +191,36 @@ bool sdlffclib_init(SdlffContext **out_context) {
                                    &context->renderer)) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                  "Failed to create window and renderer: %s", SDL_GetError());
+    frame_queue_done(&context->frame_queue);
+    SDL_Quit();
     return false;
   }
 
-  mailbox_init(&context->main_thread_mailbox,
-               &context->main_thread_mailbox_data,
-               sizeof(context->main_thread_mailbox_data));
-  mailbox_init(&context->video_thread_mailbox,
-               &context->video_thread_mailbox_data,
-               sizeof(context->video_thread_mailbox_data));  // FIXED: was sizeof(main_thread_mailbox_data)
+  if (!mailbox_init(&context->main_thread_mailbox,
+                   &context->main_thread_mailbox_data,
+                   sizeof(context->main_thread_mailbox_data)) ||
+      !mailbox_init(&context->video_thread_mailbox,
+                   &context->video_thread_mailbox_data,
+                   sizeof(context->video_thread_mailbox_data))) {
+    SDL_DestroyRenderer(context->renderer);
+    SDL_DestroyWindow(context->window);
+    frame_queue_done(&context->frame_queue);
+    SDL_Quit();
+    return false;
+  }
 
   context->video_thread =
       SDL_CreateThread(&video_thread_cb, "video-thread", context);
+  if (!context->video_thread) {
+    mailbox_done(&context->main_thread_mailbox);
+    mailbox_done(&context->video_thread_mailbox);
+    SDL_DestroyRenderer(context->renderer);
+    SDL_DestroyWindow(context->window);
+    frame_queue_done(&context->frame_queue);
+    SDL_Quit();
+    return false;
+  }
+
   SDL_SetWindowMinimumSize(context->window, 320, 240);
   if (!SDL_SetRenderVSync(context->renderer, SDL_RENDERER_VSYNC_ADAPTIVE)) {
     SDL_SetRenderVSync(context->renderer, 1);
@@ -217,22 +246,36 @@ static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
 }
 
 void sdlffclib_done(SdlffContext **out_context) {
+  if (!out_context || !*out_context) {
+    return;
+  }
   SdlffContext *context = *out_context;
 
   /* Signal video thread to stop and unblock it if blocked in frame_queue_push */
   SDL_SetAtomicInt(&context->quit_requested, 1);
   frame_queue_flush(&context->frame_queue);
-  SDL_WaitThread(context->video_thread, NULL);
+  if (context->video_thread) {
+    SDL_WaitThread(context->video_thread, NULL);
+  }
 
   mailbox_done(&context->main_thread_mailbox);
   mailbox_done(&context->video_thread_mailbox);
   frame_queue_done(&context->frame_queue);
 
+  if (context->video_texture) {
+    SDL_DestroyTexture(context->video_texture);
+    context->video_texture = NULL;
+  }
+
   sdlffclib_free_video_file_ctx(&context->video_file_ctx);
 
   /// free sdl resources
-  SDL_DestroyRenderer(context->renderer);
-  SDL_DestroyWindow(context->window);
+  if (context->renderer) {
+    SDL_DestroyRenderer(context->renderer);
+  }
+  if (context->window) {
+    SDL_DestroyWindow(context->window);
+  }
   memset(*out_context, 0, sizeof(SdlffContext));
   *out_context = NULL;
   SDL_Quit();
@@ -502,11 +545,36 @@ static void render_frame_main_thread(SdlffContext *context, AVFrame *frame) {
     src.y = 0.0f;
     src.w = (float)frame->width;
     src.h = (float)frame->height;
+
+    int win_w = 0, win_h = 0;
+    SDL_GetRenderOutputSize(context->renderer, &win_w, &win_h);
+
+    SDL_FRect dst;
+    if (win_w > 0 && win_h > 0 && frame->width > 0 && frame->height > 0) {
+      float aspect = (float)frame->width / (float)frame->height;
+      if ((float)win_w / (float)win_h > aspect) {
+        dst.h = (float)win_h;
+        dst.w = dst.h * aspect;
+        dst.x = ((float)win_w - dst.w) * 0.5f;
+        dst.y = 0.0f;
+      } else {
+        dst.w = (float)win_w;
+        dst.h = dst.w / aspect;
+        dst.x = 0.0f;
+        dst.y = ((float)win_h - dst.h) * 0.5f;
+      }
+    } else {
+      dst.x = 0.0f;
+      dst.y = 0.0f;
+      dst.w = (float)frame->width;
+      dst.h = (float)frame->height;
+    }
+
     if (frame->linesize[0] < 0) {
       SDL_RenderTextureRotated(context->renderer, context->video_texture, &src,
-                               NULL, 0.0, NULL, SDL_FLIP_VERTICAL);
+                               &dst, 0.0, NULL, SDL_FLIP_VERTICAL);
     } else {
-      SDL_RenderTexture(context->renderer, context->video_texture, &src, NULL);
+      SDL_RenderTexture(context->renderer, context->video_texture, &src, &dst);
     }
   }
 
@@ -609,12 +677,23 @@ void sdlffclib_main_loop(SdlffContext *context) {
       }
     }
 
-    /* Pop and render any frame whose PTS has been reached */
+    /* Pop and render any frame whose PTS has been reached.
+       If multiple frames are ready (due to latency/lag), drop older frames
+       so rendering catches up to real-time playback. */
     if (!should_break) {
       /* Convert nanoseconds (SDL_GetTicksNS) to seconds (1.0e9 = 10^9 ns/s) */
       double render_elapsed =
           (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
-      AVFrame *frame = frame_queue_try_pop(&context->frame_queue, render_elapsed);
+      AVFrame *frame = NULL;
+      AVFrame *next_frame = NULL;
+
+      while ((next_frame = frame_queue_try_pop(&context->frame_queue, render_elapsed)) != NULL) {
+        if (frame) {
+          av_frame_free(&frame);
+        }
+        frame = next_frame;
+      }
+
       if (frame) {
         render_frame_main_thread(context, frame);
         av_frame_free(&frame);
@@ -638,11 +717,16 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
   if (ctx->video_stream < 0) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't find video stream %s",
                  file_path);
+    sdlffclib_free_video_file_ctx(ctx);
     return false;
   }
 
   ctx->video_context =
       open_video_stream(ctx->ic, ctx->video_stream, ctx->video_codec);
+  if (!ctx->video_context) {
+    sdlffclib_free_video_file_ctx(ctx);
+    return false;
+  }
 
   // TODO audio
 
@@ -650,19 +734,18 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
   ctx->pkt = av_packet_alloc();
   if (!ctx->pkt) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "av_packet_alloc failed");
+    sdlffclib_free_video_file_ctx(ctx);
     return false;
   }
   // reused raw decompressed video/audio frame
   ctx->frame = av_frame_alloc();
   if (!ctx->frame) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "av_frame_alloc failed");
+    sdlffclib_free_video_file_ctx(ctx);
     return false;
   }
   ctx->first_pts = -1.0;
-  if (ctx->video_context)
-    return true;
-
-  return false;
+  return true;
 }
 
 bool sdlffclib_fileinfo(const char *file_path) {
