@@ -4,7 +4,8 @@
 
 /// one-way one-slot communiction between threads
 typedef struct {
-  SDL_Condition *condition;
+  SDL_Condition *condition;        ///< signaled when a message is available
+  SDL_Condition *empty_condition;  ///< signaled when the slot is consumed
   SDL_Mutex *mutex;
   void *data;
   size_t data_size;
@@ -14,8 +15,7 @@ typedef struct {
 /// data is a reusable buffer
 bool mailbox_init(MailBox *mb, void *data, size_t data_size);
 void mailbox_done(MailBox *mb);
-/// signals, data is ready, is_set = true
-/// returns false if the mailbox is already set, and the data is not updated
+/// blocks until slot is free, then copies data and signals receiver
 /// data_size must be the same as in mailbox_init
 bool mailbox_send(MailBox *mb, void *new_data_value, size_t data_size);
 
