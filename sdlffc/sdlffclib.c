@@ -594,6 +594,7 @@ void sdlffclib_main_loop(SdlffContext *context) {
 
     /* Pop and render any frame whose PTS has been reached */
     if (!should_break) {
+      /* Convert nanoseconds (SDL_GetTicksNS) to seconds (1.0e9 = 10^9 ns/s) */
       double elapsed =
           (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
       AVFrame *frame = frame_queue_try_pop(&context->frame_queue, elapsed);
