@@ -9,7 +9,6 @@
 #include "SDL3/SDL_timer.h"
 #include "mailbox.h"
 #include "sdlffclib_private.h"
-#include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_init.h>
@@ -45,7 +44,6 @@ static void send_main_thread_event(SdlffContext *context) {
     SDL_PushEvent(&event);
 }
 
-
 static void read_and_decode_next_packet(SdlffContext *context) {
   int result;
   SdlffVideoFileContext *ctx = &context->video_file_ctx;
@@ -61,15 +59,6 @@ static void read_and_decode_next_packet(SdlffContext *context) {
       }
       ctx->flushing = true;
     } else {
-      // TODO handle audio
-#if 0
-      if (ctx->pkt->stream_index == ctx->audio_stream) {
-                    result = avcodec_send_packet(ctx->audio_context, ctx->pkt);
-                    if (result < 0) {
-                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_send_packet(audio_context) failed: %s", av_err2str(result));
-                    }
-      } else
-#endif
       if (ctx->pkt->stream_index == ctx->video_stream) {
         result = avcodec_send_packet(ctx->video_context, ctx->pkt);
         if (result < 0) {
@@ -81,7 +70,7 @@ static void read_and_decode_next_packet(SdlffContext *context) {
       av_packet_unref(ctx->pkt);
     }
   }
-} // read_next_packet
+}
 
 /// video decoding thread
 static int SDLCALL video_thread_cb(void *data) {
@@ -129,6 +118,7 @@ static int SDLCALL video_thread_cb(void *data) {
               ctx->first_pts = pts;
             }
             pts -= ctx->first_pts;
+            (void)pts;
 
             // Notify main thread to create texture or render frame
             MainThreadCommand mtc = MTC_CREATE_TEXTURE_FOR_FRAME;
@@ -170,7 +160,6 @@ static int SDLCALL video_thread_cb(void *data) {
 
 bool sdlffclib_init(SdlffContext **out_context) {
   static SdlffContext global_context = {0};
-  // memset(&global_context, 0, sizeof(SdlffContext));
 
   SDL_SetAppMetadata("sdlffc", "0.1", "com.github.exhu.miscalg.sdlffc");
 
@@ -226,11 +215,6 @@ static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
   }
 }
 
-static bool is_video_finished(SdlffContext *context) {
-  return context->video_file_ctx.flushing ||
-         (context->video_file_ctx.ic == NULL);
-}
-
 void sdlffclib_done(SdlffContext **out_context) {
   SdlffContext *context = *out_context;
 
@@ -249,25 +233,6 @@ void sdlffclib_done(SdlffContext **out_context) {
   *out_context = NULL;
   SDL_Quit();
 }
-
-static void sdlffclib_render(SdlffContext *context) {
-  SDL_SetRenderDrawColor(context->renderer, 0x00, 0x00, 0x00, 0x00);
-  SDL_RenderClear(context->renderer);
-  SDL_SetRenderDrawColor(context->renderer, 0xFF, 0x00, 0x00, 0xFF);
-  SDL_RenderLine(context->renderer, 0.f, 0.f, 50.f, 25.f);
-
-  SDL_RenderPresent(context->renderer);
-}
-
-#if 0
-static void dialog_cb(void *userdata, const char * const *filelist, int filter) {
-  if (filelist != NULL) {
-    SDL_Log("Selected '%s'", filelist[0]);
-  } else {
-    SDL_Log("Error.");
-  }
-}
-#endif
 
 /// return true to quit
 static bool handle_key_should_quit(const SDL_KeyboardEvent *key) {
@@ -363,18 +328,6 @@ static SDL_PropertiesID create_video_texture_properties(AVFrame *frame,
   static const float k_flSDRWhitePoint = 203.0f;
   float flMaxLuminance = k_flSDRWhitePoint;
 
-// TODO hardware decoding
-#if 0
-    if (frame->hw_frames_ctx) {
-        AVHWFramesContext *frames = (AVHWFramesContext *)(frame->hw_frames_ctx->data);
-
-        width = frames->width;
-        height = frames->height;
-        if (format == SDL_PIXELFORMAT_UNKNOWN) {
-            format = GetTextureFormat(frames->sw_format);
-        }
-    } else {
-#endif
   if (format == SDL_PIXELFORMAT_UNKNOWN) {
     format = get_texture_format(frame->format);
   }
@@ -426,171 +379,6 @@ static void SDLCALL FreeSwsContextContainer(void *userdata, void *value) {
     sws_freeContext(sws_container->context);
   }
   SDL_free(sws_container);
-}
-
-static bool get_texture_for_memory_frame(SdlffContext *context, AVFrame *frame,
-                                         SDL_Texture **texture) {
-  int texture_width = 0, texture_height = 0;
-  SDL_PixelFormat texture_format = SDL_PIXELFORMAT_UNKNOWN;
-  SDL_PixelFormat frame_format = get_texture_format(frame->format);
-
-  if (*texture) {
-    SDL_PropertiesID props = SDL_GetTextureProperties(*texture);
-    texture_format = (SDL_PixelFormat)SDL_GetNumberProperty(
-        props, SDL_PROP_TEXTURE_FORMAT_NUMBER, SDL_PIXELFORMAT_UNKNOWN);
-    texture_width =
-        (int)SDL_GetNumberProperty(props, SDL_PROP_TEXTURE_WIDTH_NUMBER, 0);
-    texture_height =
-        (int)SDL_GetNumberProperty(props, SDL_PROP_TEXTURE_HEIGHT_NUMBER, 0);
-  }
-  if (!*texture || texture_width != frame->width ||
-      texture_height != frame->height ||
-      (frame_format != SDL_PIXELFORMAT_UNKNOWN &&
-       texture_format != frame_format) ||
-      (frame_format == SDL_PIXELFORMAT_UNKNOWN &&
-       texture_format != SDL_PIXELFORMAT_ARGB8888)) {
-    if (*texture) {
-      SDL_DestroyTexture(*texture);
-    }
-
-    SDL_PropertiesID props;
-    if (frame_format == SDL_PIXELFORMAT_UNKNOWN) {
-      props = create_video_texture_properties(frame, SDL_PIXELFORMAT_ARGB8888,
-                                              SDL_TEXTUREACCESS_STREAMING);
-    } else {
-      props = create_video_texture_properties(frame, frame_format,
-                                              SDL_TEXTUREACCESS_STREAMING);
-    }
-    *texture = SDL_CreateTextureWithProperties(context->renderer, props);
-    SDL_DestroyProperties(props);
-    if (!*texture) {
-      return false;
-    }
-
-    if (frame_format == SDL_PIXELFORMAT_UNKNOWN ||
-        SDL_ISPIXELFORMAT_ALPHA(frame_format)) {
-      SDL_SetTextureBlendMode(*texture, SDL_BLENDMODE_BLEND);
-    } else {
-      SDL_SetTextureBlendMode(*texture, SDL_BLENDMODE_NONE);
-    }
-    SDL_SetTextureScaleMode(*texture, SDL_SCALEMODE_LINEAR);
-  }
-
-  switch (frame_format) {
-  case SDL_PIXELFORMAT_UNKNOWN: {
-    SDL_PropertiesID props = SDL_GetTextureProperties(*texture);
-    struct SwsContextContainer *sws_container =
-        (struct SwsContextContainer *)SDL_GetPointerProperty(
-            props, SWS_CONTEXT_CONTAINER_PROPERTY, NULL);
-    if (!sws_container) {
-      sws_container =
-          (struct SwsContextContainer *)SDL_calloc(1, sizeof(*sws_container));
-      if (!sws_container) {
-        return false;
-      }
-      SDL_SetPointerPropertyWithCleanup(props, SWS_CONTEXT_CONTAINER_PROPERTY,
-                                        sws_container, FreeSwsContextContainer,
-                                        NULL);
-    }
-    sws_container->context = sws_getCachedContext(
-        sws_container->context, frame->width, frame->height, frame->format,
-        frame->width, frame->height, AV_PIX_FMT_BGRA, SWS_POINT, NULL, NULL,
-        NULL);
-    if (sws_container->context) {
-      // TODO 1-3 are uninitialized?
-      uint8_t *pixels[4];
-      int pitch[4];
-      if (SDL_LockTexture(*texture, NULL, (void **)&pixels[0], &pitch[0])) {
-        sws_scale(sws_container->context, (const uint8_t *const *)frame->data,
-                  frame->linesize, 0, frame->height, pixels, pitch);
-        SDL_UnlockTexture(*texture);
-      }
-    } else {
-      SDL_SetError("Can't initialize the conversion context");
-      return false;
-    }
-    break;
-  }
-  case SDL_PIXELFORMAT_IYUV:
-    if (frame->linesize[0] > 0 && frame->linesize[1] > 0 &&
-        frame->linesize[2] > 0) {
-      SDL_UpdateYUVTexture(*texture, NULL, frame->data[0], frame->linesize[0],
-                           frame->data[1], frame->linesize[1], frame->data[2],
-                           frame->linesize[2]);
-    } else if (frame->linesize[0] < 0 && frame->linesize[1] < 0 &&
-               frame->linesize[2] < 0) {
-      SDL_UpdateYUVTexture(
-          *texture, NULL,
-          frame->data[0] + frame->linesize[0] * (frame->height - 1),
-          -frame->linesize[0],
-          frame->data[1] +
-              frame->linesize[1] * (AV_CEIL_RSHIFT(frame->height, 1) - 1),
-          -frame->linesize[1],
-          frame->data[2] +
-              frame->linesize[2] * (AV_CEIL_RSHIFT(frame->height, 1) - 1),
-          -frame->linesize[2]);
-    }
-    break;
-  default:
-    if (frame->linesize[0] < 0) {
-      SDL_UpdateTexture(*texture, NULL,
-                        frame->data[0] +
-                            frame->linesize[0] * (frame->height - 1),
-                        -frame->linesize[0]);
-    } else {
-      SDL_UpdateTexture(*texture, NULL, frame->data[0], frame->linesize[0]);
-    }
-    break;
-  }
-  return true;
-}
-
-static bool get_texture_for_video_frame(SdlffContext *context, AVFrame *frame,
-                                        SDL_Texture **texture) {
-  // TODO hw accel formats
-  return get_texture_for_memory_frame(context, frame, texture);
-}
-
-// TODO do we need frame here?
-static void display_video_frame(SdlffContext *context, AVFrame *frame) {
-  /* Update the video texture */
-  if (!get_texture_for_video_frame(context, frame, &context->video_texture)) {
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                 "Couldn't get texture for frame: %s", SDL_GetError());
-    return;
-  }
-
-  SDL_FRect src;
-  src.x = 0.0f;
-  src.y = 0.0f;
-  src.w = (float)frame->width;
-  src.h = (float)frame->height;
-  if (frame->linesize[0] < 0) {
-    SDL_RenderTextureRotated(context->renderer, context->video_texture, &src,
-                             NULL, 0.0, NULL, SDL_FLIP_VERTICAL);
-  } else {
-    SDL_RenderTexture(context->renderer, context->video_texture, &src, NULL);
-  }
-}
-
-// TODO do we need frame here?
-static void handle_video_frame(SdlffContext *context, AVFrame *frame,
-                               double pts) {
-#if 0
-    /* Quick and dirty PTS handling */
-    if (!video_start) {
-        video_start = SDL_GetTicks();
-    }
-    double now = (double)(SDL_GetTicks() - video_start) / 1000.0;
-    if (now < pts) {
-        SDL_DelayPrecise((Uint64)((pts - now) * SDL_NS_PER_SECOND));
-    }
-#endif
-
-  SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 255);
-  SDL_RenderClear(context->renderer);
-  display_video_frame(context, frame);
-  SDL_RenderPresent(context->renderer);
 }
 
 static bool create_or_reuse_cached_texture(SdlffContext *context, AVFrame *frame,
@@ -660,6 +448,7 @@ static bool fill_texture_with_frame_data(SdlffContext *context, AVFrame *frame,
       sws_scale(sws_container->context, (const uint8_t *const *)frame->data,
                 frame->linesize, 0, frame->height, pixels, pitch);
 
+      // Force alpha to fully opaque; sws_scale sets A=0 for non-alpha sources.
       uint8_t *p = (uint8_t *)pixels[0];
       int total_bytes = pitch[0] * frame->height;
       for (int i = 3; i < total_bytes; i += 4) {
@@ -709,197 +498,12 @@ static void render_texture_main_thread(SdlffContext *context, AVFrame *frame) {
   SDL_RenderPresent(context->renderer);
 }
 
-// original from main-thread only decoding/presentation
-// true to continue
-static bool process_next_file_frame(SdlffContext *context) {
-  int result;
-  SdlffVideoFileContext *ctx = &context->video_file_ctx;
-  if (!ctx->flushing) {
-    result = av_read_frame(ctx->ic, ctx->pkt);
-    if (result < 0) {
-      SDL_Log("End of stream, finishing decode");
-      if (ctx->audio_context) {
-        avcodec_flush_buffers(ctx->audio_context);
-      }
-      if (ctx->video_context) {
-        avcodec_flush_buffers(ctx->video_context);
-      }
-      ctx->flushing = true;
-    } else {
-      // TODO handle audio
-#if 0
-      if (ctx->pkt->stream_index == ctx->audio_stream) {
-                    result = avcodec_send_packet(ctx->audio_context, ctx->pkt);
-                    if (result < 0) {
-                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_send_packet(audio_context) failed: %s", av_err2str(result));
-                    }
-      } else
-#endif
-      if (ctx->pkt->stream_index == ctx->video_stream) {
-        result = avcodec_send_packet(ctx->video_context, ctx->pkt);
-        if (result < 0) {
-          SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                       "avcodec_send_packet(video_context) failed: %s",
-                       av_err2str(result));
-        }
-      }
-      av_packet_unref(ctx->pkt);
-    }
-  }
-  // TODO handle audio
-  bool decoded = false;
-  if (ctx->video_context) {
-    while (avcodec_receive_frame(ctx->video_context, ctx->frame) >= 0) {
-      double pts =
-          ((double)ctx->frame->pts * ctx->video_context->pkt_timebase.num) /
-          ctx->video_context->pkt_timebase.den;
-      if (ctx->first_pts < 0.0) {
-        ctx->first_pts = pts;
-      }
-      pts -= ctx->first_pts;
-
-      handle_video_frame(context, ctx->frame, pts);
-      decoded = true;
-    }
-  }
-  if (ctx->flushing && !decoded) {
-// TODO
-#if 0
-    if (SDL_GetAudioStreamQueued(audio) > 0) {
-        /* Wait a little bit for the audio to finish */
-        SDL_Delay(10);
-    } else {
-        done = true;
-    }
-#endif
-  }
-  return !ctx->flushing;
-}
-
-static const Uint32 default_timer_interval = 1000 / 240;
-
-static Uint32 SDLCALL timer_cb(void *userdata, SDL_TimerID timerID,
-                               Uint32 interval) {
-  SdlffContext *context = (SdlffContext *)userdata;
-  if (!is_video_finished(context)) {
-    send_main_thread_event(context);
-  }
-
-  return default_timer_interval;
-}
-void sdlffclib_main_loop(SdlffContext *context) {
-  // SDL_ShowOpenFileDialog(dialog_cb, NULL, context->window, NULL, 0, NULL,
-  // false);
-  SDL_Event event;
-  bool should_break = false;
-
-  SDL_Rect area = {0, 0, 200, 30};
-  int cursor = 0;
-  // SDL_SetTextInputArea(context->window, &area, cursor);
-  // SDL_StartTextInput(context->window);
-
-  // TODO remove timer
-  // context->timer_id = SDL_AddTimer(default_timer_interval, &timer_cb,
-  // context);
-
-  VideoThreadCommand command = VTC_PLAY;
-  mailbox_send(&context->video_thread_mailbox, &command, sizeof(command));
-
-  while (!should_break && SDL_WaitEvent(&event)) {
-    switch (event.type) {
-    case SDL_EVENT_QUIT:
-      should_break = true;
-      break;
-    case SDL_EVENT_WINDOW_EXPOSED:
-      sdlffclib_render(context);
-      break;
-    case SDL_EVENT_KEY_DOWN:
-      should_break = handle_key_should_quit(&event.key);
-      SDL_Log("key down: %s, repeat %d", SDL_GetKeyName(event.key.key),
-              event.key.repeat);
-      break;
-    case SDL_EVENT_TEXT_INPUT:
-      SDL_Log("text input: %s", event.text.text);
-      break;
-    default:
-      if (event.type == context->main_thread_event) {
-        const bool has_cmd = mailbox_receive_and_lock(&context->main_thread_mailbox,
-                                                     1000 / 60);
-        const MainThreadCommand cmd = context->main_thread_mailbox_data;
-        mailbox_unlock(&context->main_thread_mailbox);
-        if (has_cmd) {
-          switch (cmd) {
-          case MTC_CREATE_TEXTURE_FOR_FRAME: {
-            SDL_Log("MTC_CREATE_TEXTURE_FOR_FRAME");
-            get_texture_for_video_thread(context, context->video_file_ctx.frame);
-            VideoThreadCommand reply = VTC_FILL_TEXTURE;
-            mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
-            break;
-          }
-          case MTC_RENDER_FRAME: {
-            SDL_Log("MTC_RENDER_FRAME");
-            render_texture_main_thread(context, context->video_file_ctx.frame);
-            VideoThreadCommand reply = VTC_NEXT_FRAME;
-            mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
-            break;
-          }
-          case MTC_VIDEO_END:
-            SDL_Log("main thread received video end command.");
-            should_break = true;
-            break;
-          default:;
-          }
-        }
-      }
-      break;
-    }
-  }
-  SDL_StopTextInput(context->window);
-  SDL_RemoveTimer(context->timer_id);
-  SDL_Log("Quit.");
-}
-
-static bool is_pixel_format_supported(enum AVPixelFormat format) {
-  return get_texture_format(format) != SDL_PIXELFORMAT_UNKNOWN;
-}
-
-/// copied from testffmpeg.c GetSupportedPixelFormat
-static enum AVPixelFormat
-get_supported_pixel_format_cb(AVCodecContext *s,
-                              const enum AVPixelFormat *pix_fmts) {
-  const enum AVPixelFormat *p;
-
-  for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
-    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(*p);
-
-    if (!(desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
-      /* We support all memory formats using swscale */
-      break;
-    }
-
-    if (is_pixel_format_supported(*p)) {
-      /* We support this format */
-      break;
-    }
-  }
-
-  if (*p == AV_PIX_FMT_NONE) {
-    SDL_Log("Couldn't find a supported pixel format:");
-    for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
-      SDL_Log("    %s", av_get_pix_fmt_name(*p));
-    }
-  }
-
-  return *p;
-}
 /// based on OpenVideoStream from testffmpeg.c
 static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream,
                                          const AVCodec *codec) {
   AVStream *st = ic->streams[stream];
   AVCodecParameters *codecpar = st->codecpar;
   AVCodecContext *context;
-  const AVCodecHWConfig *config;
-  int i;
   int result;
 
   SDL_Log("Video stream: %s %dx%d", avcodec_get_name(codec->id),
@@ -922,12 +526,6 @@ static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream,
   }
   context->pkt_timebase = ic->streams[stream]->time_base;
 
-// TODO add hw decoder support
-#if 0
-  /* Allow supported hardware accelerated pixel formats */
-  context->get_format = get_supported_pixel_format_cb;
-#endif
-  // skip hw device for now, software decoder only
   result = avcodec_open2(context, codec, NULL);
   if (result < 0) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't open codec %s: %s",
@@ -936,10 +534,59 @@ static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream,
     return NULL;
   }
 
-  // SDL_SetWindowSize(window, codecpar->width, codecpar->height);
   SDL_Log("video w*h = %d x %d", codecpar->width, codecpar->height);
 
   return context;
+}
+
+void sdlffclib_main_loop(SdlffContext *context) {
+  SDL_Event event;
+  bool should_break = false;
+
+  VideoThreadCommand command = VTC_PLAY;
+  mailbox_send(&context->video_thread_mailbox, &command, sizeof(command));
+
+  while (!should_break && SDL_WaitEvent(&event)) {
+    switch (event.type) {
+    case SDL_EVENT_QUIT:
+      should_break = true;
+      break;
+    case SDL_EVENT_KEY_DOWN:
+      should_break = handle_key_should_quit(&event.key);
+      break;
+    default:
+      if (event.type == context->main_thread_event) {
+        const bool has_cmd = mailbox_receive_and_lock(&context->main_thread_mailbox,
+                                                     1000 / 60);
+        const MainThreadCommand cmd = context->main_thread_mailbox_data;
+        mailbox_unlock(&context->main_thread_mailbox);
+        if (has_cmd) {
+          switch (cmd) {
+          case MTC_CREATE_TEXTURE_FOR_FRAME: {
+            get_texture_for_video_thread(context, context->video_file_ctx.frame);
+            VideoThreadCommand reply = VTC_FILL_TEXTURE;
+            mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
+            break;
+          }
+          case MTC_RENDER_FRAME: {
+            render_texture_main_thread(context, context->video_file_ctx.frame);
+            VideoThreadCommand reply = VTC_NEXT_FRAME;
+            mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
+            break;
+          }
+          case MTC_VIDEO_END:
+            SDL_Log("main thread received video end command.");
+            should_break = true;
+            break;
+          default:;
+          }
+        }
+      }
+      break;
+    }
+  }
+  SDL_RemoveTimer(context->timer_id);
+  SDL_Log("Quit.");
 }
 
 bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
@@ -1002,9 +649,9 @@ bool sdlffclib_fileinfo(const char *file_path) {
   SDL_Log("Name: %s", ic->iformat->name);
   SDL_Log("Mime: %s", ic->iformat->mime_type);
   SDL_Log("Extensions: %s", ic->iformat->extensions);
-  SDL_Log("Streams: %d", ic->nb_streams);
+  SDL_Log("Streams: %u", ic->nb_streams);
   for (unsigned i = 0; i < ic->nb_streams; ++i) {
-    SDL_Log("Stream: %d", i);
+    SDL_Log("Stream: %u", i);
     AVStream *stream = ic->streams[i];
     SDL_Log("Time base: %d/%d", stream->time_base.num, stream->time_base.den);
     SDL_Log("Duration: %ld", stream->duration);
