@@ -45,6 +45,7 @@ deps = [sdl_dep,
 src = ['sdlffc.c',
        'sdlffclib.c',
        'mailbox.c',
+       'frame_queue.c',
       ]
 
 exe = executable('sdlffc', src,

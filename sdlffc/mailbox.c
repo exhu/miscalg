@@ -47,7 +47,14 @@ bool mailbox_receive_and_lock(MailBox *mb, Sint32 timeout) {
         SDL_WaitCondition(mb->condition, mb->mutex);
       }
     } else {
-      SDL_WaitConditionTimeout(mb->condition, mb->mutex, timeout);
+      /* Loop to guard against spurious wakeups: re-check is_set after each
+         SDL_WaitConditionTimeout returns. Break only on a genuine timeout
+         (return value false). */
+      while (!mb->is_set) {
+        if (!SDL_WaitConditionTimeout(mb->condition, mb->mutex, timeout)) {
+          break; /* genuine timeout */
+        }
+      }
     }
   }
   return mb->is_set;

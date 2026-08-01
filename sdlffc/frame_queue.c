@@ -1,0 +1,76 @@
+#include "frame_queue.h"
+
+#include <string.h>
+#include <SDL3/SDL_log.h>
+#include <libavutil/frame.h>
+
+bool frame_queue_init(FrameQueue *q) {
+    memset(q, 0, sizeof(*q));
+    q->mutex     = SDL_CreateMutex();
+    q->not_full  = SDL_CreateCondition();
+    q->not_empty = SDL_CreateCondition();
+    return q->mutex && q->not_full && q->not_empty;
+}
+
+void frame_queue_done(FrameQueue *q) {
+    frame_queue_flush(q);
+    SDL_DestroyCondition(q->not_empty);
+    SDL_DestroyCondition(q->not_full);
+    SDL_DestroyMutex(q->mutex);
+    q->not_empty = NULL;
+    q->not_full  = NULL;
+    q->mutex     = NULL;
+}
+
+bool frame_queue_push(FrameQueue *q, AVFrame *frame, double pts,
+                      SDL_AtomicInt *quit_requested) {
+    SDL_LockMutex(q->mutex);
+    /* Block while full, but bail out if quit is requested */
+    while (q->count == FRAME_QUEUE_SIZE &&
+           !SDL_GetAtomicInt(quit_requested)) {
+        SDL_WaitCondition(q->not_full, q->mutex);
+    }
+    if (SDL_GetAtomicInt(quit_requested)) {
+        SDL_UnlockMutex(q->mutex);
+        return false;
+    }
+    int idx = q->write_idx;
+    q->frames[idx] = frame;
+    q->pts[idx]    = pts;
+    q->write_idx   = (idx + 1) % FRAME_QUEUE_SIZE;
+    q->count++;
+    SDL_SignalCondition(q->not_empty);
+    SDL_UnlockMutex(q->mutex);
+    return true;
+}
+
+AVFrame *frame_queue_try_pop(FrameQueue *q, double max_pts) {
+    SDL_LockMutex(q->mutex);
+    AVFrame *frame = NULL;
+    if (q->count > 0 && q->pts[q->read_idx] <= max_pts) {
+        frame = q->frames[q->read_idx];
+        q->frames[q->read_idx] = NULL;
+        q->read_idx = (q->read_idx + 1) % FRAME_QUEUE_SIZE;
+        q->count--;
+        SDL_SignalCondition(q->not_full);
+    }
+    SDL_UnlockMutex(q->mutex);
+    return frame;
+}
+
+void frame_queue_flush(FrameQueue *q) {
+    SDL_LockMutex(q->mutex);
+    while (q->count > 0) {
+        AVFrame *f = q->frames[q->read_idx];
+        q->frames[q->read_idx] = NULL;
+        q->read_idx = (q->read_idx + 1) % FRAME_QUEUE_SIZE;
+        q->count--;
+        if (f) {
+            av_frame_unref(f);
+            av_frame_free(&f);
+        }
+    }
+    /* Wake any blocked push so the producer can observe quit_requested */
+    SDL_BroadcastCondition(q->not_full);
+    SDL_UnlockMutex(q->mutex);
+}

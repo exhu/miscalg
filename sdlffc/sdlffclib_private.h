@@ -1,5 +1,6 @@
 #pragma once
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_atomic.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_thread.h>
@@ -8,6 +9,7 @@
 #include <libavcodec/avcodec.h>
 
 #include "mailbox.h"
+#include "frame_queue.h"
 
 typedef struct {
   /// input context
@@ -18,32 +20,24 @@ typedef struct {
   AVCodecContext *video_context;
   AVPacket *pkt;
   AVFrame *frame;
+  double first_pts;
   int audio_stream;
   int video_stream;
   bool flushing;
-  double first_pts;
 } SdlffVideoFileContext;
 
-/// commands that main thread expects:
+/// commands that main thread expects (sent by video thread):
 typedef enum {
-  /// create texture from the active frame data, and lock pixel pointer
-  MTC_CREATE_TEXTURE_FOR_FRAME,
-  /// unlock texture pointer and render it
-  MTC_RENDER_FRAME,
   /// end of stream reached
   MTC_VIDEO_END,
 } MainThreadCommand;
 
-/// commands that video thread expects:
+/// commands that video thread expects (sent by main thread):
 typedef enum {
-  /// exit from stream function
+  /// signal video thread to exit
   VTC_QUIT,
   /// start playing the stream
   VTC_PLAY,
-  /// write to the locked texture buffer
-  VTC_FILL_TEXTURE,
-  /// proceed to next frame,
-  VTC_NEXT_FRAME,
 } VideoThreadCommand;
 
 
@@ -51,15 +45,14 @@ struct _SdlffContext {
   SDL_Window *window;
   SDL_Renderer *renderer;
   SDL_Texture *video_texture;
-  /// CPU buffer from SDL_LockTexture, written by video thread
-  void *locked_pixels;
-  int locked_pitch;
-  SdlffVideoFileContext video_file_ctx;
-  SDL_TimerID timer_id;
-  Uint32 main_thread_event;
   SDL_Thread *video_thread;
+  Uint64 play_start_time;              ///< SDL_GetTicksNS() captured when playback begins
+  SdlffVideoFileContext video_file_ctx;
+  FrameQueue frame_queue;              ///< decoded frames produced by video thread
   MailBox video_thread_mailbox;
   MailBox main_thread_mailbox;
+  Uint32 main_thread_event;
   MainThreadCommand main_thread_mailbox_data;
   VideoThreadCommand video_thread_mailbox_data;
+  SDL_AtomicInt quit_requested;       ///< set to 1 to signal video thread to exit
 };
