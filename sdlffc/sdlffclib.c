@@ -140,7 +140,7 @@ bool sdlffclib_init(SdlffContext **out_context) {
   static SdlffContext global_context = {0};
   // memset(&global_context, 0, sizeof(SdlffContext));
 
-  SDL_SetAppMetadata("rdlffc", "0.1", "com.github.exhu.miscalg.sdlffc");
+  SDL_SetAppMetadata("sdlffc", "0.1", "com.github.exhu.miscalg.sdlffc");
 
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to init: %s",
@@ -679,14 +679,17 @@ void sdlffclib_main_loop(SdlffContext *context) {
           switch (cmd) {
           case MTC_CREATE_TEXTURE_FOR_FRAME:
             // TODO create and send to video thread
+            SDL_Log("MTC_CREATE_TEXTURE_FOR_FRAME");
             break;
           case MTC_RENDER_FRAME:
             // TODO
             // process_next_file_frame(context);
-            // VTC_NEXT_FRAME
+            // send VTC_NEXT_FRAME
+            SDL_Log("MTC_RENDER_FRAME");
             break;
           case MTC_VIDEO_END:
             SDL_Log("main thread received video end command.");
+            should_break = true;
             break;
           default:;
           }

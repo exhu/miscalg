@@ -6,5 +6,8 @@ set -e
 LOCAL_PC="$HOME/.local/lib/pkgconfig"
 export PKG_CONFIG_PATH="${LOCAL_PC}${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 
-exec meson setup _build "$@"
-exec meson compile -C _build
+if [ ! -d "_build" ]; then
+    meson setup _build "$@"
+fi
+
+exec meson compile -C _build "$@"
