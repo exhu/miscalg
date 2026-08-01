@@ -31,6 +31,10 @@
 #include <stdbool.h>
 #include <string.h>
 
+static inline double seconds_from_nanoseconds(Uint64 ns) {
+  return (double)ns / 1.0e9;
+}
+
 static bool fill_texture_with_frame_data(SDL_Texture *texture, AVFrame *frame,
                                          void *pixels, int pitch);
 static bool create_or_reuse_cached_texture(SdlffContext *context, AVFrame *frame,
@@ -689,7 +693,7 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
   if (!ctx->ic) return;
 
   Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
-  double current_pos = (double)(now - context->play_start_time) / 1.0e9;
+  double current_pos = seconds_from_nanoseconds(now - context->play_start_time);
   double target_pos = current_pos + offset_sec;
   if (target_pos < 0.0) {
     target_pos = 0.0;
@@ -726,8 +730,8 @@ void sdlffclib_main_loop(SdlffContext *context) {
   while (!should_break) {
     /* Calculate dynamic timeout based on next frame's PTS */
     double elapsed = context->paused
-        ? (double)(context->pause_start_ticks - context->play_start_time) / 1.0e9
-        : (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
+        ? seconds_from_nanoseconds(context->pause_start_ticks - context->play_start_time)
+        : seconds_from_nanoseconds(SDL_GetTicksNS() - context->play_start_time);
     double next_pts = 0.0;
     Sint32 timeout_ms = 10; /* Fallback timeout if frame queue is empty */
 
@@ -799,10 +803,10 @@ void sdlffclib_main_loop(SdlffContext *context) {
        If multiple frames are ready (due to latency/lag), drop older frames
        so rendering catches up to real-time playback. */
     if (!should_break) {
-      /* Convert nanoseconds (SDL_GetTicksNS) to seconds (1.0e9 = 10^9 ns/s) */
+      /* Convert nanoseconds (SDL_GetTicksNS) to seconds */
       double render_elapsed = context->paused
-          ? (double)(context->pause_start_ticks - context->play_start_time) / 1.0e9
-          : (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
+          ? seconds_from_nanoseconds(context->pause_start_ticks - context->play_start_time)
+          : seconds_from_nanoseconds(SDL_GetTicksNS() - context->play_start_time);
       AVFrame *frame = NULL;
       AVFrame *next_frame = NULL;
 
