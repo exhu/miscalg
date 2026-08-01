@@ -30,6 +30,13 @@
 #include <stdbool.h>
 #include <string.h>
 
+static bool fill_texture_with_frame_data(SdlffContext *context, AVFrame *frame,
+                                         SDL_Texture *texture);
+static bool create_or_reuse_cached_texture(SdlffContext *context, AVFrame *frame,
+                                            SDL_Texture **texture);
+static bool get_texture_for_video_thread(SdlffContext *context, AVFrame *frame);
+static void render_texture_main_thread(SdlffContext *context, AVFrame *frame);
+
 /// notify main thread to read mailbox
 static void send_main_thread_event(SdlffContext *context) {
     SDL_Event event;
@@ -76,6 +83,7 @@ static void read_and_decode_next_packet(SdlffContext *context) {
   }
 } // read_next_packet
 
+/// video decoding thread
 static int SDLCALL video_thread_cb(void *data) {
   SdlffContext *context = (SdlffContext *)data;
   SDL_Log("video thread started.");
@@ -138,6 +146,7 @@ static int SDLCALL video_thread_cb(void *data) {
             }
 
             if (resp_cmd == VTC_FILL_TEXTURE) {
+              fill_texture_with_frame_data(context, ctx->frame, context->video_texture);
               mtc = MTC_RENDER_FRAME;
               mailbox_send(&context->main_thread_mailbox, &mtc, sizeof(mtc));
               send_main_thread_event(context);
@@ -369,7 +378,11 @@ static SDL_PropertiesID create_video_texture_properties(AVFrame *frame,
   if (format == SDL_PIXELFORMAT_UNKNOWN) {
     format = get_texture_format(frame->format);
   }
-  //}
+  if (SDL_COLORSPACETYPE(colorspace) != SDL_COLOR_TYPE_RGB &&
+      (format == SDL_PIXELFORMAT_ARGB8888 || format == SDL_PIXELFORMAT_RGBA8888 ||
+       format == SDL_PIXELFORMAT_BGRA8888 || format == SDL_PIXELFORMAT_ABGR8888)) {
+    colorspace = SDL_COLORSPACE_SRGB;
+  }
 
   props = SDL_CreateProperties();
   SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER,
@@ -580,6 +593,122 @@ static void handle_video_frame(SdlffContext *context, AVFrame *frame,
   SDL_RenderPresent(context->renderer);
 }
 
+static bool create_or_reuse_cached_texture(SdlffContext *context, AVFrame *frame,
+                                            SDL_Texture **texture) {
+  int texture_width = 0, texture_height = 0;
+  SDL_PixelFormat texture_format = SDL_PIXELFORMAT_UNKNOWN;
+
+  if (*texture) {
+    SDL_PropertiesID props = SDL_GetTextureProperties(*texture);
+    texture_format = (SDL_PixelFormat)SDL_GetNumberProperty(
+        props, SDL_PROP_TEXTURE_FORMAT_NUMBER, SDL_PIXELFORMAT_UNKNOWN);
+    texture_width =
+        (int)SDL_GetNumberProperty(props, SDL_PROP_TEXTURE_WIDTH_NUMBER, 0);
+    texture_height =
+        (int)SDL_GetNumberProperty(props, SDL_PROP_TEXTURE_HEIGHT_NUMBER, 0);
+  }
+  if (!*texture || texture_width != frame->width ||
+      texture_height != frame->height ||
+      texture_format != SDL_PIXELFORMAT_ARGB8888) {
+    if (*texture) {
+      SDL_DestroyTexture(*texture);
+    }
+
+    SDL_PropertiesID props = create_video_texture_properties(
+        frame, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING);
+    *texture = SDL_CreateTextureWithProperties(context->renderer, props);
+    SDL_DestroyProperties(props);
+    if (!*texture) {
+      return false;
+    }
+
+    SDL_SetTextureBlendMode(*texture, SDL_BLENDMODE_NONE);
+    SDL_SetTextureScaleMode(*texture, SDL_SCALEMODE_LINEAR);
+  }
+  return true;
+}
+
+static bool fill_texture_with_frame_data(SdlffContext *context, AVFrame *frame,
+                                         SDL_Texture *texture) {
+  (void)context;
+  if (!texture || !frame) {
+    return false;
+  }
+
+  SDL_PropertiesID props = SDL_GetTextureProperties(texture);
+  struct SwsContextContainer *sws_container =
+      (struct SwsContextContainer *)SDL_GetPointerProperty(
+          props, SWS_CONTEXT_CONTAINER_PROPERTY, NULL);
+  if (!sws_container) {
+    sws_container =
+        (struct SwsContextContainer *)SDL_calloc(1, sizeof(*sws_container));
+    if (!sws_container) {
+      return false;
+    }
+    SDL_SetPointerPropertyWithCleanup(props, SWS_CONTEXT_CONTAINER_PROPERTY,
+                                      sws_container, FreeSwsContextContainer,
+                                      NULL);
+  }
+  sws_container->context = sws_getCachedContext(
+      sws_container->context, frame->width, frame->height,
+      (enum AVPixelFormat)frame->format, frame->width, frame->height,
+      AV_PIX_FMT_BGRA, SWS_POINT, NULL, NULL, NULL);
+  if (sws_container->context) {
+    uint8_t *pixels[4] = {0};
+    int pitch[4] = {0};
+    if (SDL_LockTexture(texture, NULL, (void **)&pixels[0], &pitch[0])) {
+      sws_scale(sws_container->context, (const uint8_t *const *)frame->data,
+                frame->linesize, 0, frame->height, pixels, pitch);
+
+      uint8_t *p = (uint8_t *)pixels[0];
+      int total_bytes = pitch[0] * frame->height;
+      for (int i = 3; i < total_bytes; i += 4) {
+        p[i] = 255;
+      }
+
+      SDL_UnlockTexture(texture);
+      return true;
+    } else {
+      SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                   "SDL_LockTexture failed: %s", SDL_GetError());
+    }
+  } else {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                 "Can't initialize the conversion context");
+  }
+  return false;
+}
+
+static bool get_texture_for_video_thread(SdlffContext *context, AVFrame *frame) {
+  if (!create_or_reuse_cached_texture(context, frame, &context->video_texture)) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                 "Couldn't get texture for frame: %s", SDL_GetError());
+    return false;
+  }
+  return true;
+}
+
+static void render_texture_main_thread(SdlffContext *context, AVFrame *frame) {
+  SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 255);
+  SDL_RenderClear(context->renderer);
+
+  if (context->video_texture && frame) {
+    SDL_FRect src;
+    src.x = 0.0f;
+    src.y = 0.0f;
+    src.w = (float)frame->width;
+    src.h = (float)frame->height;
+    if (frame->linesize[0] < 0) {
+      SDL_RenderTextureRotated(context->renderer, context->video_texture, &src,
+                               NULL, 0.0, NULL, SDL_FLIP_VERTICAL);
+    } else {
+      SDL_RenderTexture(context->renderer, context->video_texture, &src, NULL);
+    }
+  }
+
+  SDL_RenderPresent(context->renderer);
+}
+
 // original from main-thread only decoding/presentation
 // true to continue
 static bool process_next_file_frame(SdlffContext *context) {
@@ -701,12 +830,15 @@ void sdlffclib_main_loop(SdlffContext *context) {
         if (has_cmd) {
           switch (cmd) {
           case MTC_CREATE_TEXTURE_FOR_FRAME: {
+            SDL_Log("MTC_CREATE_TEXTURE_FOR_FRAME");
+            get_texture_for_video_thread(context, context->video_file_ctx.frame);
             VideoThreadCommand reply = VTC_FILL_TEXTURE;
             mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
             break;
           }
           case MTC_RENDER_FRAME: {
-            handle_video_frame(context, context->video_file_ctx.frame, 0.0);
+            SDL_Log("MTC_RENDER_FRAME");
+            render_texture_main_thread(context, context->video_file_ctx.frame);
             VideoThreadCommand reply = VTC_NEXT_FRAME;
             mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
             break;

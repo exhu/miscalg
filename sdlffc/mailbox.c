@@ -39,11 +39,17 @@ bool mailbox_send(MailBox *mb, void *new_data_value, size_t data_size) {
 }
 
 bool mailbox_receive_and_lock(MailBox *mb, Sint32 timeout) {
-  bool is_set = false;
   SDL_LockMutex(mb->mutex);
-  SDL_WaitConditionTimeout(mb->condition, mb->mutex, timeout);
-  is_set= mb->is_set;
-  return is_set;
+  if (!mb->is_set) {
+    if (timeout < 0) {
+      while (!mb->is_set) {
+        SDL_WaitCondition(mb->condition, mb->mutex);
+      }
+    } else {
+      SDL_WaitConditionTimeout(mb->condition, mb->mutex, timeout);
+    }
+  }
+  return mb->is_set;
 }
 
 void mailbox_unlock(MailBox *mb) {
