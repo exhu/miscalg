@@ -1,4 +1,5 @@
-* TODO operate on sdlcffclib.c and sdlffclib_private.h only, keep process_next_file_frame() function unused,
+* TODO now it plays video but only decoding is in the video thread?
+* PARTIALLY DONE operate on sdlcffclib.c and sdlffclib_private.h only, keep process_next_file_frame() function unused,
 but create new functions using the code from process_next_file_frame as a guide to split video
 frame decoding and presentation into main thread work and video thread work.
 Use VTC_PLAY, VTC_FILL_TEXTURE, VTC_NEXT_FRAME sent by the main thread in sdlffclib_main_loop

@@ -78,25 +78,9 @@ static void read_and_decode_next_packet(SdlffContext *context) {
 
 static int SDLCALL video_thread_cb(void *data) {
   SdlffContext *context = (SdlffContext *)data;
-  /*
-    loop while not quit:
-      wait for condition to start;
-      loop while not quit or video end:
-        demux,
-        decode,
-        request texture from main thread,
-        wait message with texture or quit message,
-        scale/copy,
-        request frame rendering.
-   */
   SDL_Log("video thread started.");
   bool playing = false;
-  // need to receive codec frames before taking next file frame
-  // (one file frame may contain several codec frames when decoded)
-  // although in ffmpeg comment it's stated that "For video, the packet contains
-  // exactly one frame" maybe the demo is written so that it works for both
-  // audio (multiple codec frames in single stream frame) and video
-  bool receiving_frames = false;
+
   while (true) {
     const bool has_msg = mailbox_receive_and_lock(&context->video_thread_mailbox, -1);
     const VideoThreadCommand cmd = context->video_thread_mailbox_data;
@@ -108,29 +92,68 @@ static int SDLCALL video_thread_cb(void *data) {
     switch (cmd) {
     case VTC_PLAY:
       playing = true;
-      receiving_frames = false;
       SDL_Log("video thread play command received.");
       break;
     case VTC_FILL_TEXTURE:
-      // TODO
+    case VTC_NEXT_FRAME:
+      playing = true;
       break;
     case VTC_QUIT:
-      // should never reach this
-      break;
-    case VTC_NEXT_FRAME:
+      playing = false;
       break;
     default:;
     }
+
     if (playing) {
-      // if receiving_frames then receive new frame from codec and render, otherwise start next file frame/packet
-      if (!receiving_frames) {
+      SdlffVideoFileContext *ctx = &context->video_file_ctx;
+      bool decoded_frame = false;
+
+      while (!decoded_frame && !ctx->flushing) {
         read_and_decode_next_packet(context);
-        receiving_frames = true;
+
+        if (ctx->video_context) {
+          if (avcodec_receive_frame(ctx->video_context, ctx->frame) >= 0) {
+            decoded_frame = true;
+            double pts =
+                ((double)ctx->frame->pts * ctx->video_context->pkt_timebase.num) /
+                ctx->video_context->pkt_timebase.den;
+            if (ctx->first_pts < 0.0) {
+              ctx->first_pts = pts;
+            }
+            pts -= ctx->first_pts;
+
+            // Notify main thread to create texture or render frame
+            MainThreadCommand mtc = MTC_CREATE_TEXTURE_FOR_FRAME;
+            mailbox_send(&context->main_thread_mailbox, &mtc, sizeof(mtc));
+            send_main_thread_event(context);
+
+            // Wait for main thread response or quit
+            const bool resp = mailbox_receive_and_lock(&context->video_thread_mailbox, -1);
+            const VideoThreadCommand resp_cmd = context->video_thread_mailbox_data;
+            mailbox_unlock(&context->video_thread_mailbox);
+
+            if (!resp || resp_cmd == VTC_QUIT) {
+              playing = false;
+              break;
+            }
+
+            if (resp_cmd == VTC_FILL_TEXTURE) {
+              mtc = MTC_RENDER_FRAME;
+              mailbox_send(&context->main_thread_mailbox, &mtc, sizeof(mtc));
+              send_main_thread_event(context);
+            }
+          }
+        }
       }
-      // TODO render frame, set receiving_frames to false if last frame
-      receiving_frames = false;
-    } // playing
-  } // while
+
+      if (ctx->flushing && !decoded_frame) {
+        MainThreadCommand mtc = MTC_VIDEO_END;
+        mailbox_send(&context->main_thread_mailbox, &mtc, sizeof(mtc));
+        send_main_thread_event(context);
+        playing = false;
+      }
+    }
+  }
 
   SDL_Log("video thread exit.");
   return 0;
@@ -166,7 +189,7 @@ bool sdlffclib_init(SdlffContext **out_context) {
                sizeof(context->main_thread_mailbox_data));
   mailbox_init(&context->video_thread_mailbox,
                &context->video_thread_mailbox_data,
-               sizeof(context->main_thread_mailbox_data));
+               sizeof(context->video_thread_mailbox_data));
 
   context->video_thread =
       SDL_CreateThread(&video_thread_cb, "video-thread", context);
@@ -677,16 +700,17 @@ void sdlffclib_main_loop(SdlffContext *context) {
         mailbox_unlock(&context->main_thread_mailbox);
         if (has_cmd) {
           switch (cmd) {
-          case MTC_CREATE_TEXTURE_FOR_FRAME:
-            // TODO create and send to video thread
-            SDL_Log("MTC_CREATE_TEXTURE_FOR_FRAME");
+          case MTC_CREATE_TEXTURE_FOR_FRAME: {
+            VideoThreadCommand reply = VTC_FILL_TEXTURE;
+            mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
             break;
-          case MTC_RENDER_FRAME:
-            // TODO
-            // process_next_file_frame(context);
-            // send VTC_NEXT_FRAME
-            SDL_Log("MTC_RENDER_FRAME");
+          }
+          case MTC_RENDER_FRAME: {
+            handle_video_frame(context, context->video_file_ctx.frame, 0.0);
+            VideoThreadCommand reply = VTC_NEXT_FRAME;
+            mailbox_send(&context->video_thread_mailbox, &reply, sizeof(reply));
             break;
+          }
           case MTC_VIDEO_END:
             SDL_Log("main thread received video end command.");
             should_break = true;
