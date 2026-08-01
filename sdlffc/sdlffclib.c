@@ -416,10 +416,11 @@ static bool create_or_reuse_cached_texture(SdlffContext *context, AVFrame *frame
   return true;
 }
 
+// Called on VIDEO thread: writes frame pixels into the CPU buffer locked by
+// get_texture_for_video_thread (main thread). No SDL GPU calls here.
 static bool fill_texture_with_frame_data(SdlffContext *context, AVFrame *frame,
                                          SDL_Texture *texture) {
-  (void)context;
-  if (!texture || !frame) {
+  if (!texture || !frame || !context->locked_pixels) {
     return false;
   }
 
@@ -441,43 +442,55 @@ static bool fill_texture_with_frame_data(SdlffContext *context, AVFrame *frame,
       sws_container->context, frame->width, frame->height,
       (enum AVPixelFormat)frame->format, frame->width, frame->height,
       AV_PIX_FMT_BGRA, SWS_POINT, NULL, NULL, NULL);
-  if (sws_container->context) {
-    uint8_t *pixels[4] = {0};
-    int pitch[4] = {0};
-    if (SDL_LockTexture(texture, NULL, (void **)&pixels[0], &pitch[0])) {
-      sws_scale(sws_container->context, (const uint8_t *const *)frame->data,
-                frame->linesize, 0, frame->height, pixels, pitch);
-
-      // Force alpha to fully opaque; sws_scale sets A=0 for non-alpha sources.
-      uint8_t *p = (uint8_t *)pixels[0];
-      int total_bytes = pitch[0] * frame->height;
-      for (int i = 3; i < total_bytes; i += 4) {
-        p[i] = 255;
-      }
-
-      SDL_UnlockTexture(texture);
-      return true;
-    } else {
-      SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                   "SDL_LockTexture failed: %s", SDL_GetError());
-    }
-  } else {
+  if (!sws_container->context) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                  "Can't initialize the conversion context");
+    return false;
   }
-  return false;
+
+  uint8_t *dst_planes[4] = { (uint8_t *)context->locked_pixels, NULL, NULL, NULL };
+  int dst_pitch[4] = { context->locked_pitch, 0, 0, 0 };
+  sws_scale(sws_container->context, (const uint8_t *const *)frame->data,
+            frame->linesize, 0, frame->height, dst_planes, dst_pitch);
+
+  // Force alpha to fully opaque; sws_scale sets A=0 for non-alpha sources.
+  uint8_t *p = (uint8_t *)context->locked_pixels;
+  int total_bytes = context->locked_pitch * frame->height;
+  for (int i = 3; i < total_bytes; i += 4) {
+    p[i] = 255;
+  }
+
+  return true;
 }
 
+// Called on MAIN thread: creates/reuses texture then locks it, storing the CPU
+// buffer pointer in context so the video thread can write into it.
 static bool get_texture_for_video_thread(SdlffContext *context, AVFrame *frame) {
   if (!create_or_reuse_cached_texture(context, frame, &context->video_texture)) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                  "Couldn't get texture for frame: %s", SDL_GetError());
     return false;
   }
+  context->locked_pixels = NULL;
+  context->locked_pitch = 0;
+  if (!SDL_LockTexture(context->video_texture, NULL,
+                       &context->locked_pixels, &context->locked_pitch)) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                 "SDL_LockTexture failed: %s", SDL_GetError());
+    return false;
+  }
   return true;
 }
 
+// Called on MAIN thread: unlocks texture (commits CPU buffer to GPU) then renders.
 static void render_texture_main_thread(SdlffContext *context, AVFrame *frame) {
+  // Unlock uploads the CPU buffer filled by video thread to the GPU.
+  if (context->locked_pixels) {
+    SDL_UnlockTexture(context->video_texture);
+    context->locked_pixels = NULL;
+    context->locked_pitch = 0;
+  }
+
   SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 255);
   SDL_RenderClear(context->renderer);
 

@@ -51,6 +51,9 @@ struct _SdlffContext {
   SDL_Window *window;
   SDL_Renderer *renderer;
   SDL_Texture *video_texture;
+  /// CPU buffer from SDL_LockTexture, written by video thread
+  void *locked_pixels;
+  int locked_pitch;
   SdlffVideoFileContext video_file_ctx;
   SDL_TimerID timer_id;
   Uint32 main_thread_event;
