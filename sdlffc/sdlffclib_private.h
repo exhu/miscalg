@@ -48,8 +48,8 @@ typedef enum {
 } VideoThreadCommand;
 
 typedef struct {
-  VideoThreadCommand command;
   double seek_target_sec;              ///< target playback position in seconds (used with VTC_SEEK)
+  VideoThreadCommand command;
 } VideoThreadMsg;
 
 
@@ -60,14 +60,14 @@ struct _SdlffContext {
   SDL_Thread *video_thread;
   SDL_AudioStream *audio_stream;
   Uint64 play_start_time;              ///< SDL_GetTicksNS() captured when playback begins
-  bool paused;                         ///< true if playback is paused
   Uint64 pause_start_ticks;            ///< SDL_GetTicksNS() captured when paused
   SdlffVideoFileContext video_file_ctx;
   FrameQueue frame_queue;              ///< decoded frames produced by video thread
   MailBox video_thread_mailbox;
   MailBox main_thread_mailbox;
+  VideoThreadMsg video_thread_mailbox_data;
   Uint32 main_thread_event;
   MainThreadCommand main_thread_mailbox_data;
-  VideoThreadMsg video_thread_mailbox_data;
   SDL_AtomicInt quit_requested;       ///< set to 1 to signal video thread to exit
+  bool paused;                         ///< true if playback is paused
 };

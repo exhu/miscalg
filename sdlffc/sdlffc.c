@@ -13,8 +13,9 @@ int main(int argc, char **argv) {
   if (sdlffclib_init(&context)) {
     const char * file_path = argv[1];
     sdlffclib_fileinfo(file_path);
-    sdlffclib_open_video(context, file_path);
-    sdlffclib_main_loop(context);
+    if (sdlffclib_open_video(context, file_path)) {
+      sdlffclib_main_loop(context);
+    }
   }
   sdlffclib_done(&context);
 

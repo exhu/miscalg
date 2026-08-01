@@ -83,6 +83,8 @@ void frame_queue_flush(FrameQueue *q) {
             av_frame_free(&f);
         }
     }
+    q->read_idx  = 0;
+    q->write_idx = 0;
     /* Wake any blocked push so the producer can observe quit_requested */
     SDL_BroadcastCondition(q->not_full);
     SDL_UnlockMutex(q->mutex);

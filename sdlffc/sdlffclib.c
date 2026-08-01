@@ -90,8 +90,25 @@ static void read_and_decode_next_packet(SdlffContext *context) {
                 ctx->audio_frame->nb_samples);
 
             if (converted_samples > 0) {
-              int data_size = converted_samples * channels * (int)sizeof(float);
-              SDL_PutAudioStreamData(context->audio_stream, out_buf, data_size);
+              bool drop_audio = false;
+              if (ctx->seek_target_pts >= 0.0) {
+                int64_t pts_raw = (ctx->audio_frame->pts != AV_NOPTS_VALUE)
+                                      ? ctx->audio_frame->pts
+                                      : ctx->audio_frame->best_effort_timestamp;
+                if (pts_raw != AV_NOPTS_VALUE && ctx->ic && ctx->audio_stream >= 0) {
+                  AVRational tb = ctx->ic->streams[ctx->audio_stream]->time_base;
+                  double audio_pts_abs = (double)pts_raw * av_q2d(tb);
+                  if (audio_pts_abs < ctx->seek_target_pts - 0.1) {
+                    drop_audio = true;
+                  }
+                } else {
+                  drop_audio = true;
+                }
+              }
+              if (!drop_audio) {
+                int data_size = converted_samples * channels * (int)sizeof(float);
+                SDL_PutAudioStreamData(context->audio_stream, out_buf, data_size);
+              }
             }
             av_freep(&out_buf);
           }
@@ -621,10 +638,11 @@ static bool fill_texture_with_frame_data(SDL_Texture *texture, AVFrame *frame,
             frame->linesize, 0, frame->height, dst_planes, dst_pitch);
 
   // Force alpha to fully opaque; sws_scale sets A=0 for non-alpha sources.
-  uint8_t *p = (uint8_t *)pixels;
-  int total_bytes = pitch * frame->height;
-  for (int i = 3; i < total_bytes; i += 4) {
-    p[i] = 255;
+  for (int y = 0; y < frame->height; ++y) {
+    uint8_t *row = (uint8_t *)pixels + y * pitch;
+    for (int x = 0; x < frame->width; ++x) {
+      row[x * 4 + 3] = 255;
+    }
   }
 
   return true;
@@ -887,8 +905,6 @@ void sdlffclib_main_loop(SdlffContext *context) {
               SDL_Log("main thread received video end command.");
               should_break = true;
             }
-          } else {
-            mailbox_unlock(&context->main_thread_mailbox);
           }
         }
         break;
