@@ -46,27 +46,72 @@ static void send_main_thread_event(SdlffContext *context) {
 }
 
 static void read_and_decode_next_packet(SdlffContext *context) {
-  int result;
   SdlffVideoFileContext *ctx = &context->video_file_ctx;
-  if (!ctx->flushing) {
-    result = av_read_frame(ctx->ic, ctx->pkt);
+  if (ctx->flushing) return;
+
+  if (!ctx->has_pending_pkt) {
+    int result = av_read_frame(ctx->ic, ctx->pkt);
     if (result < 0) {
       SDL_Log("End of stream reached, draining decoder...");
       if (ctx->video_context) {
-        /* Send NULL packet to video decoder to signal EOF and drain remaining frames */
         avcodec_send_packet(ctx->video_context, NULL);
       }
       ctx->flushing = true;
-    } else {
-      if (ctx->pkt->stream_index == ctx->video_stream) {
-        result = avcodec_send_packet(ctx->video_context, ctx->pkt);
-        if (result < 0) {
-          SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                       "avcodec_send_packet(video_context) failed: %s",
-                       av_err2str(result));
-        }
-      }
+      return;
+    }
+    if (ctx->pkt->stream_index != ctx->video_stream) {
       av_packet_unref(ctx->pkt);
+      return;
+    }
+    ctx->has_pending_pkt = true;
+  }
+
+  if (ctx->has_pending_pkt && ctx->video_context) {
+    int ret = avcodec_send_packet(ctx->video_context, ctx->pkt);
+    if (ret == AVERROR(EAGAIN)) {
+      /* Decoder full, keep pending packet to try again after receive_frame */
+      return;
+    }
+    av_packet_unref(ctx->pkt);
+    ctx->has_pending_pkt = false;
+  }
+}
+
+static void process_video_thread_commands(SdlffContext *context) {
+  SdlffVideoFileContext *ctx = &context->video_file_ctx;
+
+  if (mailbox_receive_and_lock(&context->video_thread_mailbox, 0)) {
+    const VideoThreadMsg msg = context->video_thread_mailbox_data;
+    mailbox_unlock(&context->video_thread_mailbox);
+
+    if (msg.command == VTC_SEEK) {
+      SDL_Log("[SEEK LOG] video thread received VTC_SEEK target=%.2f sec", msg.seek_target_sec);
+      if (ctx->video_stream >= 0 && ctx->ic) {
+        AVRational tb = ctx->ic->streams[ctx->video_stream]->time_base;
+        double first = (ctx->first_pts >= 0.0) ? ctx->first_pts : 0.0;
+        double target_pts = first + msg.seek_target_sec;
+        int64_t seek_ts = (int64_t)(target_pts / av_q2d(tb));
+
+        if (ctx->has_pending_pkt) {
+          av_packet_unref(ctx->pkt);
+          ctx->has_pending_pkt = false;
+        }
+
+        frame_queue_flush(&context->frame_queue);
+        int seek_res = av_seek_frame(ctx->ic, ctx->video_stream, seek_ts, AVSEEK_FLAG_BACKWARD);
+        SDL_Log("[SEEK LOG] av_seek_frame(stream=%d, ts=%" PRId64 ") returned %d", ctx->video_stream, seek_ts, seek_res);
+        if (seek_res < 0) {
+          int64_t seek_ts_global = (int64_t)(target_pts * AV_TIME_BASE);
+          int seek_res2 = av_seek_frame(ctx->ic, -1, seek_ts_global, AVSEEK_FLAG_BACKWARD);
+          SDL_Log("[SEEK LOG] av_seek_frame(global, ts=%" PRId64 ") returned %d", seek_ts_global, seek_res2);
+        }
+        if (ctx->video_context) {
+          avcodec_flush_buffers(ctx->video_context);
+        }
+        ctx->flushing = false;
+        ctx->seek_target_pts = target_pts;
+        SDL_Log("[SEEK LOG] seek setup complete. seek_target_pts=%.2f", target_pts);
+      }
     }
   }
 }
@@ -82,9 +127,9 @@ static int SDLCALL video_thread_cb(void *data) {
   while (!SDL_GetAtomicInt(&context->quit_requested)) {
     const bool has_msg =
         mailbox_receive_and_lock(&context->video_thread_mailbox, 100);
-    const VideoThreadCommand cmd = context->video_thread_mailbox_data;
+    const VideoThreadMsg msg = context->video_thread_mailbox_data;
     mailbox_unlock(&context->video_thread_mailbox);
-    if (has_msg && cmd == VTC_PLAY) {
+    if (has_msg && msg.command == VTC_PLAY) {
       do_play = true;
       break;
     }
@@ -99,16 +144,18 @@ static int SDLCALL video_thread_cb(void *data) {
   SdlffVideoFileContext *ctx = &context->video_file_ctx;
 
   while (!SDL_GetAtomicInt(&context->quit_requested)) {
+    /* Check for seek command */
+    process_video_thread_commands(context);
+
     bool decoded_frame = false;
 
     while (!decoded_frame && !SDL_GetAtomicInt(&context->quit_requested)) {
+      process_video_thread_commands(context);
       read_and_decode_next_packet(context);
 
       if (ctx->video_context) {
         int ret = avcodec_receive_frame(ctx->video_context, ctx->frame);
         if (ret >= 0) {
-          decoded_frame = true;
-
           int64_t pts_raw = (ctx->frame->pts != AV_NOPTS_VALUE)
                                 ? ctx->frame->pts
                                 : ctx->frame->best_effort_timestamp;
@@ -116,12 +163,25 @@ static int SDLCALL video_thread_cb(void *data) {
             pts_raw = 0;
           }
           AVRational tb = ctx->ic->streams[ctx->video_stream]->time_base;
-          double pts = (double)pts_raw * av_q2d(tb);
+          double frame_pts_abs = (double)pts_raw * av_q2d(tb);
 
           if (ctx->first_pts < 0.0) {
-            ctx->first_pts = pts;
+            ctx->first_pts = frame_pts_abs;
           }
-          pts -= ctx->first_pts;
+          double pts = frame_pts_abs - ctx->first_pts;
+
+          /* If seeking, drop pre-roll frames in video thread until near target_pts */
+          if (ctx->seek_target_pts >= 0.0) {
+            if (frame_pts_abs < ctx->seek_target_pts - 0.1) {
+              SDL_Log("[SEEK LOG] dropping pre-roll frame pts_abs=%.2f target=%.2f", frame_pts_abs, ctx->seek_target_pts);
+              av_frame_unref(ctx->frame);
+              continue;
+            }
+            SDL_Log("[SEEK LOG] reached target frame pts_abs=%.2f target=%.2f", frame_pts_abs, ctx->seek_target_pts);
+            ctx->seek_target_pts = -1.0;
+          }
+
+          decoded_frame = true;
 
           /* Ref the frame for queue ownership; avcodec may reuse ctx->frame */
           AVFrame *qframe = av_frame_alloc();
@@ -140,6 +200,7 @@ static int SDLCALL video_thread_cb(void *data) {
           av_frame_unref(ctx->frame);
         } else if (ret == AVERROR_EOF || (ctx->flushing && ret == AVERROR(EAGAIN))) {
           /* Decoder is fully drained or requires no more input */
+          ctx->seek_target_pts = -1.0;
           break;
         }
       }
@@ -152,7 +213,7 @@ static int SDLCALL video_thread_cb(void *data) {
     if (ctx->flushing && !decoded_frame) {
       /* All frames pushed; tell main thread the stream is finished */
       MainThreadCommand mtc = MTC_VIDEO_END;
-      mailbox_send(&context->main_thread_mailbox, &mtc, sizeof(mtc));
+      mailbox_send_overwrite(&context->main_thread_mailbox, &mtc, sizeof(mtc));
       send_main_thread_event(context);
       break;
     }
@@ -285,6 +346,7 @@ void sdlffclib_done(SdlffContext **out_context) {
 static bool handle_key_should_quit(const SDL_KeyboardEvent *key) {
   switch (key->key) {
   case SDLK_Q:
+  case SDLK_ESCAPE:
     return true;
     break;
   default:;
@@ -622,14 +684,43 @@ static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream,
   return context;
 }
 
+static void handle_seek(SdlffContext *context, double offset_sec) {
+  SdlffVideoFileContext *ctx = &context->video_file_ctx;
+  if (!ctx->ic) return;
+
+  double current_pos = (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
+  double target_pos = current_pos + offset_sec;
+  if (target_pos < 0.0) {
+    target_pos = 0.0;
+  }
+  if (ctx->ic->duration != AV_NOPTS_VALUE) {
+    double duration = (double)ctx->ic->duration / AV_TIME_BASE;
+    if (target_pos > duration) {
+      target_pos = duration;
+    }
+  }
+
+  SDL_Log("Seek requested: %.2f -> %.2f (offset: %+.1fs)", current_pos, target_pos, offset_sec);
+
+  /* Flush frame queue so main thread stops presenting pre-seek frames */
+  frame_queue_flush(&context->frame_queue);
+
+  /* Update playback clock baseline */
+  context->play_start_time = SDL_GetTicksNS() - (Uint64)(target_pos * 1.0e9);
+
+  /* Send seek command to video thread */
+  VideoThreadMsg msg = { .command = VTC_SEEK, .seek_target_sec = target_pos };
+  mailbox_send_overwrite(&context->video_thread_mailbox, &msg, sizeof(msg));
+}
+
 void sdlffclib_main_loop(SdlffContext *context) {
   SDL_Event event;
   bool should_break = false;
 
   /* Record the wall-clock start time and kick the video thread */
   context->play_start_time = SDL_GetTicksNS();
-  VideoThreadCommand command = VTC_PLAY;
-  mailbox_send(&context->video_thread_mailbox, &command, sizeof(command));
+  VideoThreadMsg command = { .command = VTC_PLAY, .seek_target_sec = 0.0 };
+  mailbox_send_overwrite(&context->video_thread_mailbox, &command, sizeof(command));
 
   while (!should_break) {
     /* Calculate dynamic timeout based on next frame's PTS */
@@ -656,7 +747,13 @@ void sdlffclib_main_loop(SdlffContext *context) {
         should_break = true;
         break;
       case SDL_EVENT_KEY_DOWN:
-        should_break = handle_key_should_quit(&event.key);
+        if (event.key.key == SDLK_LEFT) {
+          handle_seek(context, -5.0);
+        } else if (event.key.key == SDLK_RIGHT) {
+          handle_seek(context, 5.0);
+        } else {
+          should_break = handle_key_should_quit(&event.key);
+        }
         break;
       default:
         if (event.type == context->main_thread_event) {
@@ -745,6 +842,8 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
     return false;
   }
   ctx->first_pts = -1.0;
+  ctx->seek_target_pts = -1.0;
+  ctx->has_pending_pkt = false;
   return true;
 }
 

@@ -39,6 +39,21 @@ bool mailbox_send(MailBox *mb, void *new_data_value, size_t data_size) {
   return result;
 }
 
+bool mailbox_send_overwrite(MailBox *mb, const void *new_data_value, size_t data_size) {
+  SDL_LockMutex(mb->mutex);
+  bool result = false;
+  if (data_size == mb->data_size) {
+    memcpy(mb->data, new_data_value, data_size);
+    mb->is_set = true;
+    result = true;
+  } else {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "data_size mismatch!");
+  }
+  SDL_UnlockMutex(mb->mutex);
+  SDL_SignalCondition(mb->condition);
+  return result;
+}
+
 bool mailbox_receive_and_lock(MailBox *mb, Sint32 timeout) {
   SDL_LockMutex(mb->mutex);
   if (!mb->is_set) {
@@ -57,7 +72,11 @@ bool mailbox_receive_and_lock(MailBox *mb, Sint32 timeout) {
       }
     }
   }
-  return mb->is_set;
+  if (!mb->is_set) {
+    SDL_UnlockMutex(mb->mutex);
+    return false;
+  }
+  return true;
 }
 
 void mailbox_unlock(MailBox *mb) {

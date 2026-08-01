@@ -1,3 +1,3 @@
 #!/bin/env bash
-./_build/sdlffc resenije.mp4
+./_build/sdlffc samplevideo.mp4
 

@@ -21,9 +21,11 @@ typedef struct {
   AVPacket *pkt;
   AVFrame *frame;
   double first_pts;
+  double seek_target_pts;
   int audio_stream;
   int video_stream;
   bool flushing;
+  bool has_pending_pkt;
 } SdlffVideoFileContext;
 
 /// commands that main thread expects (sent by video thread):
@@ -38,7 +40,14 @@ typedef enum {
   VTC_QUIT,
   /// start playing the stream
   VTC_PLAY,
+  /// seek to position
+  VTC_SEEK,
 } VideoThreadCommand;
+
+typedef struct {
+  VideoThreadCommand command;
+  double seek_target_sec;              ///< target playback position in seconds (used with VTC_SEEK)
+} VideoThreadMsg;
 
 
 struct _SdlffContext {
@@ -53,6 +62,6 @@ struct _SdlffContext {
   MailBox main_thread_mailbox;
   Uint32 main_thread_event;
   MainThreadCommand main_thread_mailbox_data;
-  VideoThreadCommand video_thread_mailbox_data;
+  VideoThreadMsg video_thread_mailbox_data;
   SDL_AtomicInt quit_requested;       ///< set to 1 to signal video thread to exit
 };
