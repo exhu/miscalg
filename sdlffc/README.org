@@ -1,24 +1,22 @@
-* TODO now it plays video but only decoding is in the video thread?
-* PARTIALLY DONE operate on sdlcffclib.c and sdlffclib_private.h only, keep process_next_file_frame() function unused,
-but create new functions using the code from process_next_file_frame as a guide to split video
-frame decoding and presentation into main thread work and video thread work.
-Use VTC_PLAY, VTC_FILL_TEXTURE, VTC_NEXT_FRAME sent by the main thread in sdlffclib_main_loop
-to guide video thread decoding
-and MTC_CREATE_TEXTURE_FOR_FRAME, MTC_RENDER_FRAME, MTC_VIDEO_END to guide main thread only
-operations of texture creation and rendering sent by the video thread in video_thread_cb.
+LLM USAGE DISCLOSURE: this branch is written with the LLM assistance, sometimes with big patches of generated code.
+It's experimental code to play with llms and study ffmpeg+sdl apis, may contain unreviewed parts.
+
 
 * sdl3 + ffmpeg video playback prototype
 Used code from SDL3-3.4.10/test/testffmpeg.c
-* DONE load video, dump stream info
-* TODO move decoding to a thread, remove timer?
-split handle_next_frame into main thread parts and worker thread parts
-* TODO playback video at correct rate
+
 * TODO show frame time
-* TODO drop frames when slow
-* TODO rewind, fast forward
-* TODO play audio
+* TODO granular seek
 * TODO consider gui https://github.com/Immediate-Mode-UI/Nuklear/blob/master/demo/sdl_renderer/nuklear_sdl_renderer.h
 * TODO enable hw decoding
+
+* DONE load video, dump stream info
+* DONE move decoding to a thread, remove timer?
+split handle_next_frame into main thread parts and worker thread parts
+* DONE playback video at correct rate
+* DONE drop frames when slow
+* DONE rewind, fast forward
+* DONE play audio
 
 * Build
 PKG_CONFIG_PATH=~/.local/lib/pkgconfig/ meson setup _build

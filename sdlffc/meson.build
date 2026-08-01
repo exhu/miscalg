@@ -30,7 +30,7 @@ libavcodec_dep = dependency('libavcodec')
 # "Pixel format conversion: ...for example from planar YUV420P to RGB24 packed."
 libswscale_dep = dependency('libswscale')
 # libswresample -- audio resampling
-# TODO do we need it?
+libswresample_dep = dependency('libswresample')
 # libavformat -- muxing, demuxing
 libavformat_dep = dependency('libavformat')
 
@@ -40,6 +40,7 @@ deps = [sdl_dep,
         libavcodec_dep,
         libavformat_dep,
         libswscale_dep,
+        libswresample_dep,
        ]
 
 src = ['sdlffc.c',

@@ -7,6 +7,7 @@
 #include <SDL3/SDL_mutex.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libswresample/swresample.h>
 
 #include "mailbox.h"
 #include "frame_queue.h"
@@ -18,8 +19,10 @@ typedef struct {
   const AVCodec *video_codec;
   AVCodecContext *audio_context;
   AVCodecContext *video_context;
+  SwrContext *swr_ctx;
   AVPacket *pkt;
   AVFrame *frame;
+  AVFrame *audio_frame;
   double first_pts;
   double seek_target_pts;
   int audio_stream;
@@ -55,6 +58,7 @@ struct _SdlffContext {
   SDL_Renderer *renderer;
   SDL_Texture *video_texture;
   SDL_Thread *video_thread;
+  SDL_AudioStream *audio_stream;
   Uint64 play_start_time;              ///< SDL_GetTicksNS() captured when playback begins
   bool paused;                         ///< true if playback is paused
   Uint64 pause_start_ticks;            ///< SDL_GetTicksNS() captured when paused

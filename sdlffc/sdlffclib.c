@@ -60,7 +60,44 @@ static void read_and_decode_next_packet(SdlffContext *context) {
       if (ctx->video_context) {
         avcodec_send_packet(ctx->video_context, NULL);
       }
+      if (ctx->audio_context) {
+        avcodec_send_packet(ctx->audio_context, NULL);
+      }
       ctx->flushing = true;
+      return;
+    }
+    if (ctx->pkt->stream_index == ctx->audio_stream && ctx->audio_context) {
+      avcodec_send_packet(ctx->audio_context, ctx->pkt);
+      av_packet_unref(ctx->pkt);
+      while (avcodec_receive_frame(ctx->audio_context, ctx->audio_frame) >= 0) {
+        if (ctx->swr_ctx && context->audio_stream) {
+          int channels = ctx->audio_context->ch_layout.nb_channels > 0
+                             ? ctx->audio_context->ch_layout.nb_channels
+                             : 2;
+          int dst_nb_samples = (int)av_rescale_rnd(
+              swr_get_delay(ctx->swr_ctx, ctx->audio_context->sample_rate) +
+                  ctx->audio_frame->nb_samples,
+              ctx->audio_context->sample_rate, ctx->audio_context->sample_rate,
+              AV_ROUND_UP);
+
+          uint8_t *out_buf = NULL;
+          int out_linesize = 0;
+          if (av_samples_alloc(&out_buf, &out_linesize, channels,
+                               dst_nb_samples, AV_SAMPLE_FMT_FLT, 0) >= 0) {
+            int converted_samples = swr_convert(
+                ctx->swr_ctx, &out_buf, dst_nb_samples,
+                (const uint8_t **)(void *)ctx->audio_frame->data,
+                ctx->audio_frame->nb_samples);
+
+            if (converted_samples > 0) {
+              int data_size = converted_samples * channels * (int)sizeof(float);
+              SDL_PutAudioStreamData(context->audio_stream, out_buf, data_size);
+            }
+            av_freep(&out_buf);
+          }
+        }
+        av_frame_unref(ctx->audio_frame);
+      }
       return;
     }
     if (ctx->pkt->stream_index != ctx->video_stream) {
@@ -111,6 +148,9 @@ static void process_video_thread_commands(SdlffContext *context) {
         }
         if (ctx->video_context) {
           avcodec_flush_buffers(ctx->video_context);
+        }
+        if (ctx->audio_context) {
+          avcodec_flush_buffers(ctx->audio_context);
         }
         ctx->flushing = false;
         ctx->seek_target_pts = target_pts;
@@ -300,8 +340,12 @@ static void sdlffclib_free_video_file_ctx(SdlffVideoFileContext *ctx) {
      ctx->ic is NULL (e.g. when avformat_open_input fails partway through). */
   if (ctx->frame)
     av_frame_free(&ctx->frame);
+  if (ctx->audio_frame)
+    av_frame_free(&ctx->audio_frame);
   if (ctx->pkt)
     av_packet_free(&ctx->pkt);
+  if (ctx->swr_ctx)
+    swr_free(&ctx->swr_ctx);
   if (ctx->audio_context)
     avcodec_free_context(&ctx->audio_context);
   if (ctx->video_context)
@@ -321,6 +365,11 @@ void sdlffclib_done(SdlffContext **out_context) {
   frame_queue_flush(&context->frame_queue);
   if (context->video_thread) {
     SDL_WaitThread(context->video_thread, NULL);
+  }
+
+  if (context->audio_stream) {
+    SDL_DestroyAudioStream(context->audio_stream);
+    context->audio_stream = NULL;
   }
 
   mailbox_done(&context->main_thread_mailbox);
@@ -688,6 +737,43 @@ static AVCodecContext *open_video_stream(AVFormatContext *ic, int stream,
   return context;
 }
 
+static AVCodecContext *open_audio_stream(AVFormatContext *ic, int stream,
+                                         const AVCodec *codec) {
+  AVStream *st = ic->streams[stream];
+  AVCodecParameters *codecpar = st->codecpar;
+  AVCodecContext *context;
+  int result;
+
+  SDL_Log("Audio stream: %s %d Hz, %d channels", avcodec_get_name(codec->id),
+          codecpar->sample_rate, codecpar->ch_layout.nb_channels);
+
+  context = avcodec_alloc_context3(NULL);
+  if (!context) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "avcodec_alloc_context3 failed for audio");
+    return NULL;
+  }
+
+  result = avcodec_parameters_to_context(context, codecpar);
+  if (result < 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                 "avcodec_parameters_to_context failed for audio: %s",
+                 av_err2str(result));
+    avcodec_free_context(&context);
+    return NULL;
+  }
+  context->pkt_timebase = st->time_base;
+
+  result = avcodec_open2(context, codec, NULL);
+  if (result < 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't open audio codec %s: %s",
+                 avcodec_get_name(context->codec_id), av_err2str(result));
+    avcodec_free_context(&context);
+    return NULL;
+  }
+
+  return context;
+}
+
 static void handle_seek(SdlffContext *context, double offset_sec) {
   SdlffVideoFileContext *ctx = &context->video_file_ctx;
   if (!ctx->ic) return;
@@ -709,6 +795,10 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
 
   /* Flush frame queue so main thread stops presenting pre-seek frames */
   frame_queue_flush(&context->frame_queue);
+
+  if (context->audio_stream) {
+    SDL_ClearAudioStream(context->audio_stream);
+  }
 
   /* Update playback clock baseline */
   context->play_start_time = now - (Uint64)(target_pos * 1.0e9);
@@ -765,10 +855,16 @@ void sdlffclib_main_loop(SdlffContext *context) {
               Uint64 now = SDL_GetTicksNS();
               context->play_start_time += (now - context->pause_start_ticks);
               context->paused = false;
+              if (context->audio_stream) {
+                SDL_ResumeAudioStreamDevice(context->audio_stream);
+              }
               SDL_Log("Resumed video playback");
             } else {
               context->pause_start_ticks = SDL_GetTicksNS();
               context->paused = true;
+              if (context->audio_stream) {
+                SDL_PauseAudioStreamDevice(context->audio_stream);
+              }
               SDL_Log("Paused video playback");
             }
           }
@@ -851,7 +947,41 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
     return false;
   }
 
-  // TODO audio
+  ctx->audio_stream = av_find_best_stream(ctx->ic, AVMEDIA_TYPE_AUDIO, -1, -1,
+                                          &ctx->audio_codec, 0);
+  if (ctx->audio_stream >= 0) {
+    ctx->audio_context =
+        open_audio_stream(ctx->ic, ctx->audio_stream, ctx->audio_codec);
+    if (ctx->audio_context) {
+      SDL_AudioSpec src_spec;
+      SDL_zero(src_spec);
+      src_spec.format = SDL_AUDIO_F32;
+      src_spec.channels = ctx->audio_context->ch_layout.nb_channels > 0
+                              ? ctx->audio_context->ch_layout.nb_channels
+                              : 2;
+      src_spec.freq = ctx->audio_context->sample_rate;
+
+      context->audio_stream = SDL_OpenAudioDeviceStream(
+          SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &src_spec, NULL, NULL);
+      if (context->audio_stream) {
+        SDL_ResumeAudioStreamDevice(context->audio_stream);
+      } else {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Failed to open audio device stream: %s", SDL_GetError());
+      }
+
+      AVChannelLayout out_ch_layout;
+      av_channel_layout_default(&out_ch_layout, src_spec.channels);
+      int swr_res = swr_alloc_set_opts2(
+          &ctx->swr_ctx, &out_ch_layout, AV_SAMPLE_FMT_FLT, src_spec.freq,
+          &ctx->audio_context->ch_layout, ctx->audio_context->sample_fmt,
+          ctx->audio_context->sample_rate, 0, NULL);
+      if (swr_res < 0 || swr_init(ctx->swr_ctx) < 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize SwrContext");
+      }
+      av_channel_layout_uninit(&out_ch_layout);
+    }
+  }
 
   // reused packet data from demuxer (video/audio)
   ctx->pkt = av_packet_alloc();
@@ -860,10 +990,17 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
     sdlffclib_free_video_file_ctx(ctx);
     return false;
   }
-  // reused raw decompressed video/audio frame
+  // reused raw decompressed video frame
   ctx->frame = av_frame_alloc();
   if (!ctx->frame) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "av_frame_alloc failed");
+    sdlffclib_free_video_file_ctx(ctx);
+    return false;
+  }
+  // reused raw decompressed audio frame
+  ctx->audio_frame = av_frame_alloc();
+  if (!ctx->audio_frame) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "av_frame_alloc failed for audio");
     sdlffclib_free_video_file_ctx(ctx);
     return false;
   }
