@@ -56,6 +56,8 @@ struct _SdlffContext {
   SDL_Texture *video_texture;
   SDL_Thread *video_thread;
   Uint64 play_start_time;              ///< SDL_GetTicksNS() captured when playback begins
+  bool paused;                         ///< true if playback is paused
+  Uint64 pause_start_ticks;            ///< SDL_GetTicksNS() captured when paused
   SdlffVideoFileContext video_file_ctx;
   FrameQueue frame_queue;              ///< decoded frames produced by video thread
   MailBox video_thread_mailbox;

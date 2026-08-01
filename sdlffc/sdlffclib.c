@@ -688,7 +688,8 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
   SdlffVideoFileContext *ctx = &context->video_file_ctx;
   if (!ctx->ic) return;
 
-  double current_pos = (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
+  Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
+  double current_pos = (double)(now - context->play_start_time) / 1.0e9;
   double target_pos = current_pos + offset_sec;
   if (target_pos < 0.0) {
     target_pos = 0.0;
@@ -706,7 +707,7 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
   frame_queue_flush(&context->frame_queue);
 
   /* Update playback clock baseline */
-  context->play_start_time = SDL_GetTicksNS() - (Uint64)(target_pos * 1.0e9);
+  context->play_start_time = now - (Uint64)(target_pos * 1.0e9);
 
   /* Send seek command to video thread */
   VideoThreadMsg msg = { .command = VTC_SEEK, .seek_target_sec = target_pos };
@@ -724,12 +725,19 @@ void sdlffclib_main_loop(SdlffContext *context) {
 
   while (!should_break) {
     /* Calculate dynamic timeout based on next frame's PTS */
-    double elapsed =
-        (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
+    double elapsed = context->paused
+        ? (double)(context->pause_start_ticks - context->play_start_time) / 1.0e9
+        : (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
     double next_pts = 0.0;
     Sint32 timeout_ms = 10; /* Fallback timeout if frame queue is empty */
 
-    if (frame_queue_peek_pts(&context->frame_queue, &next_pts)) {
+    if (context->paused) {
+      if (frame_queue_peek_pts(&context->frame_queue, &next_pts) && next_pts <= elapsed) {
+        timeout_ms = 0;
+      } else {
+        timeout_ms = 100;
+      }
+    } else if (frame_queue_peek_pts(&context->frame_queue, &next_pts)) {
       double delay_sec = next_pts - elapsed;
       if (delay_sec <= 0.0) {
         timeout_ms = 0; /* Frame is already due */
@@ -747,7 +755,20 @@ void sdlffclib_main_loop(SdlffContext *context) {
         should_break = true;
         break;
       case SDL_EVENT_KEY_DOWN:
-        if (event.key.key == SDLK_LEFT) {
+        if (event.key.key == SDLK_SPACE) {
+          if (!event.key.repeat) {
+            if (context->paused) {
+              Uint64 now = SDL_GetTicksNS();
+              context->play_start_time += (now - context->pause_start_ticks);
+              context->paused = false;
+              SDL_Log("Resumed video playback");
+            } else {
+              context->pause_start_ticks = SDL_GetTicksNS();
+              context->paused = true;
+              SDL_Log("Paused video playback");
+            }
+          }
+        } else if (event.key.key == SDLK_LEFT) {
           handle_seek(context, -5.0);
         } else if (event.key.key == SDLK_RIGHT) {
           handle_seek(context, 5.0);
@@ -779,8 +800,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
        so rendering catches up to real-time playback. */
     if (!should_break) {
       /* Convert nanoseconds (SDL_GetTicksNS) to seconds (1.0e9 = 10^9 ns/s) */
-      double render_elapsed =
-          (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
+      double render_elapsed = context->paused
+          ? (double)(context->pause_start_ticks - context->play_start_time) / 1.0e9
+          : (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
       AVFrame *frame = NULL;
       AVFrame *next_frame = NULL;
 
