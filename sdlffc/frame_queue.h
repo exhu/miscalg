@@ -34,6 +34,11 @@ bool     frame_queue_push(FrameQueue *q, AVFrame *frame, double pts,
 /// Caller owns the returned frame and must av_frame_free() it when done.
 AVFrame *frame_queue_try_pop(FrameQueue *q, double max_pts);
 
+/// Non-blocking: peeks the PTS of the head frame in the queue without popping.
+/// Returns true if a frame is available and writes its PTS to *out_pts.
+/// Returns false if the queue is empty.
+bool     frame_queue_peek_pts(FrameQueue *q, double *out_pts);
+
 /// Drain all frames (av_frame_unref + av_frame_free each) and broadcast
 /// not_full. Used during shutdown to unblock a blocked push.
 void     frame_queue_flush(FrameQueue *q);

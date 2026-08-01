@@ -564,8 +564,25 @@ void sdlffclib_main_loop(SdlffContext *context) {
   mailbox_send(&context->video_thread_mailbox, &command, sizeof(command));
 
   while (!should_break) {
-    /* 1 ms timeout so frame-timing checks run every tick even without events */
-    if (SDL_WaitEventTimeout(&event, 1)) {
+    /* Calculate dynamic timeout based on next frame's PTS */
+    double elapsed =
+        (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
+    double next_pts = 0.0;
+    Sint32 timeout_ms = 10; /* Fallback timeout if frame queue is empty */
+
+    if (frame_queue_peek_pts(&context->frame_queue, &next_pts)) {
+      double delay_sec = next_pts - elapsed;
+      if (delay_sec <= 0.0) {
+        timeout_ms = 0; /* Frame is already due */
+      } else {
+        timeout_ms = (Sint32)(delay_sec * 1000.0);
+        if (timeout_ms > 100) {
+          timeout_ms = 100; /* Cap maximum wait time for event responsiveness */
+        }
+      }
+    }
+
+    if (SDL_WaitEventTimeout(&event, timeout_ms)) {
       switch (event.type) {
       case SDL_EVENT_QUIT:
         should_break = true;
@@ -595,9 +612,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
     /* Pop and render any frame whose PTS has been reached */
     if (!should_break) {
       /* Convert nanoseconds (SDL_GetTicksNS) to seconds (1.0e9 = 10^9 ns/s) */
-      double elapsed =
+      double render_elapsed =
           (double)(SDL_GetTicksNS() - context->play_start_time) / 1.0e9;
-      AVFrame *frame = frame_queue_try_pop(&context->frame_queue, elapsed);
+      AVFrame *frame = frame_queue_try_pop(&context->frame_queue, render_elapsed);
       if (frame) {
         render_frame_main_thread(context, frame);
         av_frame_free(&frame);

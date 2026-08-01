@@ -58,6 +58,19 @@ AVFrame *frame_queue_try_pop(FrameQueue *q, double max_pts) {
     return frame;
 }
 
+bool frame_queue_peek_pts(FrameQueue *q, double *out_pts) {
+    SDL_LockMutex(q->mutex);
+    bool has_frame = false;
+    if (q->count > 0) {
+        if (out_pts) {
+            *out_pts = q->pts[q->read_idx];
+        }
+        has_frame = true;
+    }
+    SDL_UnlockMutex(q->mutex);
+    return has_frame;
+}
+
 void frame_queue_flush(FrameQueue *q) {
     SDL_LockMutex(q->mutex);
     while (q->count > 0) {
