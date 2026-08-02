@@ -74,6 +74,20 @@ exe_rewind = executable('test_rewind', test_src,
                         install : false,
                         dependencies: deps)
 
+test_pause_seek_src = ['test_pause_seek.c',
+                   'sdlffclib.c',
+                   'video_render.c',
+                   'demux_decoder.c',
+                   'playback_thread.c',
+                   'mailbox.c',
+                   'frame_queue.c',
+                  ]
+
+exe_pause_seek = executable('test_pause_seek', test_pause_seek_src,
+                             install : false,
+                             dependencies: deps)
+
 test_env = ['SDL_VIDEODRIVER=dummy', 'SDL_AUDIODRIVER=dummy']
 test('basic', exe, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
 test('rewind_at_end', exe_rewind, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
+test('pause_seek', exe_pause_seek, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)

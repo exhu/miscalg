@@ -140,8 +140,9 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
   if (!ctx->ic)
     return;
 
-  Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
-  double current_pos = seconds_from_nanoseconds(now - context->play_start_time);
+  Uint64 now = SDL_GetTicksNS();
+  Uint64 pos_now = context->paused ? context->pause_start_ticks : now;
+  double current_pos = seconds_from_nanoseconds(pos_now - context->play_start_time);
 
   double duration = -1.0;
   if (ctx->ic->duration != AV_NOPTS_VALUE && ctx->ic->duration > 0) {
@@ -173,6 +174,10 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
 
   if (context->audio_stream) {
     SDL_ClearAudioStream(context->audio_stream);
+  }
+
+  if (context->paused) {
+    context->pause_start_ticks = now;
   }
 
   /* Update playback clock baseline */
