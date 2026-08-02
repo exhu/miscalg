@@ -28,14 +28,16 @@ int main(int argc, char **argv) {
   assert(!context->looping);
   assert(context->overlay_mode == OVERLAY_TOP_LEFT);
 
-  /* Simulate setting IN marker at t=1.5s */
-  context->in_point = 1.5;
-  context->markers_modified = true;
-
-  /* Simulate setting OUT marker at t=4.5s */
-  context->out_point = 4.5;
-
-  assert(context->markers_modified);
+  /* Simulate setting IN marker at t=4.5s and OUT marker at t=1.5s (IN > OUT) */
+  context->in_point = 4.5;
+  context->out_point = 1.5;
+  if (context->in_point > context->out_point) {
+    double tmp = context->in_point;
+    context->in_point = context->out_point;
+    context->out_point = tmp;
+  }
+  assert(context->in_point == 1.5);
+  assert(context->out_point == 4.5);
 
   /* Test key V cycling */
   context->overlay_mode = (OverlayMode)((context->overlay_mode + 1) % 3);

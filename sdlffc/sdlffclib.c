@@ -243,13 +243,50 @@ double sdlffclib_get_min_seek_increment(const SdlffContext *context) {
   return 1.0 / 30.0;
 }
 
+static void validate_and_clamp_markers(SdlffContext *context) {
+  if (!context) return;
+
+  double duration = -1.0;
+  if (context->video_file_ctx.ic) {
+    if (context->video_file_ctx.ic->duration != AV_NOPTS_VALUE &&
+        context->video_file_ctx.ic->duration > 0) {
+      duration = (double)context->video_file_ctx.ic->duration / (double)AV_TIME_BASE;
+    } else if (context->video_file_ctx.video_stream >= 0) {
+      AVStream *st = context->video_file_ctx.ic->streams[context->video_file_ctx.video_stream];
+      if (st && st->duration != AV_NOPTS_VALUE && st->duration > 0) {
+        duration = (double)st->duration * av_q2d(st->time_base);
+      }
+    }
+  }
+
+  double step = sdlffclib_get_min_seek_increment(context);
+  double max_frame_time = (duration > step) ? (duration - step) : 0.0;
+
+  if (context->in_point < 0.0) context->in_point = 0.0;
+  if (max_frame_time > 0.0 && context->in_point > max_frame_time) {
+    context->in_point = max_frame_time;
+  }
+
+  if (context->out_point < 0.0) context->out_point = 0.0;
+  if (max_frame_time > 0.0 && context->out_point > max_frame_time) {
+    context->out_point = max_frame_time;
+  }
+
+  if (context->in_point > context->out_point) {
+    double tmp = context->in_point;
+    context->in_point = context->out_point;
+    context->out_point = tmp;
+    SDL_Log("Swapped IN and OUT markers so IN <= OUT (IN: %.3fs, OUT: %.3fs)",
+            context->in_point, context->out_point);
+  }
+}
+
 static void print_ffmpeg_command(SdlffContext *context) {
   if (!context || !context->file_path[0]) return;
+  validate_and_clamp_markers(context);
 
   double in_sec = context->in_point;
-  if (in_sec < 0.0) in_sec = 0.0;
   double out_sec = context->out_point;
-  if (out_sec < in_sec) out_sec = in_sec;
 
   double step = context->min_seek_increment;
   if (step <= 0.0) step = 1.0 / 30.0;
@@ -367,8 +404,9 @@ static bool handle_key_should_quit(SdlffContext *context,
       handle_seek(context, context->in_point - current_pos);
     } else if (!key->repeat) {
       context->in_point = current_pos;
+      validate_and_clamp_markers(context);
       context->markers_modified = true;
-      SDL_Log("Set IN-marker to %.3fs", current_pos);
+      SDL_Log("Set IN-marker to %.3fs (OUT: %.3fs)", context->in_point, context->out_point);
       redraw_current_frame(context);
     }
     context->looping = false;
@@ -379,8 +417,9 @@ static bool handle_key_should_quit(SdlffContext *context,
       handle_seek(context, context->out_point - current_pos);
     } else if (!key->repeat) {
       context->out_point = current_pos;
+      validate_and_clamp_markers(context);
       context->markers_modified = true;
-      SDL_Log("Set OUT-marker to %.3fs", current_pos);
+      SDL_Log("Set OUT-marker to %.3fs (IN: %.3fs)", context->out_point, context->in_point);
       redraw_current_frame(context);
     }
     context->looping = false;

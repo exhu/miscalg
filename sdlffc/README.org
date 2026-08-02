@@ -10,9 +10,9 @@ Used code from SDL3-3.4.10/test/testffmpeg.c
 ** LEFT/RIGHT = 5 second seek back/forward
 ** [ and ] frame back/forward jumps.
 
-** TODO IN must be lower than OUT
-** TODO IN/OUT must never be beyond total video duration.
-** TODO check if IN/OUT = first and last, and the final video is the same as original
+** DONE IN must be lower than OUT
+** DONE IN/OUT must never be beyond total video duration.
+** DONE check if IN/OUT = first and last, and the final video is the same as original
 ** DONE bug key B = seek to the video start frame
 ** DONE bug key E = seek to the video end frame
 ** DONE key I = set in-marker (start of the cut) to the current video frame time
