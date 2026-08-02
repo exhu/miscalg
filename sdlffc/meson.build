@@ -82,9 +82,14 @@ exe_frame_seek = executable('test_frame_seek', 'test_frame_seek.c',
                             install : false,
                             dependencies: sdlffc_dep)
 
+exe_markers_cut = executable('test_markers_cut', 'test_markers_cut.c',
+                             install : false,
+                             dependencies: sdlffc_dep)
+
 test_env = ['SDL_VIDEODRIVER=dummy', 'SDL_AUDIODRIVER=dummy']
 test('basic', exe, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
 test('rewind_at_end', exe_rewind, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
 test('pause_seek', exe_pause_seek, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
 test('stream_end_pause', exe_stream_end_pause, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
 test('frame_seek', exe_frame_seek, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
+test('markers_cut', exe_markers_cut, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)

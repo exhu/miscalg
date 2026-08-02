@@ -218,16 +218,6 @@ static void handle_pause_key(SdlffContext *context,
   }
 }
 
-static void handle_osd_key(SdlffContext *context,
-                           const SDL_KeyboardEvent *key) {
-  if (!key->repeat) {
-    context->show_overlay = !context->show_overlay;
-    SDL_Log("Timestamp overlay toggled: %s",
-            context->show_overlay ? "ON" : "OFF");
-    redraw_current_frame(context);
-  }
-}
-
 double sdlffclib_get_min_seek_increment(const SdlffContext *context) {
   if (!context) return 1.0 / 30.0;
   if (context->min_seek_increment > 0.0) {
@@ -253,27 +243,162 @@ double sdlffclib_get_min_seek_increment(const SdlffContext *context) {
   return 1.0 / 30.0;
 }
 
+static void print_ffmpeg_command(SdlffContext *context) {
+  if (!context || !context->file_path[0]) return;
+
+  double in_sec = context->in_point;
+  if (in_sec < 0.0) in_sec = 0.0;
+  double out_sec = context->out_point;
+  if (out_sec < in_sec) out_sec = in_sec;
+
+  double step = context->min_seek_increment;
+  if (step <= 0.0) step = 1.0 / 30.0;
+
+  /* Cut duration including full display duration of out frame */
+  double cut_duration = (out_sec - in_sec) + step;
+
+  /* IN time components for filename */
+  int in_total = (int)in_sec;
+  int in_h = in_total / 3600;
+  int in_m = (in_total % 3600) / 60;
+  int in_s = in_total % 60;
+
+  /* OUT time components for filename */
+  int out_total = (int)out_sec;
+  int out_h = out_total / 3600;
+  int out_m = (out_total % 3600) / 60;
+  int out_s = out_total % 60;
+
+  /* Split file path into path_without_ext and ext */
+  char path_buf[1024];
+  snprintf(path_buf, sizeof(path_buf), "%s", context->file_path);
+  char *dot = strrchr(path_buf, '.');
+  char *slash = strrchr(path_buf, '/');
+  char ext[32] = "";
+  if (dot && (!slash || dot > slash)) {
+    snprintf(ext, sizeof(ext), "%s", dot);
+    *dot = '\0';
+  }
+
+  char out_filename[1024];
+  snprintf(out_filename, sizeof(out_filename), "%s_%02d_%02d_%02d_%02d_%02d_%02d%s",
+           path_buf, in_h, in_m, in_s, out_h, out_m, out_s, ext);
+
+  /* Format IN time string: HH:MM:SS.mmm */
+  int in_ms = (int)((in_sec - in_total) * 1000.0);
+  if (in_ms < 0) in_ms = 0;
+  char in_time_str[64];
+  snprintf(in_time_str, sizeof(in_time_str), "%02d:%02d:%02d.%03d",
+           in_h, in_m, in_s, in_ms);
+
+  /* Format Duration string: HH:MM:SS.mmm */
+  int dur_total = (int)cut_duration;
+  int dur_h = dur_total / 3600;
+  int dur_m = (dur_total % 3600) / 60;
+  int dur_s = dur_total % 60;
+  int dur_ms = (int)((cut_duration - dur_total) * 1000.0);
+  if (dur_ms < 0) dur_ms = 0;
+  char dur_time_str[64];
+  snprintf(dur_time_str, sizeof(dur_time_str), "%02d:%02d:%02d.%03d",
+           dur_h, dur_m, dur_s, dur_ms);
+
+  printf("ffmpeg -ss %s -i \"%s\" -t %s -c:v copy -c:a copy -map 0 \"%s\"\n",
+         in_time_str, context->file_path, dur_time_str, out_filename);
+  fflush(stdout);
+}
+
 /// all keyboard handling here. returns true to quit
 static bool handle_key_should_quit(SdlffContext *context,
                                    const SDL_KeyboardEvent *key) {
+  Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
+  double current_pos = seconds_from_nanoseconds(now - context->play_start_time);
+  bool is_shift = (key->mod & SDL_KMOD_SHIFT) != 0;
+
   switch (key->key) {
   case SDLK_Q:
   case SDLK_ESCAPE:
+    if (context->markers_modified) {
+      print_ffmpeg_command(context);
+    }
     return true;
-    break;
   case SDLK_SPACE:
     handle_pause_key(context, key);
     context->exit_at_end = false;
     break;
+  case SDLK_V:
+    if (!key->repeat) {
+      context->overlay_mode = (OverlayMode)((context->overlay_mode + 1) % 3);
+      redraw_current_frame(context);
+    }
+    break;
+  case SDLK_B:
+    handle_seek(context, -current_pos);
+    context->looping = false;
+    context->exit_at_end = false;
+    break;
+  case SDLK_E:
+    handle_seek(context, context->out_point - current_pos);
+    context->looping = false;
+    context->exit_at_end = false;
+    break;
+  case SDLK_I:
+    if (is_shift) {
+      handle_seek(context, context->in_point - current_pos);
+    } else if (!key->repeat) {
+      context->in_point = current_pos;
+      context->markers_modified = true;
+      SDL_Log("Set IN-marker to %.3fs", current_pos);
+      redraw_current_frame(context);
+    }
+    context->looping = false;
+    context->exit_at_end = false;
+    break;
   case SDLK_O:
-    handle_osd_key(context, key);
+    if (is_shift) {
+      handle_seek(context, context->out_point - current_pos);
+    } else if (!key->repeat) {
+      context->out_point = current_pos;
+      context->markers_modified = true;
+      SDL_Log("Set OUT-marker to %.3fs", current_pos);
+      redraw_current_frame(context);
+    }
+    context->looping = false;
+    context->exit_at_end = false;
+    break;
+  case SDLK_L:
+    if (!key->repeat) {
+      context->looping = !context->looping;
+      SDL_Log("Looping mode: %s", context->looping ? "ON" : "OFF");
+      if (context->looping) {
+        if (context->paused) {
+          Uint64 ticks_now = SDL_GetTicksNS();
+          context->play_start_time += (ticks_now - context->pause_start_ticks);
+          context->paused = false;
+          if (context->audio_stream) {
+            SDL_ResumeAudioStreamDevice(context->audio_stream);
+          }
+        }
+        Uint64 pos_ticks = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
+        double pos_now = seconds_from_nanoseconds(pos_ticks - context->play_start_time);
+        handle_seek(context, context->in_point - pos_now);
+      }
+      redraw_current_frame(context);
+    }
+    break;
+  case SDLK_RETURN:
+  case SDLK_KP_ENTER:
+    if (!key->repeat) {
+      print_ffmpeg_command(context);
+    }
     break;
   case SDLK_LEFT:
     handle_seek(context, -5.0);
+    context->looping = false;
     context->exit_at_end = false;
     break;
   case SDLK_RIGHT:
     handle_seek(context, 5.0);
+    context->looping = false;
     context->exit_at_end = false;
     break;
   case SDLK_LEFTBRACKET: {
@@ -282,6 +407,7 @@ static bool handle_key_should_quit(SdlffContext *context,
     }
     double step = sdlffclib_get_min_seek_increment(context);
     handle_seek(context, -step);
+    context->looping = false;
     context->exit_at_end = false;
     break;
   }
@@ -291,6 +417,7 @@ static bool handle_key_should_quit(SdlffContext *context,
     }
     double step = sdlffclib_get_min_seek_increment(context);
     handle_seek(context, step);
+    context->looping = false;
     context->exit_at_end = false;
     break;
   }
@@ -320,18 +447,28 @@ void sdlffclib_main_loop(SdlffContext *context) {
 
   /* Record the wall-clock start time and kick the video thread */
   context->play_start_time = SDL_GetTicksNS();
-  context->show_overlay = true;
+  context->overlay_mode = OVERLAY_TOP_LEFT;
   VideoThreadMsg command = {.command = VTC_PLAY, .seek_target_sec = 0.0};
   mailbox_send_overwrite(&context->video_thread_mailbox, &command,
                          sizeof(command));
 
   while (!should_break) {
-    /* Calculate dynamic timeout based on next frame's PTS */
+    /* Handle looping if active */
     double elapsed = context->paused
                          ? seconds_from_nanoseconds(context->pause_start_ticks -
                                                     context->play_start_time)
                          : seconds_from_nanoseconds(SDL_GetTicksNS() -
                                                     context->play_start_time);
+
+    if (context->looping) {
+      double end_threshold = context->out_point + context->min_seek_increment;
+      if (elapsed >= end_threshold || context->stream_ended) {
+        context->stream_ended = false;
+        handle_seek(context, context->in_point - elapsed);
+        elapsed = context->in_point;
+      }
+    }
+
     if (duration > 0.0 && (context->stream_ended || elapsed > duration)) {
       elapsed = duration;
     }
@@ -361,6 +498,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
     if (SDL_WaitEventTimeout(&event, timeout_ms)) {
       switch (event.type) {
       case SDL_EVENT_QUIT:
+        if (context->markers_modified) {
+          print_ffmpeg_command(context);
+        }
         should_break = true;
         break;
       case SDL_EVENT_KEY_DOWN:
@@ -376,7 +516,7 @@ void sdlffclib_main_loop(SdlffContext *context) {
             if (cmd == MTC_VIDEO_END) {
               SDL_Log("main thread received video end command.");
               context->stream_ended = true;
-              if (context->exit_at_end) {
+              if (context->exit_at_end && !context->looping) {
                 should_break = true;
               }
             }

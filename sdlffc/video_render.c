@@ -155,7 +155,7 @@ static bool init_font_context(SDL_Renderer *renderer) {
 }
 
 static void render_timestamp_overlay(SdlffContext *context) {
-  if (!context || !context->show_overlay) {
+  if (!context || context->overlay_mode == OVERLAY_HIDDEN) {
     return;
   }
 
@@ -192,24 +192,62 @@ static void render_timestamp_overlay(SdlffContext *context) {
   int dur_m = (dur_total % 3600) / 60;
   int dur_s = dur_total % 60;
 
-  char time_str[128];
-  if (dur_h > 0 || cur_h > 0) {
-    snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d / %02d:%02d:%02d%s",
-             cur_h, cur_m, cur_s, dur_h, dur_m, dur_s,
-             context->paused ? " [PAUSED]" : "");
-  } else {
-    snprintf(time_str, sizeof(time_str), "%02d:%02d / %02d:%02d%s",
-             cur_m, cur_s, dur_m, dur_s,
-             context->paused ? " [PAUSED]" : "");
+  char status_str[64] = "";
+  if (context->paused && context->looping) {
+    snprintf(status_str, sizeof(status_str), " [PAUSED] [LOOP]");
+  } else if (context->paused) {
+    snprintf(status_str, sizeof(status_str), " [PAUSED]");
+  } else if (context->looping) {
+    snprintf(status_str, sizeof(status_str), " [LOOP]");
   }
+
+  char line1_str[128];
+  if (dur_h > 0 || cur_h > 0) {
+    snprintf(line1_str, sizeof(line1_str), "%02d:%02d:%02d / %02d:%02d:%02d%s",
+             cur_h, cur_m, cur_s, dur_h, dur_m, dur_s, status_str);
+  } else {
+    snprintf(line1_str, sizeof(line1_str), "%02d:%02d / %02d:%02d%s",
+             cur_m, cur_s, dur_m, dur_s, status_str);
+  }
+
+  int in_total = (int)context->in_point;
+  int in_h = in_total / 3600;
+  int in_m = (in_total % 3600) / 60;
+  int in_s = in_total % 60;
+
+  int out_total = (int)context->out_point;
+  int out_h = out_total / 3600;
+  int out_m = (out_total % 3600) / 60;
+  int out_s = out_total % 60;
+
+  char line2_str[128];
+  if (dur_h > 0 || in_h > 0 || out_h > 0) {
+    snprintf(line2_str, sizeof(line2_str), "IN: %02d:%02d:%02d  OUT: %02d:%02d:%02d",
+             in_h, in_m, in_s, out_h, out_m, out_s);
+  } else {
+    snprintf(line2_str, sizeof(line2_str), "IN: %02d:%02d  OUT: %02d:%02d",
+             in_m, in_s, out_m, out_s);
+  }
+
+  int win_w = 0, win_h = 0;
+  SDL_GetRenderOutputSize(context->renderer, &win_w, &win_h);
 
   bool font_ok = init_font_context(context->renderer);
   if (!font_ok) {
     /* Fallback to SDL_RenderDebugText if stb_truetype font loading failed */
+    float text_w1 = (float)(strlen(line1_str) * 8);
+    float text_w2 = (float)(strlen(line2_str) * 8);
+    float text_w = text_w1 > text_w2 ? text_w1 : text_w2;
+    float text_h = 20.0f;
+
     float text_x = 12.0f;
     float text_y = 12.0f;
-    float text_w = (float)(strlen(time_str) * 8);
-    float text_h = 8.0f;
+    if (context->overlay_mode == OVERLAY_BOTTOM_RIGHT) {
+      text_x = (float)win_w - text_w - 16.0f;
+      text_y = (float)win_h - text_h - 16.0f;
+      if (text_x < 12.0f) text_x = 12.0f;
+      if (text_y < 12.0f) text_y = 12.0f;
+    }
 
     SDL_SetRenderDrawBlendMode(context->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 204);
@@ -217,31 +255,47 @@ static void render_timestamp_overlay(SdlffContext *context) {
     SDL_RenderFillRect(context->renderer, &bg_rect);
 
     SDL_SetRenderDrawColor(context->renderer, 255, 255, 255, 255);
-    SDL_RenderDebugText(context->renderer, text_x, text_y, time_str);
+    SDL_RenderDebugText(context->renderer, text_x, text_y, line1_str);
+    SDL_SetRenderDrawColor(context->renderer, 255, 255, 0, 255);
+    SDL_RenderDebugText(context->renderer, text_x, text_y + 10.0f, line2_str);
     return;
   }
 
-  float start_x = 12.0f;
-  float start_y = 12.0f;
+  /* Measure text bounds for line 1 and line 2 */
+  float line_height = FONT_SIZE_PX * 0.9f;
+  float max_w = 0.0f;
 
-  /* Measure text width and height for background rectangle */
-  float max_x = start_x;
-  float max_y = start_y + FONT_SIZE_PX;
-
-  float temp_x = start_x;
-  float temp_y = start_y + FONT_SIZE_PX;
-  for (const char *p = time_str; *p; ++p) {
+  float temp_x = 0.0f, temp_y = FONT_SIZE_PX;
+  for (const char *p = line1_str; *p; ++p) {
     if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
       stbtt_aligned_quad q;
       stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
                          (unsigned char)*p - 32, &temp_x, &temp_y, &q, 1);
-      if (q.x1 > max_x) max_x = q.x1;
-      if (q.y1 > max_y) max_y = q.y1;
+      if (q.x1 > max_w) max_w = q.x1;
     }
   }
 
-  float bg_w = max_x - start_x;
-  float bg_h = FONT_SIZE_PX;
+  temp_x = 0.0f; temp_y = FONT_SIZE_PX;
+  for (const char *p = line2_str; *p; ++p) {
+    if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+      stbtt_aligned_quad q;
+      stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                         (unsigned char)*p - 32, &temp_x, &temp_y, &q, 1);
+      if (q.x1 > max_w) max_w = q.x1;
+    }
+  }
+
+  float bg_w = max_w;
+  float bg_h = line_height * 2.0f;
+
+  float start_x = 12.0f;
+  float start_y = 12.0f;
+  if (context->overlay_mode == OVERLAY_BOTTOM_RIGHT) {
+    start_x = (float)win_w - bg_w - 18.0f;
+    start_y = (float)win_h - bg_h - 18.0f;
+    if (start_x < 12.0f) start_x = 12.0f;
+    if (start_y < 12.0f) start_y = 12.0f;
+  }
 
   /* Render background rectangle: black with 80% opacity (204 / 255) */
   SDL_SetRenderDrawBlendMode(context->renderer, SDL_BLENDMODE_BLEND);
@@ -249,10 +303,27 @@ static void render_timestamp_overlay(SdlffContext *context) {
   SDL_FRect bg_rect = { start_x - 6.0f, start_y - 4.0f, bg_w + 12.0f, bg_h + 8.0f };
   SDL_RenderFillRect(context->renderer, &bg_rect);
 
-  /* Render white text glyphs */
+  /* Render Line 1 (White) */
+  SDL_SetTextureColorMod(g_font_ctx.texture, 255, 255, 255);
   float cur_x = start_x;
   float cur_y = start_y + FONT_SIZE_PX * 0.8f;
-  for (const char *p = time_str; *p; ++p) {
+  for (const char *p = line1_str; *p; ++p) {
+    if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+      stbtt_aligned_quad q;
+      stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                         (unsigned char)*p - 32, &cur_x, &cur_y, &q, 1);
+      SDL_FRect src = { q.s0 * (float)FONT_ATLAS_WIDTH, q.t0 * (float)FONT_ATLAS_HEIGHT,
+                        (q.s1 - q.s0) * (float)FONT_ATLAS_WIDTH, (q.t1 - q.t0) * (float)FONT_ATLAS_HEIGHT };
+      SDL_FRect dst = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
+      SDL_RenderTexture(context->renderer, g_font_ctx.texture, &src, &dst);
+    }
+  }
+
+  /* Render Line 2 (Yellow: 255, 255, 0) */
+  SDL_SetTextureColorMod(g_font_ctx.texture, 255, 255, 0);
+  cur_x = start_x;
+  cur_y = start_y + FONT_SIZE_PX * 0.8f + line_height;
+  for (const char *p = line2_str; *p; ++p) {
     if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
       stbtt_aligned_quad q;
       stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,

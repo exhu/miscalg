@@ -54,6 +54,12 @@ typedef struct {
 } VideoThreadMsg;
 
 
+typedef enum {
+  OVERLAY_TOP_LEFT = 0,
+  OVERLAY_BOTTOM_RIGHT = 1,
+  OVERLAY_HIDDEN = 2
+} OverlayMode;
+
 struct _SdlffContext {
   SDL_Window *window;
   SDL_Renderer *renderer;
@@ -70,11 +76,14 @@ struct _SdlffContext {
   Uint32 main_thread_event;
   MainThreadCommand main_thread_mailbox_data;
   SDL_AtomicInt quit_requested;       ///< set to 1 to signal video thread to exit
+  char file_path[1024];               ///< path to the currently open video file
   bool paused;                         ///< true if playback is paused
-  bool show_overlay;                   ///< true if timestamp overlay is visible (toggled via 'O' key)
+  bool looping;                        ///< true if playback loops between in_point and out_point
+  bool markers_modified;               ///< true if in_point or out_point was changed by the user
+  OverlayMode overlay_mode;            ///< overlay visibility and position state
   bool exit_at_end;
   bool stream_ended;                   ///< true if stream reached EOF
   double min_seek_increment;           ///< cached minimal seek increment in seconds (frame duration)
-  double in_point; ///< first frame of the cut
-  double out_point; ///< last frame (inclusive) of the cut
+  double in_point;                     ///< first frame of the cut in seconds
+  double out_point;                    ///< last frame (inclusive) of the cut in seconds
 };

@@ -289,7 +289,28 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
   ctx->first_pts = -1.0;
   ctx->seek_target_pts = -1.0;
   ctx->has_pending_pkt = false;
+  snprintf(context->file_path, sizeof(context->file_path), "%s", file_path);
   context->min_seek_increment = sdlffclib_get_min_seek_increment(context);
+
+  double duration_sec = 0.0;
+  if (ctx->ic) {
+    if (ctx->ic->duration != AV_NOPTS_VALUE && ctx->ic->duration > 0) {
+      duration_sec = (double)ctx->ic->duration / (double)AV_TIME_BASE;
+    } else if (ctx->video_stream >= 0) {
+      AVStream *st = ctx->ic->streams[ctx->video_stream];
+      if (st && st->duration != AV_NOPTS_VALUE && st->duration > 0) {
+        duration_sec = (double)st->duration * av_q2d(st->time_base);
+      }
+    }
+  }
+
+  context->in_point = 0.0;
+  context->out_point = (duration_sec > context->min_seek_increment)
+                           ? (duration_sec - context->min_seek_increment)
+                           : 0.0;
+  context->looping = false;
+  context->markers_modified = false;
+  context->overlay_mode = OVERLAY_TOP_LEFT;
   return true;
 }
 
