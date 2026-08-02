@@ -83,15 +83,23 @@ int SDLCALL video_thread_cb(void *data) {
   SDL_Log("video thread play command received.");
 
   SdlffVideoFileContext *ctx = &context->video_file_ctx;
+  bool end_notified = false;
 
   while (!SDL_GetAtomicInt(&context->quit_requested)) {
     /* Check for seek command */
     process_video_thread_commands(context);
 
+    if (!ctx->flushing) {
+      end_notified = false;
+    }
+
     bool decoded_frame = false;
 
     while (!decoded_frame && !SDL_GetAtomicInt(&context->quit_requested)) {
       process_video_thread_commands(context);
+      if (!ctx->flushing) {
+        end_notified = false;
+      }
       read_and_decode_next_packet(context);
 
       if (ctx->video_context) {
@@ -152,11 +160,15 @@ int SDLCALL video_thread_cb(void *data) {
     }
 
     if (ctx->flushing && !decoded_frame) {
-      /* All frames pushed; tell main thread the stream is finished */
-      MainThreadCommand mtc = MTC_VIDEO_END;
-      mailbox_send_overwrite(&context->main_thread_mailbox, &mtc, sizeof(mtc));
-      send_main_thread_event(context);
-      break;
+      if (!end_notified) {
+        /* All frames pushed; tell main thread the stream is finished */
+        MainThreadCommand mtc = MTC_VIDEO_END;
+        mailbox_send_overwrite(&context->main_thread_mailbox, &mtc, sizeof(mtc));
+        send_main_thread_event(context);
+        end_notified = true;
+      }
+      SDL_Delay(10);
+      continue;
     }
   }
 

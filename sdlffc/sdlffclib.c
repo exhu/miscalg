@@ -142,15 +142,27 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
 
   Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
   double current_pos = seconds_from_nanoseconds(now - context->play_start_time);
+
+  double duration = -1.0;
+  if (ctx->ic->duration != AV_NOPTS_VALUE && ctx->ic->duration > 0) {
+    duration = (double)ctx->ic->duration / (double)AV_TIME_BASE;
+  } else if (ctx->video_stream >= 0) {
+    AVStream *st = ctx->ic->streams[ctx->video_stream];
+    if (st && st->duration != AV_NOPTS_VALUE && st->duration > 0) {
+      duration = (double)st->duration * av_q2d(st->time_base);
+    }
+  }
+
+  if (duration > 0.0 && current_pos > duration) {
+    current_pos = duration;
+  }
+
   double target_pos = current_pos + offset_sec;
   if (target_pos < 0.0) {
     target_pos = 0.0;
   }
-  if (ctx->ic->duration != AV_NOPTS_VALUE) {
-    double duration = (double)ctx->ic->duration / AV_TIME_BASE;
-    if (target_pos > duration) {
-      target_pos = duration;
-    }
+  if (duration > 0.0 && target_pos > duration) {
+    target_pos = duration;
   }
 
   SDL_Log("Seek requested: %.2f -> %.2f (offset: %+.1fs)", current_pos,
