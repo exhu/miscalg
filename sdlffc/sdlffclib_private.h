@@ -75,4 +75,6 @@ struct _SdlffContext {
   bool exit_at_end;
   bool stream_ended;                   ///< true if stream reached EOF
   double min_seek_increment;           ///< cached minimal seek increment in seconds (frame duration)
+  double in_point; ///< first frame of the cut
+  double out_point; ///< last frame (inclusive) of the cut
 };

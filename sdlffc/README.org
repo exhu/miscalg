@@ -5,8 +5,25 @@ It's experimental code to play with llms and study ffmpeg+sdl apis, may contain 
 * sdl3 + ffmpeg video playback prototype
 Used code from SDL3-3.4.10/test/testffmpeg.c
 
-* TODO show frame time
-* TODO granular seek
+* Usage and Keys
+** SPACE = pause/resume
+** LEFT/RIGHT = 5 second seek back/forward
+** [ and ] frame back/forward jumps.
+
+** TODO key B = seek to the video start frame
+** TODO key E = seek to the video end frame
+** TODO key I = set in-marker (start of the cut) to the current video frame time
+** TODO key O = set out-marker (last inclusive frame of the cut) to the current video frame time
+** TODO key shortcut SHIFT+I = seek to in-marker position
+** TODO key shortcut SHIFT+O = seek to out-marker position
+** TODO after video is loaded in-marker is set to the first visible frame, out-marker is set to the last visible frame of the video
+** TODO timestamp overlay must display IN and OUT time stamps one line below the current timestamp and total duration in yellow colour over 80% opacity black background
+** TODO L = loop current video between in and out marks, i.e. video starts playing if it was paused from IN frame and after displaying OUT frame seeks to IN frame and plays again. Pause key pauses/resumes the loop, other keys cancel looping. Repetative L keypress cancells the loop.
+** TODO ENTER = print ffmpeg command to stdout that would loselessly ("-ac copy -vc copy) save current video cut to start from IN frame and having OUT as last displayed frame, the new filename is current filename without extension + "_" + inout time in HH_MM_SS format (underscore separates numbers) + original extension.
+** TODO add --help command line argument that displays usage help including keyboard shortcuts
+
+* DONE show frame time
+* DONE granular seek
 * TODO consider gui https://github.com/Immediate-Mode-UI/Nuklear/blob/master/demo/sdl_renderer/nuklear_sdl_renderer.h
 * TODO enable hw decoding
 

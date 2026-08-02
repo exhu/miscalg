@@ -5,10 +5,10 @@
 
 int main(int argc, char **argv) {
   if (argc != 2) {
+    printf("This is project %s.\n", PROJECT_NAME);
     printf("%s requires argument: file name of a video file\n", argv[0]);
     return 1;
   }
-  printf("This is project %s.\n", PROJECT_NAME);
   SdlffContext* context = NULL;
   if (sdlffclib_init(&context)) {
     const char * file_path = argv[1];
@@ -18,6 +18,5 @@ int main(int argc, char **argv) {
     }
   }
   sdlffclib_done(&context);
-
   return 0;
 }
