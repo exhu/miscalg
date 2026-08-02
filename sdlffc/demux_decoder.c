@@ -206,6 +206,13 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
                  file_path, result);
     return false;
   }
+  result = avformat_find_stream_info(ctx->ic, NULL);
+  if (result < 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't find stream info %s: %d",
+                 file_path, result);
+    sdlffclib_free_video_file_ctx(ctx);
+    return false;
+  }
   ctx->video_stream = av_find_best_stream(ctx->ic, AVMEDIA_TYPE_VIDEO, -1, -1,
                                           &ctx->video_codec, 0);
   if (ctx->video_stream < 0) {

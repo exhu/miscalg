@@ -39,7 +39,7 @@
 
 #define FONT_ATLAS_WIDTH 512
 #define FONT_ATLAS_HEIGHT 512
-#define FONT_SIZE_PX 20.0f
+#define FONT_SIZE_PX 40.0f
 
 typedef struct {
   SDL_Texture *texture;
@@ -167,8 +167,15 @@ static void render_timestamp_overlay(SdlffContext *context) {
 
   double duration_sec = 0.0;
   AVFormatContext *ic = context->video_file_ctx.ic;
-  if (ic && ic->duration != AV_NOPTS_VALUE) {
-    duration_sec = (double)ic->duration / (double)AV_TIME_BASE;
+  if (ic) {
+    if (ic->duration != AV_NOPTS_VALUE && ic->duration > 0) {
+      duration_sec = (double)ic->duration / (double)AV_TIME_BASE;
+    } else if (context->video_file_ctx.video_stream >= 0) {
+      AVStream *st = ic->streams[context->video_file_ctx.video_stream];
+      if (st && st->duration != AV_NOPTS_VALUE && st->duration > 0) {
+        duration_sec = (double)st->duration * av_q2d(st->time_base);
+      }
+    }
   }
 
   int cur_total = (int)elapsed_sec;
@@ -579,4 +586,3 @@ void redraw_current_frame(SdlffContext *context) {
   render_timestamp_overlay(context);
   SDL_RenderPresent(context->renderer);
 }
-
