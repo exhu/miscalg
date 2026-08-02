@@ -14,3 +14,5 @@ void sdlffclib_main_loop(SdlffContext *context);
 bool sdlffclib_fileinfo(const char *file_path);
 /// open file for playback
 bool sdlffclib_open_video(SdlffContext *context, const char *file_path);
+/// returns minimal time seek increment value in seconds (frame duration)
+double sdlffclib_get_min_seek_increment(const SdlffContext *context);

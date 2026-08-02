@@ -289,6 +289,7 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
   ctx->first_pts = -1.0;
   ctx->seek_target_pts = -1.0;
   ctx->has_pending_pkt = false;
+  context->min_seek_increment = sdlffclib_get_min_seek_increment(context);
   return true;
 }
 

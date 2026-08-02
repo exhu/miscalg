@@ -228,6 +228,31 @@ static void handle_osd_key(SdlffContext *context,
   }
 }
 
+double sdlffclib_get_min_seek_increment(const SdlffContext *context) {
+  if (!context) return 1.0 / 30.0;
+  if (context->min_seek_increment > 0.0) {
+    return context->min_seek_increment;
+  }
+  const SdlffVideoFileContext *ctx = &context->video_file_ctx;
+  if (ctx && ctx->ic && ctx->video_stream >= 0) {
+    AVStream *st = ctx->ic->streams[ctx->video_stream];
+    if (st) {
+      if (st->avg_frame_rate.num > 0 && st->avg_frame_rate.den > 0) {
+        return (double)st->avg_frame_rate.den / (double)st->avg_frame_rate.num;
+      }
+      if (st->r_frame_rate.num > 0 && st->r_frame_rate.den > 0) {
+        return (double)st->r_frame_rate.den / (double)st->r_frame_rate.num;
+      }
+    }
+    if (ctx->video_context && ctx->video_context->framerate.num > 0 &&
+        ctx->video_context->framerate.den > 0) {
+      return (double)ctx->video_context->framerate.den /
+             (double)ctx->video_context->framerate.num;
+    }
+  }
+  return 1.0 / 30.0;
+}
+
 /// all keyboard handling here. returns true to quit
 static bool handle_key_should_quit(SdlffContext *context,
                                    const SDL_KeyboardEvent *key) {
@@ -251,6 +276,24 @@ static bool handle_key_should_quit(SdlffContext *context,
     handle_seek(context, 5.0);
     context->exit_at_end = false;
     break;
+  case SDLK_LEFTBRACKET: {
+    if (!context->paused) {
+      handle_pause_key(context, key);
+    }
+    double step = sdlffclib_get_min_seek_increment(context);
+    handle_seek(context, -step);
+    context->exit_at_end = false;
+    break;
+  }
+  case SDLK_RIGHTBRACKET: {
+    if (!context->paused) {
+      handle_pause_key(context, key);
+    }
+    double step = sdlffclib_get_min_seek_increment(context);
+    handle_seek(context, step);
+    context->exit_at_end = false;
+    break;
+  }
   default:;
   }
   return false;
