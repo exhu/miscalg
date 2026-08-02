@@ -281,38 +281,28 @@ static void validate_and_clamp_markers(SdlffContext *context) {
   }
 }
 
-static void print_ffmpeg_command(SdlffContext *context) {
-  if (!context || !context->file_path[0]) return;
+static bool get_export_filename(SdlffContext *context, char *out_filename, size_t max_filename_len) {
+  if (!context || !context->file_path[0]) return false;
+
   validate_and_clamp_markers(context);
 
   double in_sec = context->in_point;
   double out_sec = context->out_point;
 
-  double step = context->min_seek_increment;
-  if (step <= 0.0) step = 1.0 / 30.0;
-
-  /* Cut duration including full display duration of out frame */
-  double cut_duration = (out_sec - in_sec) + step;
-
-  /* IN time components for filename */
   int in_total = (int)in_sec;
   int in_h = in_total / 3600;
   int in_m = (in_total % 3600) / 60;
   int in_s = in_total % 60;
   int in_ms = (int)((in_sec - (double)in_total) * 1000.0 + 0.5);
-  if (in_ms < 0) in_ms = 0;
-  if (in_ms >= 1000) in_ms = 999;
+  if (in_ms < 0) in_ms = 0; if (in_ms >= 1000) in_ms = 999;
 
-  /* OUT time components for filename */
   int out_total = (int)out_sec;
   int out_h = out_total / 3600;
   int out_m = (out_total % 3600) / 60;
   int out_s = out_total % 60;
   int out_ms = (int)((out_sec - (double)out_total) * 1000.0 + 0.5);
-  if (out_ms < 0) out_ms = 0;
-  if (out_ms >= 1000) out_ms = 999;
+  if (out_ms < 0) out_ms = 0; if (out_ms >= 1000) out_ms = 999;
 
-  /* Split file path into path_without_ext and ext */
   char path_buf[1024];
   snprintf(path_buf, sizeof(path_buf), "%s", context->file_path);
   char *dot = strrchr(path_buf, '.');
@@ -323,24 +313,101 @@ static void print_ffmpeg_command(SdlffContext *context) {
     *dot = '\0';
   }
 
-  char out_filename[1024];
-  snprintf(out_filename, sizeof(out_filename),
+  snprintf(out_filename, max_filename_len,
            "%s_%02d_%02d_%02d_%03d_%02d_%02d_%02d_%03d%s",
            path_buf, in_h, in_m, in_s, in_ms, out_h, out_m, out_s, out_ms, ext);
+  return true;
+}
 
-  /* Format IN time string: HH:MM:SS.mmm */
+static bool export_file_exists(const char *filename) {
+  if (!filename || !filename[0]) return false;
+  FILE *f = fopen(filename, "rb");
+  if (f) {
+    fclose(f);
+    return true;
+  }
+  return false;
+}
+
+static int SDLCALL ffmpeg_export_thread_cb(void *userdata) {
+  SdlffContext *context = (SdlffContext *)userdata;
+  char out_filename[1024];
+  if (get_export_filename(context, out_filename, sizeof(out_filename))) {
+    double in_sec = context->in_point;
+    double out_sec = context->out_point;
+    double step = context->min_seek_increment;
+    if (step <= 0.0) step = 1.0 / 30.0;
+    double cut_duration = (out_sec - in_sec) + step;
+
+    int in_total = (int)in_sec;
+    int in_h = in_total / 3600;
+    int in_m = (in_total % 3600) / 60;
+    int in_s = in_total % 60;
+    int in_ms = (int)((in_sec - (double)in_total) * 1000.0 + 0.5);
+    if (in_ms < 0) in_ms = 0; if (in_ms >= 1000) in_ms = 999;
+
+    int dur_total = (int)cut_duration;
+    int dur_h = dur_total / 3600;
+    int dur_m = (dur_total % 3600) / 60;
+    int dur_s = dur_total % 60;
+    int dur_ms = (int)((cut_duration - (double)dur_total) * 1000.0 + 0.5);
+    if (dur_ms < 0) dur_ms = 0; if (dur_ms >= 1000) dur_ms = 999;
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "ffmpeg -ss %02d:%02d:%02d.%03d -i \"%s\" -t %02d:%02d:%02d.%03d -c:v copy -c:a copy -map 0 \"%s\"",
+             in_h, in_m, in_s, in_ms, context->file_path, dur_h, dur_m, dur_s, dur_ms, out_filename);
+
+    printf("[EXPORT] Executing: %s\n", cmd);
+    fflush(stdout);
+
+    int res = system(cmd);
+    (void)res;
+  }
+
+  /* Signal main thread */
+  MainThreadCommand msg = MTC_FFMPEG_DONE;
+  mailbox_send_overwrite(&context->main_thread_mailbox, &msg, sizeof(msg));
+  SDL_Event event;
+  SDL_zero(event);
+  event.type = context->main_thread_event;
+  SDL_PushEvent(&event);
+  return 0;
+}
+
+static void print_ffmpeg_command(SdlffContext *context) {
+  if (!context || !context->file_path[0]) return;
+  char out_filename[1024];
+  if (!get_export_filename(context, out_filename, sizeof(out_filename))) return;
+
+  double in_sec = context->in_point;
+  double out_sec = context->out_point;
+
+  double step = context->min_seek_increment;
+  if (step <= 0.0) step = 1.0 / 30.0;
+
+  /* Cut duration including full display duration of out frame */
+  double cut_duration = (out_sec - in_sec) + step;
+
+  /* IN time components */
+  int in_total = (int)in_sec;
+  int in_h = in_total / 3600;
+  int in_m = (in_total % 3600) / 60;
+  int in_s = in_total % 60;
+  int in_ms = (int)((in_sec - (double)in_total) * 1000.0 + 0.5);
+  if (in_ms < 0) in_ms = 0; if (in_ms >= 1000) in_ms = 999;
+
   char in_time_str[64];
   snprintf(in_time_str, sizeof(in_time_str), "%02d:%02d:%02d.%03d",
            in_h, in_m, in_s, in_ms);
 
-  /* Format Duration string: HH:MM:SS.mmm */
+  /* Format Duration string */
   int dur_total = (int)cut_duration;
   int dur_h = dur_total / 3600;
   int dur_m = (dur_total % 3600) / 60;
   int dur_s = dur_total % 60;
   int dur_ms = (int)((cut_duration - (double)dur_total) * 1000.0 + 0.5);
-  if (dur_ms < 0) dur_ms = 0;
-  if (dur_ms >= 1000) dur_ms = 999;
+  if (dur_ms < 0) dur_ms = 0; if (dur_ms >= 1000) dur_ms = 999;
   char dur_time_str[64];
   snprintf(dur_time_str, sizeof(dur_time_str), "%02d:%02d:%02d.%03d",
            dur_h, dur_m, dur_s, dur_ms);
@@ -353,9 +420,17 @@ static void print_ffmpeg_command(SdlffContext *context) {
 /// all keyboard handling here. returns true to quit
 static bool handle_key_should_quit(SdlffContext *context,
                                    const SDL_KeyboardEvent *key) {
+  if (context->ffmpeg_busy) {
+    snprintf(context->error_msg_text, sizeof(context->error_msg_text), "waiting for the command to finish!");
+    context->error_msg_until_ticks = SDL_GetTicksNS() + 1000000000ULL;
+    redraw_current_frame(context);
+    return false;
+  }
+
   Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
   double current_pos = seconds_from_nanoseconds(now - context->play_start_time);
   bool is_shift = (key->mod & SDL_KMOD_SHIFT) != 0;
+  bool is_ctrl = (key->mod & SDL_KMOD_CTRL) != 0;
 
   switch (key->key) {
   case SDLK_Q:
@@ -448,7 +523,36 @@ static bool handle_key_should_quit(SdlffContext *context,
   case SDLK_RETURN:
   case SDLK_KP_ENTER:
     if (!key->repeat) {
-      print_ffmpeg_command(context);
+      if (is_ctrl) {
+        char out_filename[1024];
+        get_export_filename(context, out_filename, sizeof(out_filename));
+        if (export_file_exists(out_filename)) {
+          snprintf(context->error_msg_text, sizeof(context->error_msg_text), "Export file already exists!");
+          context->error_msg_until_ticks = SDL_GetTicksNS() + 1000000000ULL;
+          redraw_current_frame(context);
+          SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Export aborted: file '%s' already exists", out_filename);
+        } else {
+          if (!context->paused) {
+            context->pause_start_ticks = SDL_GetTicksNS();
+            context->paused = true;
+            if (context->audio_stream) {
+              SDL_PauseAudioStreamDevice(context->audio_stream);
+            }
+          }
+          context->ffmpeg_busy = true;
+          print_ffmpeg_command(context);
+          SDL_Thread *export_thread = SDL_CreateThread(ffmpeg_export_thread_cb, "ffmpeg-export", context);
+          if (export_thread) {
+            SDL_DetachThread(export_thread);
+          } else {
+            context->ffmpeg_busy = false;
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create export thread");
+          }
+          redraw_current_frame(context);
+        }
+      } else {
+        print_ffmpeg_command(context);
+      }
     }
     break;
   case SDLK_LEFT:
@@ -579,6 +683,11 @@ void sdlffclib_main_loop(SdlffContext *context) {
               if (context->exit_at_end && !context->looping) {
                 should_break = true;
               }
+            } else if (cmd == MTC_FFMPEG_DONE) {
+              SDL_Log("main thread received ffmpeg export done command.");
+              context->ffmpeg_busy = false;
+              context->markers_modified = false;
+              redraw_current_frame(context);
             }
           }
         }

@@ -32,10 +32,12 @@ typedef struct {
   bool has_pending_pkt;
 } SdlffVideoFileContext;
 
-/// commands that main thread expects (sent by video thread):
+/// commands that main thread expects (sent by video or export thread):
 typedef enum {
   /// end of stream reached
   MTC_VIDEO_END,
+  /// ffmpeg export process completed
+  MTC_FFMPEG_DONE,
 } MainThreadCommand;
 
 /// commands that video thread expects (sent by main thread):
@@ -80,6 +82,9 @@ struct _SdlffContext {
   bool paused;                         ///< true if playback is paused
   bool looping;                        ///< true if playback loops between in_point and out_point
   bool markers_modified;               ///< true if in_point or out_point was changed by the user
+  bool ffmpeg_busy;                    ///< true if FFmpeg export process is currently running
+  Uint64 error_msg_until_ticks;        ///< ticks until which warning/error banner is displayed
+  char error_msg_text[256];            ///< text message to display in warning/error banner
   OverlayMode overlay_mode;            ///< overlay visibility and position state
   bool exit_at_end;
   bool stream_ended;                   ///< true if stream reached EOF

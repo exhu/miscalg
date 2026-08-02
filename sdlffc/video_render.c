@@ -562,6 +562,119 @@ static bool fill_texture_with_frame_data(SDL_Texture *texture, AVFrame *frame,
   return true;
 }
 
+static void render_busy_and_error_overlays(SdlffContext *context) {
+  if (!context || !context->renderer) return;
+
+  int win_w = 0, win_h = 0;
+  SDL_GetRenderOutputSize(context->renderer, &win_w, &win_h);
+  if (win_w <= 0 || win_h <= 0) return;
+
+  bool font_ok = init_font_context(context->renderer);
+
+  /* 1. Render Full-window 90% Gray Busy Overlay if ffmpeg_busy */
+  if (context->ffmpeg_busy) {
+    SDL_SetRenderDrawBlendMode(context->renderer, SDL_BLENDMODE_BLEND);
+    /* 90% gray background with 90% opacity (230, 230, 230, 230) */
+    SDL_SetRenderDrawColor(context->renderer, 230, 230, 230, 230);
+    SDL_FRect full_rect = { 0.0f, 0.0f, (float)win_w, (float)win_h };
+    SDL_RenderFillRect(context->renderer, &full_rect);
+
+    const char *busy_msg = "ffmpeg command is in progress...";
+    if (!font_ok) {
+      float text_w = (float)(strlen(busy_msg) * 8);
+      float text_x = ((float)win_w - text_w) * 0.5f;
+      float text_y = ((float)win_h - 8.0f) * 0.5f;
+      SDL_SetRenderDrawColor(context->renderer, 255, 255, 255, 255);
+      SDL_RenderDebugText(context->renderer, text_x, text_y, busy_msg);
+    } else {
+      /* Measure text width */
+      float msg_w = 0.0f;
+      float temp_x = 0.0f, temp_y = FONT_SIZE_PX;
+      for (const char *p = busy_msg; *p; ++p) {
+        if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+          stbtt_aligned_quad q;
+          stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                             (unsigned char)*p - 32, &temp_x, &temp_y, &q, 1);
+          if (q.x1 > msg_w) msg_w = q.x1;
+        }
+      }
+
+      float start_x = ((float)win_w - msg_w) * 0.5f;
+      float start_y = ((float)win_h - FONT_SIZE_PX) * 0.5f;
+
+      /* Render white text */
+      SDL_SetTextureColorMod(g_font_ctx.texture, 255, 255, 255);
+      float cur_x = start_x;
+      float cur_y = start_y + FONT_SIZE_PX * 0.8f;
+      for (const char *p = busy_msg; *p; ++p) {
+        if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+          stbtt_aligned_quad q;
+          stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                             (unsigned char)*p - 32, &cur_x, &cur_y, &q, 1);
+          SDL_FRect src = { q.s0 * (float)FONT_ATLAS_WIDTH, q.t0 * (float)FONT_ATLAS_HEIGHT,
+                            (q.s1 - q.s0) * (float)FONT_ATLAS_WIDTH, (q.t1 - q.t0) * (float)FONT_ATLAS_HEIGHT };
+          SDL_FRect dst = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
+          SDL_RenderTexture(context->renderer, g_font_ctx.texture, &src, &dst);
+        }
+      }
+    }
+  }
+
+  /* 2. Render Light Red 1-Second Warning / Error Banner */
+  Uint64 now_ticks = SDL_GetTicksNS();
+  if (now_ticks < context->error_msg_until_ticks) {
+    const char *err_msg = context->error_msg_text[0]
+                              ? context->error_msg_text
+                              : "waiting for the command to finish!";
+    float banner_h = 44.0f;
+    float banner_y = (float)win_h - banner_h;
+
+    SDL_SetRenderDrawBlendMode(context->renderer, SDL_BLENDMODE_BLEND);
+    /* Light red background (255, 100, 100, 240) */
+    SDL_SetRenderDrawColor(context->renderer, 255, 100, 100, 240);
+    SDL_FRect banner_rect = { 0.0f, banner_y, (float)win_w, banner_h };
+    SDL_RenderFillRect(context->renderer, &banner_rect);
+
+    if (!font_ok) {
+      float text_w = (float)(strlen(err_msg) * 8);
+      float text_x = ((float)win_w - text_w) * 0.5f;
+      float text_y = banner_y + (banner_h - 8.0f) * 0.5f;
+      SDL_SetRenderDrawColor(context->renderer, 255, 255, 255, 255);
+      SDL_RenderDebugText(context->renderer, text_x, text_y, err_msg);
+    } else {
+      float msg_w = 0.0f;
+      float temp_x = 0.0f, temp_y = FONT_SIZE_PX;
+      for (const char *p = err_msg; *p; ++p) {
+        if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+          stbtt_aligned_quad q;
+          stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                             (unsigned char)*p - 32, &temp_x, &temp_y, &q, 1);
+          if (q.x1 > msg_w) msg_w = q.x1;
+        }
+      }
+
+      float start_x = ((float)win_w - msg_w) * 0.5f;
+      float start_y = banner_y + (banner_h - FONT_SIZE_PX) * 0.5f;
+
+      /* Render white text */
+      SDL_SetTextureColorMod(g_font_ctx.texture, 255, 255, 255);
+      float cur_x = start_x;
+      float cur_y = start_y + FONT_SIZE_PX * 0.8f;
+      for (const char *p = err_msg; *p; ++p) {
+        if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+          stbtt_aligned_quad q;
+          stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                             (unsigned char)*p - 32, &cur_x, &cur_y, &q, 1);
+          SDL_FRect src = { q.s0 * (float)FONT_ATLAS_WIDTH, q.t0 * (float)FONT_ATLAS_HEIGHT,
+                            (q.s1 - q.s0) * (float)FONT_ATLAS_WIDTH, (q.t1 - q.t0) * (float)FONT_ATLAS_HEIGHT };
+          SDL_FRect dst = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
+          SDL_RenderTexture(context->renderer, g_font_ctx.texture, &src, &dst);
+        }
+      }
+    }
+  }
+}
+
 void render_frame_main_thread(SdlffContext *context, AVFrame *frame) {
   if (!create_or_reuse_cached_texture(context, frame, &context->video_texture)) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -624,6 +737,7 @@ void render_frame_main_thread(SdlffContext *context, AVFrame *frame) {
   }
 
   render_timestamp_overlay(context);
+  render_busy_and_error_overlays(context);
 
   SDL_RenderPresent(context->renderer);
 }
@@ -661,5 +775,6 @@ void redraw_current_frame(SdlffContext *context) {
   }
 
   render_timestamp_overlay(context);
+  render_busy_and_error_overlays(context);
   SDL_RenderPresent(context->renderer);
 }

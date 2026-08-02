@@ -22,6 +22,7 @@ static void print_usage(const char *prog_name) {
   printf("  L             Toggle looping between IN and OUT markers\n");
   printf("  V             Cycle overlay position (Top-Left -> Bottom-Right -> Hidden)\n");
   printf("  Enter         Print lossless FFmpeg cut command to stdout\n");
+  printf("  Ctrl + Enter  Execute FFmpeg export command asynchronously\n");
   printf("  Q / Esc       Quit application (auto-prints FFmpeg command if markers modified)\n");
 }
 
