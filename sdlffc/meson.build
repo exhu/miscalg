@@ -45,6 +45,9 @@ deps = [sdl_dep,
 
 src = ['sdlffc.c',
        'sdlffclib.c',
+       'video_render.c',
+       'demux_decoder.c',
+       'playback_thread.c',
        'mailbox.c',
        'frame_queue.c',
       ]
