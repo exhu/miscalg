@@ -1,10 +1,10 @@
 #include "sdlffclib.h"
-#include "sdlffclib_private.h"
-#include "video_render.h"
 #include "demux_decoder.h"
-#include "playback_thread.h"
 #include "frame_queue.h"
 #include "mailbox.h"
+#include "playback_thread.h"
+#include "sdlffclib_private.h"
+#include "video_render.h"
 
 // sdl
 #include <SDL3/SDL_events.h>
@@ -39,6 +39,7 @@ bool sdlffclib_init(SdlffContext **out_context) {
   }
 
   SdlffContext *context = &global_context;
+  context->exit_at_end = true;
   *out_context = context;
 
   SDL_SetAtomicInt(&context->quit_requested, 0);
@@ -60,11 +61,11 @@ bool sdlffclib_init(SdlffContext **out_context) {
   }
 
   if (!mailbox_init(&context->main_thread_mailbox,
-                   &context->main_thread_mailbox_data,
-                   sizeof(context->main_thread_mailbox_data)) ||
+                    &context->main_thread_mailbox_data,
+                    sizeof(context->main_thread_mailbox_data)) ||
       !mailbox_init(&context->video_thread_mailbox,
-                   &context->video_thread_mailbox_data,
-                   sizeof(context->video_thread_mailbox_data))) {
+                    &context->video_thread_mailbox_data,
+                    sizeof(context->video_thread_mailbox_data))) {
     SDL_DestroyRenderer(context->renderer);
     SDL_DestroyWindow(context->window);
     frame_queue_done(&context->frame_queue);
@@ -98,7 +99,8 @@ void sdlffclib_done(SdlffContext **out_context) {
   }
   SdlffContext *context = *out_context;
 
-  /* Signal video thread to stop and unblock it if blocked in frame_queue_push */
+  /* Signal video thread to stop and unblock it if blocked in frame_queue_push
+   */
   SDL_SetAtomicInt(&context->quit_requested, 1);
   frame_queue_flush(&context->frame_queue);
   if (context->video_thread) {
@@ -133,21 +135,10 @@ void sdlffclib_done(SdlffContext **out_context) {
   SDL_Quit();
 }
 
-/// return true to quit
-static bool handle_key_should_quit(const SDL_KeyboardEvent *key) {
-  switch (key->key) {
-  case SDLK_Q:
-  case SDLK_ESCAPE:
-    return true;
-    break;
-  default:;
-  }
-  return false;
-}
-
 static void handle_seek(SdlffContext *context, double offset_sec) {
   SdlffVideoFileContext *ctx = &context->video_file_ctx;
-  if (!ctx->ic) return;
+  if (!ctx->ic)
+    return;
 
   Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
   double current_pos = seconds_from_nanoseconds(now - context->play_start_time);
@@ -162,7 +153,8 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
     }
   }
 
-  SDL_Log("Seek requested: %.2f -> %.2f (offset: %+.1fs)", current_pos, target_pos, offset_sec);
+  SDL_Log("Seek requested: %.2f -> %.2f (offset: %+.1fs)", current_pos,
+          target_pos, offset_sec);
 
   /* Flush frame queue so main thread stops presenting pre-seek frames */
   frame_queue_flush(&context->frame_queue);
@@ -175,8 +167,69 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
   context->play_start_time = now - (Uint64)(target_pos * 1.0e9);
 
   /* Send seek command to video thread */
-  VideoThreadMsg msg = { .command = VTC_SEEK, .seek_target_sec = target_pos };
+  VideoThreadMsg msg = {.command = VTC_SEEK, .seek_target_sec = target_pos};
   mailbox_send_overwrite(&context->video_thread_mailbox, &msg, sizeof(msg));
+}
+
+static void handle_pause_key(SdlffContext *context,
+                             const SDL_KeyboardEvent *key) {
+  if (!key->repeat) {
+    if (context->paused) {
+      Uint64 now = SDL_GetTicksNS();
+      context->play_start_time += (now - context->pause_start_ticks);
+      context->paused = false;
+      if (context->audio_stream) {
+        SDL_ResumeAudioStreamDevice(context->audio_stream);
+      }
+      SDL_Log("Resumed video playback");
+    } else {
+      context->pause_start_ticks = SDL_GetTicksNS();
+      context->paused = true;
+      if (context->audio_stream) {
+        SDL_PauseAudioStreamDevice(context->audio_stream);
+      }
+      SDL_Log("Paused video playback");
+    }
+    redraw_current_frame(context);
+  }
+}
+
+static void handle_osd_key(SdlffContext *context,
+                           const SDL_KeyboardEvent *key) {
+  if (!key->repeat) {
+    context->show_overlay = !context->show_overlay;
+    SDL_Log("Timestamp overlay toggled: %s",
+            context->show_overlay ? "ON" : "OFF");
+    redraw_current_frame(context);
+  }
+}
+
+/// all keyboard handling here. returns true to quit
+static bool handle_key_should_quit(SdlffContext *context,
+                                   const SDL_KeyboardEvent *key) {
+  switch (key->key) {
+  case SDLK_Q:
+  case SDLK_ESCAPE:
+    return true;
+    break;
+  case SDLK_SPACE:
+    handle_pause_key(context, key);
+    context->exit_at_end = false;
+    break;
+  case SDLK_O:
+    handle_osd_key(context, key);
+    break;
+  case SDLK_LEFT:
+    handle_seek(context, -5.0);
+    context->exit_at_end = false;
+    break;
+  case SDLK_RIGHT:
+    handle_seek(context, 5.0);
+    context->exit_at_end = false;
+    break;
+  default:;
+  }
+  return false;
 }
 
 void sdlffclib_main_loop(SdlffContext *context) {
@@ -186,19 +239,23 @@ void sdlffclib_main_loop(SdlffContext *context) {
   /* Record the wall-clock start time and kick the video thread */
   context->play_start_time = SDL_GetTicksNS();
   context->show_overlay = true;
-  VideoThreadMsg command = { .command = VTC_PLAY, .seek_target_sec = 0.0 };
-  mailbox_send_overwrite(&context->video_thread_mailbox, &command, sizeof(command));
+  VideoThreadMsg command = {.command = VTC_PLAY, .seek_target_sec = 0.0};
+  mailbox_send_overwrite(&context->video_thread_mailbox, &command,
+                         sizeof(command));
 
   while (!should_break) {
     /* Calculate dynamic timeout based on next frame's PTS */
     double elapsed = context->paused
-        ? seconds_from_nanoseconds(context->pause_start_ticks - context->play_start_time)
-        : seconds_from_nanoseconds(SDL_GetTicksNS() - context->play_start_time);
+                         ? seconds_from_nanoseconds(context->pause_start_ticks -
+                                                    context->play_start_time)
+                         : seconds_from_nanoseconds(SDL_GetTicksNS() -
+                                                    context->play_start_time);
     double next_pts = 0.0;
     Sint32 timeout_ms = 10; /* Fallback timeout if frame queue is empty */
 
     if (context->paused) {
-      if (frame_queue_peek_pts(&context->frame_queue, &next_pts) && next_pts <= elapsed) {
+      if (frame_queue_peek_pts(&context->frame_queue, &next_pts) &&
+          next_pts <= elapsed) {
         timeout_ms = 0;
       } else {
         timeout_ms = 100;
@@ -221,39 +278,7 @@ void sdlffclib_main_loop(SdlffContext *context) {
         should_break = true;
         break;
       case SDL_EVENT_KEY_DOWN:
-        if (event.key.key == SDLK_SPACE) {
-          if (!event.key.repeat) {
-            if (context->paused) {
-              Uint64 now = SDL_GetTicksNS();
-              context->play_start_time += (now - context->pause_start_ticks);
-              context->paused = false;
-              if (context->audio_stream) {
-                SDL_ResumeAudioStreamDevice(context->audio_stream);
-              }
-              SDL_Log("Resumed video playback");
-            } else {
-              context->pause_start_ticks = SDL_GetTicksNS();
-              context->paused = true;
-              if (context->audio_stream) {
-                SDL_PauseAudioStreamDevice(context->audio_stream);
-              }
-              SDL_Log("Paused video playback");
-            }
-            redraw_current_frame(context);
-          }
-        } else if (event.key.key == SDLK_O) {
-          if (!event.key.repeat) {
-            context->show_overlay = !context->show_overlay;
-            SDL_Log("Timestamp overlay toggled: %s", context->show_overlay ? "ON" : "OFF");
-            redraw_current_frame(context);
-          }
-        } else if (event.key.key == SDLK_LEFT) {
-          handle_seek(context, -5.0);
-        } else if (event.key.key == SDLK_RIGHT) {
-          handle_seek(context, 5.0);
-        } else {
-          should_break = handle_key_should_quit(&event.key);
-        }
+        should_break = handle_key_should_quit(context, &event.key);
         break;
       default:
         if (event.type == context->main_thread_event) {
@@ -264,7 +289,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
             mailbox_unlock(&context->main_thread_mailbox);
             if (cmd == MTC_VIDEO_END) {
               SDL_Log("main thread received video end command.");
-              should_break = true;
+              if (context->exit_at_end) {
+                should_break = true;
+              }
             }
           }
         }
@@ -277,13 +304,17 @@ void sdlffclib_main_loop(SdlffContext *context) {
        so rendering catches up to real-time playback. */
     if (!should_break) {
       /* Convert nanoseconds (SDL_GetTicksNS) to seconds */
-      double render_elapsed = context->paused
-          ? seconds_from_nanoseconds(context->pause_start_ticks - context->play_start_time)
-          : seconds_from_nanoseconds(SDL_GetTicksNS() - context->play_start_time);
+      double render_elapsed =
+          context->paused
+              ? seconds_from_nanoseconds(context->pause_start_ticks -
+                                         context->play_start_time)
+              : seconds_from_nanoseconds(SDL_GetTicksNS() -
+                                         context->play_start_time);
       AVFrame *frame = NULL;
       AVFrame *next_frame = NULL;
 
-      while ((next_frame = frame_queue_try_pop(&context->frame_queue, render_elapsed)) != NULL) {
+      while ((next_frame = frame_queue_try_pop(&context->frame_queue,
+                                               render_elapsed)) != NULL) {
         if (frame) {
           av_frame_free(&frame);
         }
