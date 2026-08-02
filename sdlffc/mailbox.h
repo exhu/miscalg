@@ -18,6 +18,7 @@ void mailbox_done(MailBox *mb);
 /// blocks until slot is free, then copies data and signals receiver
 /// data_size must be the same as in mailbox_init
 bool mailbox_send(MailBox *mb, void *new_data_value, size_t data_size);
+/// non-blocking: overwrites unconsumed data immediately and signals receiver
 bool mailbox_send_overwrite(MailBox *mb, const void *new_data_value, size_t data_size);
 
 /// waits for condition, then locks, timeout is -1 for indef, or milliseconds
