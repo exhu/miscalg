@@ -166,6 +166,10 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
     target_pos = duration;
   }
 
+  if (duration > 0.0 && target_pos < duration) {
+    context->stream_ended = false;
+  }
+
   SDL_Log("Seek requested: %.2f -> %.2f (offset: %+.1fs)", current_pos,
           target_pos, offset_sec);
 
@@ -191,6 +195,9 @@ static void handle_seek(SdlffContext *context, double offset_sec) {
 static void handle_pause_key(SdlffContext *context,
                              const SDL_KeyboardEvent *key) {
   if (!key->repeat) {
+    if (context->stream_ended) {
+      return;
+    }
     if (context->paused) {
       Uint64 now = SDL_GetTicksNS();
       context->play_start_time += (now - context->pause_start_ticks);
@@ -253,6 +260,21 @@ void sdlffclib_main_loop(SdlffContext *context) {
   SDL_Event event;
   bool should_break = false;
 
+  context->stream_ended = false;
+
+  double duration = -1.0;
+  if (context->video_file_ctx.ic) {
+    if (context->video_file_ctx.ic->duration != AV_NOPTS_VALUE &&
+        context->video_file_ctx.ic->duration > 0) {
+      duration = (double)context->video_file_ctx.ic->duration / (double)AV_TIME_BASE;
+    } else if (context->video_file_ctx.video_stream >= 0) {
+      AVStream *st = context->video_file_ctx.ic->streams[context->video_file_ctx.video_stream];
+      if (st && st->duration != AV_NOPTS_VALUE && st->duration > 0) {
+        duration = (double)st->duration * av_q2d(st->time_base);
+      }
+    }
+  }
+
   /* Record the wall-clock start time and kick the video thread */
   context->play_start_time = SDL_GetTicksNS();
   context->show_overlay = true;
@@ -267,6 +289,10 @@ void sdlffclib_main_loop(SdlffContext *context) {
                                                     context->play_start_time)
                          : seconds_from_nanoseconds(SDL_GetTicksNS() -
                                                     context->play_start_time);
+    if (duration > 0.0 && (context->stream_ended || elapsed > duration)) {
+      elapsed = duration;
+    }
+
     double next_pts = 0.0;
     Sint32 timeout_ms = 10; /* Fallback timeout if frame queue is empty */
 
@@ -306,6 +332,7 @@ void sdlffclib_main_loop(SdlffContext *context) {
             mailbox_unlock(&context->main_thread_mailbox);
             if (cmd == MTC_VIDEO_END) {
               SDL_Log("main thread received video end command.");
+              context->stream_ended = true;
               if (context->exit_at_end) {
                 should_break = true;
               }
@@ -327,6 +354,9 @@ void sdlffclib_main_loop(SdlffContext *context) {
                                          context->play_start_time)
               : seconds_from_nanoseconds(SDL_GetTicksNS() -
                                          context->play_start_time);
+      if (duration > 0.0 && (context->stream_ended || render_elapsed > duration)) {
+        render_elapsed = duration;
+      }
       AVFrame *frame = NULL;
       AVFrame *next_frame = NULL;
 

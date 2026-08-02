@@ -178,6 +178,10 @@ static void render_timestamp_overlay(SdlffContext *context) {
     }
   }
 
+  if (duration_sec > 0.0 && (context->stream_ended || elapsed_sec > duration_sec)) {
+    elapsed_sec = duration_sec;
+  }
+
   int cur_total = (int)elapsed_sec;
   int cur_h = cur_total / 3600;
   int cur_m = (cur_total % 3600) / 60;

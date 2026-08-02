@@ -73,4 +73,5 @@ struct _SdlffContext {
   bool paused;                         ///< true if playback is paused
   bool show_overlay;                   ///< true if timestamp overlay is visible (toggled via 'O' key)
   bool exit_at_end;
+  bool stream_ended;                   ///< true if stream reached EOF
 };
