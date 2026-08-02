@@ -1,8 +1,16 @@
 #include "video_render.h"
 
+// std
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 // sdl
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
+#include <SDL3/SDL_surface.h>
 
 // ffmpeg
 #include <libavcodec/avcodec.h>
@@ -11,10 +19,240 @@
 #include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 
-// std
-#include <inttypes.h>
-#include <stdbool.h>
-#include <string.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wpadded"
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wfloat-conversion"
+#pragma GCC diagnostic ignored "-Wstrict-prototypes"
+#pragma GCC diagnostic ignored "-Wold-style-definition"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "external/stb/stb_truetype.h"
+#pragma GCC diagnostic pop
+
+#define FONT_ATLAS_WIDTH 512
+#define FONT_ATLAS_HEIGHT 512
+#define FONT_SIZE_PX 20.0f
+
+typedef struct {
+  SDL_Texture *texture;
+  stbtt_bakedchar cdata[96];
+  bool loaded;
+  bool failed;
+} FontContext;
+
+static FontContext g_font_ctx = { .texture = NULL, .loaded = false, .failed = false };
+
+static bool init_font_context(SDL_Renderer *renderer) {
+  if (g_font_ctx.loaded) {
+    return true;
+  }
+  if (g_font_ctx.failed) {
+    return false;
+  }
+
+  const char *font_paths[] = {
+    "./fonts/NotoSansMono-Regular.ttf",
+    "./fonts/NotoSansMono-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
+    NULL
+  };
+
+  unsigned char *ttf_buffer = NULL;
+
+  for (int i = 0; font_paths[i] != NULL; ++i) {
+    FILE *f = fopen(font_paths[i], "rb");
+    if (f) {
+      fseek(f, 0, SEEK_END);
+      long sz = ftell(f);
+      fseek(f, 0, SEEK_SET);
+      if (sz > 0) {
+        ttf_buffer = (unsigned char *)malloc((size_t)sz);
+        if (ttf_buffer) {
+          if (fread(ttf_buffer, 1, (size_t)sz, f) == (size_t)sz) {
+            fclose(f);
+            break;
+          }
+          free(ttf_buffer);
+          ttf_buffer = NULL;
+        }
+      }
+      fclose(f);
+    }
+  }
+
+  if (!ttf_buffer) {
+    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not load TTF font file for overlay.");
+    g_font_ctx.failed = true;
+    return false;
+  }
+
+  unsigned char *temp_bitmap = (unsigned char *)calloc(FONT_ATLAS_WIDTH * FONT_ATLAS_HEIGHT, 1);
+  if (!temp_bitmap) {
+    free(ttf_buffer);
+    g_font_ctx.failed = true;
+    return false;
+  }
+
+  int bake_res = stbtt_BakeFontBitmap(ttf_buffer, 0, FONT_SIZE_PX,
+                                      temp_bitmap, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                                      32, 96, g_font_ctx.cdata);
+  free(ttf_buffer);
+
+  if (bake_res <= 0) {
+    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "stbtt_BakeFontBitmap failed.");
+    free(temp_bitmap);
+    g_font_ctx.failed = true;
+    return false;
+  }
+
+  uint8_t *rgba_pixels = (uint8_t *)malloc(FONT_ATLAS_WIDTH * FONT_ATLAS_HEIGHT * 4);
+  if (!rgba_pixels) {
+    free(temp_bitmap);
+    g_font_ctx.failed = true;
+    return false;
+  }
+
+  for (int i = 0; i < FONT_ATLAS_WIDTH * FONT_ATLAS_HEIGHT; ++i) {
+    uint8_t alpha = temp_bitmap[i];
+    rgba_pixels[i * 4 + 0] = 255;
+    rgba_pixels[i * 4 + 1] = 255;
+    rgba_pixels[i * 4 + 2] = 255;
+    rgba_pixels[i * 4 + 3] = alpha;
+  }
+  free(temp_bitmap);
+
+  SDL_Surface *surface = SDL_CreateSurfaceFrom(FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                                               SDL_PIXELFORMAT_RGBA32,
+                                               rgba_pixels, FONT_ATLAS_WIDTH * 4);
+  if (!surface) {
+    free(rgba_pixels);
+    g_font_ctx.failed = true;
+    return false;
+  }
+
+  g_font_ctx.texture = SDL_CreateTextureFromSurface(renderer, surface);
+  SDL_DestroySurface(surface);
+  free(rgba_pixels);
+
+  if (g_font_ctx.texture) {
+    SDL_SetTextureBlendMode(g_font_ctx.texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(g_font_ctx.texture, SDL_SCALEMODE_LINEAR);
+    g_font_ctx.loaded = true;
+    return true;
+  }
+
+  g_font_ctx.failed = true;
+  return false;
+}
+
+static void render_timestamp_overlay(SdlffContext *context) {
+  if (!context || !context->show_overlay) {
+    return;
+  }
+
+  Uint64 now = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
+  double elapsed_sec = (double)(now - context->play_start_time) / 1.0e9;
+  if (elapsed_sec < 0.0) {
+    elapsed_sec = 0.0;
+  }
+
+  double duration_sec = 0.0;
+  AVFormatContext *ic = context->video_file_ctx.ic;
+  if (ic && ic->duration != AV_NOPTS_VALUE) {
+    duration_sec = (double)ic->duration / (double)AV_TIME_BASE;
+  }
+
+  int cur_total = (int)elapsed_sec;
+  int cur_h = cur_total / 3600;
+  int cur_m = (cur_total % 3600) / 60;
+  int cur_s = cur_total % 60;
+
+  int dur_total = (int)duration_sec;
+  int dur_h = dur_total / 3600;
+  int dur_m = (dur_total % 3600) / 60;
+  int dur_s = dur_total % 60;
+
+  char time_str[128];
+  if (dur_h > 0 || cur_h > 0) {
+    snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d / %02d:%02d:%02d%s",
+             cur_h, cur_m, cur_s, dur_h, dur_m, dur_s,
+             context->paused ? " [PAUSED]" : "");
+  } else {
+    snprintf(time_str, sizeof(time_str), "%02d:%02d / %02d:%02d%s",
+             cur_m, cur_s, dur_m, dur_s,
+             context->paused ? " [PAUSED]" : "");
+  }
+
+  bool font_ok = init_font_context(context->renderer);
+  if (!font_ok) {
+    /* Fallback to SDL_RenderDebugText if stb_truetype font loading failed */
+    float text_x = 12.0f;
+    float text_y = 12.0f;
+    float text_w = (float)(strlen(time_str) * 8);
+    float text_h = 8.0f;
+
+    SDL_SetRenderDrawBlendMode(context->renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 204);
+    SDL_FRect bg_rect = { text_x - 4.0f, text_y - 4.0f, text_w + 8.0f, text_h + 8.0f };
+    SDL_RenderFillRect(context->renderer, &bg_rect);
+
+    SDL_SetRenderDrawColor(context->renderer, 255, 255, 255, 255);
+    SDL_RenderDebugText(context->renderer, text_x, text_y, time_str);
+    return;
+  }
+
+  float start_x = 12.0f;
+  float start_y = 12.0f;
+
+  /* Measure text width and height for background rectangle */
+  float max_x = start_x;
+  float max_y = start_y + FONT_SIZE_PX;
+
+  float temp_x = start_x;
+  float temp_y = start_y + FONT_SIZE_PX;
+  for (const char *p = time_str; *p; ++p) {
+    if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+      stbtt_aligned_quad q;
+      stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                         (unsigned char)*p - 32, &temp_x, &temp_y, &q, 1);
+      if (q.x1 > max_x) max_x = q.x1;
+      if (q.y1 > max_y) max_y = q.y1;
+    }
+  }
+
+  float bg_w = max_x - start_x;
+  float bg_h = FONT_SIZE_PX;
+
+  /* Render background rectangle: black with 80% opacity (204 / 255) */
+  SDL_SetRenderDrawBlendMode(context->renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 204);
+  SDL_FRect bg_rect = { start_x - 6.0f, start_y - 4.0f, bg_w + 12.0f, bg_h + 8.0f };
+  SDL_RenderFillRect(context->renderer, &bg_rect);
+
+  /* Render white text glyphs */
+  float cur_x = start_x;
+  float cur_y = start_y + FONT_SIZE_PX * 0.8f;
+  for (const char *p = time_str; *p; ++p) {
+    if ((unsigned char)*p >= 32 && (unsigned char)*p < 128) {
+      stbtt_aligned_quad q;
+      stbtt_GetBakedQuad(g_font_ctx.cdata, FONT_ATLAS_WIDTH, FONT_ATLAS_HEIGHT,
+                         (unsigned char)*p - 32, &cur_x, &cur_y, &q, 1);
+      SDL_FRect src = { q.s0 * (float)FONT_ATLAS_WIDTH, q.t0 * (float)FONT_ATLAS_HEIGHT,
+                        (q.s1 - q.s0) * (float)FONT_ATLAS_WIDTH, (q.t1 - q.t0) * (float)FONT_ATLAS_HEIGHT };
+      SDL_FRect dst = { q.x0, q.y0, q.x1 - q.x0, q.y1 - q.y0 };
+      SDL_RenderTexture(context->renderer, g_font_ctx.texture, &src, &dst);
+    }
+  }
+}
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch-enum"
@@ -301,5 +539,44 @@ void render_frame_main_thread(SdlffContext *context, AVFrame *frame) {
     }
   }
 
+  render_timestamp_overlay(context);
+
   SDL_RenderPresent(context->renderer);
 }
+
+void redraw_current_frame(SdlffContext *context) {
+  if (!context || !context->renderer || !context->video_texture) {
+    return;
+  }
+
+  SDL_SetRenderDrawColor(context->renderer, 0, 0, 0, 255);
+  SDL_RenderClear(context->renderer);
+
+  int win_w = 0, win_h = 0;
+  SDL_GetRenderOutputSize(context->renderer, &win_w, &win_h);
+
+  float tex_w = 0.0f, tex_h = 0.0f;
+  SDL_GetTextureSize(context->video_texture, &tex_w, &tex_h);
+
+  if (win_w > 0 && win_h > 0 && tex_w > 0.0f && tex_h > 0.0f) {
+    SDL_FRect src = { 0.0f, 0.0f, tex_w, tex_h };
+    float aspect = tex_w / tex_h;
+    SDL_FRect dst;
+    if ((float)win_w / (float)win_h > aspect) {
+      dst.h = (float)win_h;
+      dst.w = dst.h * aspect;
+      dst.x = ((float)win_w - dst.w) * 0.5f;
+      dst.y = 0.0f;
+    } else {
+      dst.w = (float)win_w;
+      dst.h = dst.w / aspect;
+      dst.x = 0.0f;
+      dst.y = ((float)win_h - dst.h) * 0.5f;
+    }
+    SDL_RenderTexture(context->renderer, context->video_texture, &src, &dst);
+  }
+
+  render_timestamp_overlay(context);
+  SDL_RenderPresent(context->renderer);
+}
+

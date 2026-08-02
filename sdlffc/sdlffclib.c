@@ -185,6 +185,7 @@ void sdlffclib_main_loop(SdlffContext *context) {
 
   /* Record the wall-clock start time and kick the video thread */
   context->play_start_time = SDL_GetTicksNS();
+  context->show_overlay = true;
   VideoThreadMsg command = { .command = VTC_PLAY, .seek_target_sec = 0.0 };
   mailbox_send_overwrite(&context->video_thread_mailbox, &command, sizeof(command));
 
@@ -238,6 +239,13 @@ void sdlffclib_main_loop(SdlffContext *context) {
               }
               SDL_Log("Paused video playback");
             }
+            redraw_current_frame(context);
+          }
+        } else if (event.key.key == SDLK_O) {
+          if (!event.key.repeat) {
+            context->show_overlay = !context->show_overlay;
+            SDL_Log("Timestamp overlay toggled: %s", context->show_overlay ? "ON" : "OFF");
+            redraw_current_frame(context);
           }
         } else if (event.key.key == SDLK_LEFT) {
           handle_seek(context, -5.0);

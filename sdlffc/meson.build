@@ -34,6 +34,10 @@ libswresample_dep = dependency('libswresample')
 # libavformat -- muxing, demuxing
 libavformat_dep = dependency('libavformat')
 
+# C compiler & math library
+cc = meson.get_compiler('c')
+m_dep = cc.find_library('m', required : true)
+
 # MAIN
 deps = [sdl_dep,
         libavutil_dep,
@@ -41,6 +45,7 @@ deps = [sdl_dep,
         libavformat_dep,
         libswscale_dep,
         libswresample_dep,
+        m_dep,
        ]
 
 src = ['sdlffc.c',

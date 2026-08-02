@@ -71,4 +71,5 @@ struct _SdlffContext {
   MainThreadCommand main_thread_mailbox_data;
   SDL_AtomicInt quit_requested;       ///< set to 1 to signal video thread to exit
   bool paused;                         ///< true if playback is paused
+  bool show_overlay;                   ///< true if timestamp overlay is visible (toggled via 'O' key)
 };
