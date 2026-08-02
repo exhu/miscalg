@@ -48,70 +48,39 @@ deps = [sdl_dep,
         m_dep,
        ]
 
-src = ['sdlffc.c',
-       'sdlffclib.c',
-       'video_render.c',
-       'demux_decoder.c',
-       'playback_thread.c',
-       'mailbox.c',
-       'frame_queue.c',
-      ]
+lib_src = ['sdlffclib.c',
+           'video_render.c',
+           'demux_decoder.c',
+           'playback_thread.c',
+           'mailbox.c',
+           'frame_queue.c',
+          ]
 
-exe = executable('sdlffc', src,
-                 install : true,
-                 dependencies: deps)
-
-test_src = ['test_rewind.c',
-            'sdlffclib.c',
-            'video_render.c',
-            'demux_decoder.c',
-            'playback_thread.c',
-            'mailbox.c',
-            'frame_queue.c',
-           ]
-
-exe_rewind = executable('test_rewind', test_src,
-                        install : false,
-                        dependencies: deps)
-
-test_pause_seek_src = ['test_pause_seek.c',
-                   'sdlffclib.c',
-                   'video_render.c',
-                   'demux_decoder.c',
-                   'playback_thread.c',
-                   'mailbox.c',
-                   'frame_queue.c',
-                  ]
-
-exe_pause_seek = executable('test_pause_seek', test_pause_seek_src,
-                             install : false,
-                             dependencies: deps)
-
-test_stream_end_pause_src = ['test_stream_end_pause.c',
-                           'sdlffclib.c',
-                           'video_render.c',
-                           'demux_decoder.c',
-                           'playback_thread.c',
-                           'mailbox.c',
-                           'frame_queue.c',
-                          ]
-
-exe_stream_end_pause = executable('test_stream_end_pause', test_stream_end_pause_src,
-                                   install : false,
-                                   dependencies: deps)
-
-test_frame_seek_src = ['test_frame_seek.c',
-                        'sdlffclib.c',
-                        'video_render.c',
-                        'demux_decoder.c',
-                        'playback_thread.c',
-                        'mailbox.c',
-                        'frame_queue.c',
-                       ]
-
-exe_frame_seek = executable('test_frame_seek', test_frame_seek_src,
-                            install : false,
+lib_sdlffc = static_library('sdlffc_core', lib_src,
                             dependencies: deps)
+
+sdlffc_dep = declare_dependency(link_with: lib_sdlffc,
+                                dependencies: deps)
+
+exe = executable('sdlffc', 'sdlffc.c',
+                 install : true,
+                 dependencies: sdlffc_dep)
+
+exe_rewind = executable('test_rewind', 'test_rewind.c',
+                        install : false,
+                        dependencies: sdlffc_dep)
+
+exe_pause_seek = executable('test_pause_seek', 'test_pause_seek.c',
+                             install : false,
+                             dependencies: sdlffc_dep)
+
+exe_stream_end_pause = executable('test_stream_end_pause', 'test_stream_end_pause.c',
+                                   install : false,
+                                   dependencies: sdlffc_dep)
+
+exe_frame_seek = executable('test_frame_seek', 'test_frame_seek.c',
+                            install : false,
+                            dependencies: sdlffc_dep)
 
 test_env = ['SDL_VIDEODRIVER=dummy', 'SDL_AUDIODRIVER=dummy']
 test('basic', exe, args: [meson.project_source_root() / 'samplevideo.mp4'], env: test_env)
