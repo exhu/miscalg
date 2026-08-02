@@ -186,11 +186,17 @@ static void render_timestamp_overlay(SdlffContext *context) {
   int cur_h = cur_total / 3600;
   int cur_m = (cur_total % 3600) / 60;
   int cur_s = cur_total % 60;
+  int cur_ms = (int)((elapsed_sec - (double)cur_total) * 1000.0 + 0.5);
+  if (cur_ms < 0) cur_ms = 0;
+  if (cur_ms >= 1000) cur_ms = 999;
 
   int dur_total = (int)duration_sec;
   int dur_h = dur_total / 3600;
   int dur_m = (dur_total % 3600) / 60;
   int dur_s = dur_total % 60;
+  int dur_ms = (int)((duration_sec - (double)dur_total) * 1000.0 + 0.5);
+  if (dur_ms < 0) dur_ms = 0;
+  if (dur_ms >= 1000) dur_ms = 999;
 
   char status_str[64] = "";
   if (context->paused && context->looping) {
@@ -202,32 +208,28 @@ static void render_timestamp_overlay(SdlffContext *context) {
   }
 
   char line1_str[128];
-  if (dur_h > 0 || cur_h > 0) {
-    snprintf(line1_str, sizeof(line1_str), "%02d:%02d:%02d / %02d:%02d:%02d%s",
-             cur_h, cur_m, cur_s, dur_h, dur_m, dur_s, status_str);
-  } else {
-    snprintf(line1_str, sizeof(line1_str), "%02d:%02d / %02d:%02d%s",
-             cur_m, cur_s, dur_m, dur_s, status_str);
-  }
+  snprintf(line1_str, sizeof(line1_str), "%02d:%02d:%02d.%03d / %02d:%02d:%02d.%03d%s",
+           cur_h, cur_m, cur_s, cur_ms, dur_h, dur_m, dur_s, dur_ms, status_str);
 
   int in_total = (int)context->in_point;
   int in_h = in_total / 3600;
   int in_m = (in_total % 3600) / 60;
   int in_s = in_total % 60;
+  int in_ms = (int)((context->in_point - (double)in_total) * 1000.0 + 0.5);
+  if (in_ms < 0) in_ms = 0;
+  if (in_ms >= 1000) in_ms = 999;
 
   int out_total = (int)context->out_point;
   int out_h = out_total / 3600;
   int out_m = (out_total % 3600) / 60;
   int out_s = out_total % 60;
+  int out_ms = (int)((context->out_point - (double)out_total) * 1000.0 + 0.5);
+  if (out_ms < 0) out_ms = 0;
+  if (out_ms >= 1000) out_ms = 999;
 
   char line2_str[128];
-  if (dur_h > 0 || in_h > 0 || out_h > 0) {
-    snprintf(line2_str, sizeof(line2_str), "IN: %02d:%02d:%02d  OUT: %02d:%02d:%02d",
-             in_h, in_m, in_s, out_h, out_m, out_s);
-  } else {
-    snprintf(line2_str, sizeof(line2_str), "IN: %02d:%02d  OUT: %02d:%02d",
-             in_m, in_s, out_m, out_s);
-  }
+  snprintf(line2_str, sizeof(line2_str), "IN: %02d:%02d:%02d.%03d  OUT: %02d:%02d:%02d.%03d",
+           in_h, in_m, in_s, in_ms, out_h, out_m, out_s, out_ms);
 
   int win_w = 0, win_h = 0;
   SDL_GetRenderOutputSize(context->renderer, &win_w, &win_h);

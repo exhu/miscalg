@@ -262,12 +262,18 @@ static void print_ffmpeg_command(SdlffContext *context) {
   int in_h = in_total / 3600;
   int in_m = (in_total % 3600) / 60;
   int in_s = in_total % 60;
+  int in_ms = (int)((in_sec - (double)in_total) * 1000.0 + 0.5);
+  if (in_ms < 0) in_ms = 0;
+  if (in_ms >= 1000) in_ms = 999;
 
   /* OUT time components for filename */
   int out_total = (int)out_sec;
   int out_h = out_total / 3600;
   int out_m = (out_total % 3600) / 60;
   int out_s = out_total % 60;
+  int out_ms = (int)((out_sec - (double)out_total) * 1000.0 + 0.5);
+  if (out_ms < 0) out_ms = 0;
+  if (out_ms >= 1000) out_ms = 999;
 
   /* Split file path into path_without_ext and ext */
   char path_buf[1024];
@@ -281,12 +287,11 @@ static void print_ffmpeg_command(SdlffContext *context) {
   }
 
   char out_filename[1024];
-  snprintf(out_filename, sizeof(out_filename), "%s_%02d_%02d_%02d_%02d_%02d_%02d%s",
-           path_buf, in_h, in_m, in_s, out_h, out_m, out_s, ext);
+  snprintf(out_filename, sizeof(out_filename),
+           "%s_%02d_%02d_%02d_%03d_%02d_%02d_%02d_%03d%s",
+           path_buf, in_h, in_m, in_s, in_ms, out_h, out_m, out_s, out_ms, ext);
 
   /* Format IN time string: HH:MM:SS.mmm */
-  int in_ms = (int)((in_sec - in_total) * 1000.0);
-  if (in_ms < 0) in_ms = 0;
   char in_time_str[64];
   snprintf(in_time_str, sizeof(in_time_str), "%02d:%02d:%02d.%03d",
            in_h, in_m, in_s, in_ms);
@@ -296,8 +301,9 @@ static void print_ffmpeg_command(SdlffContext *context) {
   int dur_h = dur_total / 3600;
   int dur_m = (dur_total % 3600) / 60;
   int dur_s = dur_total % 60;
-  int dur_ms = (int)((cut_duration - dur_total) * 1000.0);
+  int dur_ms = (int)((cut_duration - (double)dur_total) * 1000.0 + 0.5);
   if (dur_ms < 0) dur_ms = 0;
+  if (dur_ms >= 1000) dur_ms = 999;
   char dur_time_str[64];
   snprintf(dur_time_str, sizeof(dur_time_str), "%02d:%02d:%02d.%03d",
            dur_h, dur_m, dur_s, dur_ms);
@@ -336,11 +342,26 @@ static bool handle_key_should_quit(SdlffContext *context,
     context->looping = false;
     context->exit_at_end = false;
     break;
-  case SDLK_E:
-    handle_seek(context, context->out_point - current_pos);
+  case SDLK_E: {
+    double duration = -1.0;
+    if (context->video_file_ctx.ic) {
+      if (context->video_file_ctx.ic->duration != AV_NOPTS_VALUE &&
+          context->video_file_ctx.ic->duration > 0) {
+        duration = (double)context->video_file_ctx.ic->duration / (double)AV_TIME_BASE;
+      } else if (context->video_file_ctx.video_stream >= 0) {
+        AVStream *st = context->video_file_ctx.ic->streams[context->video_file_ctx.video_stream];
+        if (st && st->duration != AV_NOPTS_VALUE && st->duration > 0) {
+          duration = (double)st->duration * av_q2d(st->time_base);
+        }
+      }
+    }
+    double step = sdlffclib_get_min_seek_increment(context);
+    double last_frame = (duration > step) ? (duration - step) : 0.0;
+    handle_seek(context, last_frame - current_pos);
     context->looping = false;
     context->exit_at_end = false;
     break;
+  }
   case SDLK_I:
     if (is_shift) {
       handle_seek(context, context->in_point - current_pos);
