@@ -22,7 +22,7 @@ Used code from SDL3-3.4.10/test/testffmpeg.c
 ** DONE after video is loaded in-marker is set to the first visible frame, out-marker is set to the last visible frame of the video
 ** DONE timestamp overlay must display IN and OUT time stamps one line below the current timestamp and total duration in yellow colour over 80% opacity black background
 ** DONE L = loop current video between in and out marks, i.e. video starts playing if it was paused from IN frame and after displaying OUT frame seeks to IN frame and plays again. Pause key pauses/resumes the loop, other keys cancel looping. Repetative L keypress cancells the loop.
-** DONE ENTER = print ffmpeg command to stdout that would loselessly ("-ac copy -vc copy) save current video cut to start from IN frame and having OUT as last displayed frame, the new filename is current filename without extension + "_" + inout time in HH_MM_SS format (underscore separates numbers) + original extension.
+** DONE ENTER = print ffmpeg command to stdout that would loselessly save current video cut to start from IN frame and having OUT as last displayed frame, the new filename is current filename without extension + "_" + inout time in HH_MM_SS format (underscore separates numbers) + original extension.
 ** DONE add --help command line argument that displays usage help including keyboard shortcuts
 * DONE show frame time
 * DONE granular seek
