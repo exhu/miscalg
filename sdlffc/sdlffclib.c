@@ -441,6 +441,15 @@ static void print_ffmpeg_command(SdlffContext *context) {
   fflush(stdout);
 }
 
+/// toggle fullscreen window mode
+static void handle_fullscreen_toggle(SdlffContext *context) {
+  Uint64 flags = SDL_GetWindowFlags(context->window);
+  bool fullscreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+  SDL_SetWindowFullscreen(context->window, !fullscreen);
+  SDL_Log("Fullscreen mode: %s", !fullscreen ? "ON" : "OFF");
+  redraw_current_frame(context);
+}
+
 /// all keyboard handling here. returns true to quit
 static bool handle_key_should_quit(SdlffContext *context,
                                    const SDL_KeyboardEvent *key) {
@@ -466,6 +475,11 @@ static bool handle_key_should_quit(SdlffContext *context,
   case SDLK_SPACE:
     handle_pause_key(context, key);
     context->exit_at_end = false;
+    break;
+  case SDLK_F:
+    if (!key->repeat) {
+      handle_fullscreen_toggle(context);
+    }
     break;
   case SDLK_V:
     if (!key->repeat) {

@@ -15,6 +15,7 @@ It allows users to quickly inspect video files, step through frames, set precise
   - Jump directly to IN (`Shift+I`) or OUT (`Shift+O`) positions.
   - Fast-jump to video start (`B`) or end (`E`).
 - **A/B Looping**: Toggle seamless looping (`L`) between IN and OUT markers to preview cuts.
+- **Window Controls**: Toggle fullscreen window mode (`F`).
 - **On-Screen Display (OSD) Overlay**:
   - Displays current timestamp, total duration, frame counters, and IN/OUT marker timestamps.
   - Toggle overlay position (`V`): Top-Left $\rightarrow$ Bottom-Right $\rightarrow$ Hidden.
@@ -105,6 +106,7 @@ Expects `samplevideo.mp4` file in the root
 | **`Shift + I`** | Seek to IN-marker position |
 | **`Shift + O`** | Seek to OUT-marker position |
 | **`L`** | Toggle A/B looping between IN and OUT markers |
+| **`F`** | Toggle fullscreen window mode |
 | **`V`** | Cycle OSD overlay position (Top-Left $\rightarrow$ Bottom-Right $\rightarrow$ Hidden) |
 | **`Enter`** | Print lossless FFmpeg stream-copy command to `stdout` |
 | **`Ctrl + Enter`** | Execute FFmpeg export proces, waits until completed |
