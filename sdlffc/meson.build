@@ -11,7 +11,7 @@ project('sdlffc', 'c',
 #   ./build.sh
 # which prepends ~/.local/lib/pkgconfig to PKG_CONFIG_PATH before setup.
 
-#add_project_arguments('-fanalyzer', language: 'c')
+
 
 # DEPENDENCIES
 # sdl3 3.4.10, ffmpeg libs 6.1.1

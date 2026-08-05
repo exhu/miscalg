@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
   printf("Starting test_stream_end_pause...\n");
   sdlffclib_main_loop(context);
 
-  assert(context->stream_ended == false || context->exit_at_end == false);
+  assert(context->stream_ended == false);
   printf("Main loop finished successfully.\n");
   sdlffclib_done(&context);
   return 0;

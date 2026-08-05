@@ -14,7 +14,6 @@ typedef struct {
     double        pts[FRAME_QUEUE_SIZE];   ///< presentation time in seconds from first frame
     SDL_Mutex    *mutex;
     SDL_Condition *not_full;
-    SDL_Condition *not_empty;
     int           write_idx;
     int           read_idx;
     int           count;

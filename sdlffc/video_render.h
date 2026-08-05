@@ -7,3 +7,6 @@ void render_frame_main_thread(SdlffContext *context, AVFrame *frame);
 
 /// Re-renders the current frame texture and timestamp overlay on the main thread.
 void redraw_current_frame(SdlffContext *context);
+
+/// Destroy cached font resources. Call before destroying the renderer.
+void video_render_cleanup(void);

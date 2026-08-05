@@ -21,6 +21,11 @@
 #include <stdbool.h>
 #include <string.h>
 
+// posix
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 static inline double seconds_from_nanoseconds(Uint64 ns) {
   return (double)ns / 1.0e9;
 }
@@ -122,6 +127,8 @@ void sdlffclib_done(SdlffContext **out_context) {
   }
 
   sdlffclib_free_video_file_ctx(&context->video_file_ctx);
+
+  video_render_cleanup();
 
   /// free sdl resources
   if (context->renderer) {
@@ -262,22 +269,22 @@ static void validate_and_clamp_markers(SdlffContext *context) {
   double step = sdlffclib_get_min_seek_increment(context);
   double max_frame_time = (duration > step) ? (duration - step) : 0.0;
 
-  if (context->in_point < 0.0) context->in_point = 0.0;
-  if (max_frame_time > 0.0 && context->in_point > max_frame_time) {
-    context->in_point = max_frame_time;
+  if (context->cut.in_point < 0.0) context->cut.in_point = 0.0;
+  if (max_frame_time > 0.0 && context->cut.in_point > max_frame_time) {
+    context->cut.in_point = max_frame_time;
   }
 
-  if (context->out_point < 0.0) context->out_point = 0.0;
-  if (max_frame_time > 0.0 && context->out_point > max_frame_time) {
-    context->out_point = max_frame_time;
+  if (context->cut.out_point < 0.0) context->cut.out_point = 0.0;
+  if (max_frame_time > 0.0 && context->cut.out_point > max_frame_time) {
+    context->cut.out_point = max_frame_time;
   }
 
-  if (context->in_point > context->out_point) {
-    double tmp = context->in_point;
-    context->in_point = context->out_point;
-    context->out_point = tmp;
+  if (context->cut.in_point > context->cut.out_point) {
+    double tmp = context->cut.in_point;
+    context->cut.in_point = context->cut.out_point;
+    context->cut.out_point = tmp;
     SDL_Log("Swapped IN and OUT markers so IN <= OUT (IN: %.3fs, OUT: %.3fs)",
-            context->in_point, context->out_point);
+            context->cut.in_point, context->cut.out_point);
   }
 }
 
@@ -286,8 +293,8 @@ static bool get_export_filename(SdlffContext *context, char *out_filename, size_
 
   validate_and_clamp_markers(context);
 
-  double in_sec = context->in_point;
-  double out_sec = context->out_point;
+  double in_sec = context->cut.in_point;
+  double out_sec = context->cut.out_point;
 
   int in_total = (int)in_sec;
   int in_h = in_total / 3600;
@@ -333,8 +340,8 @@ static int SDLCALL ffmpeg_export_thread_cb(void *userdata) {
   SdlffContext *context = (SdlffContext *)userdata;
   char out_filename[1024];
   if (get_export_filename(context, out_filename, sizeof(out_filename))) {
-    double in_sec = context->in_point;
-    double out_sec = context->out_point;
+    double in_sec = context->cut.in_point;
+    double out_sec = context->cut.out_point;
     double step = context->min_seek_increment;
     if (step <= 0.0) step = 1.0 / 30.0;
     double cut_duration = (out_sec - in_sec) + step;
@@ -353,16 +360,33 @@ static int SDLCALL ffmpeg_export_thread_cb(void *userdata) {
     int dur_ms = (int)((cut_duration - (double)dur_total) * 1000.0 + 0.5);
     if (dur_ms < 0) dur_ms = 0; if (dur_ms >= 1000) dur_ms = 999;
 
-    char cmd[2048];
-    snprintf(cmd, sizeof(cmd),
-             "ffmpeg -ss %02d:%02d:%02d.%03d -i \"%s\" -t %02d:%02d:%02d.%03d -c:v copy -c:a copy -map 0 \"%s\"",
-             in_h, in_m, in_s, in_ms, context->file_path, dur_h, dur_m, dur_s, dur_ms, out_filename);
+    char in_time_str[64];
+    snprintf(in_time_str, sizeof(in_time_str), "%02d:%02d:%02d.%03d",
+             in_h, in_m, in_s, in_ms);
+    char dur_time_str[64];
+    snprintf(dur_time_str, sizeof(dur_time_str), "%02d:%02d:%02d.%03d",
+             dur_h, dur_m, dur_s, dur_ms);
 
-    printf("[EXPORT] Executing: %s\n", cmd);
+    printf("[EXPORT] ffmpeg -ss %s -i '%s' -t %s -c:v copy -c:a copy -map 0 '%s'\n",
+           in_time_str, context->file_path, dur_time_str, out_filename);
     fflush(stdout);
 
-    int res = system(cmd);
-    (void)res;
+    pid_t pid = fork();
+    if (pid == 0) {
+      /* child */
+      execlp("ffmpeg", "ffmpeg",
+             "-ss", in_time_str,
+             "-i", context->file_path,
+             "-t", dur_time_str,
+             "-c:v", "copy", "-c:a", "copy", "-map", "0",
+             out_filename, (char *)NULL);
+      _exit(127);
+    } else if (pid > 0) {
+      int status;
+      waitpid(pid, &status, 0);
+    } else {
+      SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "fork() failed");
+    }
   }
 
   /* Signal main thread */
@@ -380,8 +404,8 @@ static void print_ffmpeg_command(SdlffContext *context) {
   char out_filename[1024];
   if (!get_export_filename(context, out_filename, sizeof(out_filename))) return;
 
-  double in_sec = context->in_point;
-  double out_sec = context->out_point;
+  double in_sec = context->cut.in_point;
+  double out_sec = context->cut.out_point;
 
   double step = context->min_seek_increment;
   if (step <= 0.0) step = 1.0 / 30.0;
@@ -421,8 +445,8 @@ static void print_ffmpeg_command(SdlffContext *context) {
 static bool handle_key_should_quit(SdlffContext *context,
                                    const SDL_KeyboardEvent *key) {
   if (context->ffmpeg_busy) {
-    snprintf(context->error_msg_text, sizeof(context->error_msg_text), "waiting for the command to finish!");
-    context->error_msg_until_ticks = SDL_GetTicksNS() + 1000000000ULL;
+    snprintf(context->ui.error_msg_text, sizeof(context->ui.error_msg_text), "waiting for the command to finish!");
+    context->ui.error_msg_until_ticks = SDL_GetTicksNS() + 1000000000ULL;
     redraw_current_frame(context);
     return false;
   }
@@ -435,7 +459,7 @@ static bool handle_key_should_quit(SdlffContext *context,
   switch (key->key) {
   case SDLK_Q:
   case SDLK_ESCAPE:
-    if (context->markers_modified) {
+    if (context->cut.modified) {
       print_ffmpeg_command(context);
     }
     return true;
@@ -445,7 +469,7 @@ static bool handle_key_should_quit(SdlffContext *context,
     break;
   case SDLK_V:
     if (!key->repeat) {
-      context->overlay_mode = (OverlayMode)((context->overlay_mode + 1) % 3);
+      context->ui.overlay_mode = (OverlayMode)((context->ui.overlay_mode + 1) % 3);
       redraw_current_frame(context);
     }
     break;
@@ -476,12 +500,12 @@ static bool handle_key_should_quit(SdlffContext *context,
   }
   case SDLK_I:
     if (is_shift) {
-      handle_seek(context, context->in_point - current_pos);
+      handle_seek(context, context->cut.in_point - current_pos);
     } else if (!key->repeat) {
-      context->in_point = current_pos;
+      context->cut.in_point = current_pos;
       validate_and_clamp_markers(context);
-      context->markers_modified = true;
-      SDL_Log("Set IN-marker to %.3fs (OUT: %.3fs)", context->in_point, context->out_point);
+      context->cut.modified = true;
+      SDL_Log("Set IN-marker to %.3fs (OUT: %.3fs)", context->cut.in_point, context->cut.out_point);
       redraw_current_frame(context);
     }
     context->looping = false;
@@ -489,12 +513,12 @@ static bool handle_key_should_quit(SdlffContext *context,
     break;
   case SDLK_O:
     if (is_shift) {
-      handle_seek(context, context->out_point - current_pos);
+      handle_seek(context, context->cut.out_point - current_pos);
     } else if (!key->repeat) {
-      context->out_point = current_pos;
+      context->cut.out_point = current_pos;
       validate_and_clamp_markers(context);
-      context->markers_modified = true;
-      SDL_Log("Set OUT-marker to %.3fs (IN: %.3fs)", context->out_point, context->in_point);
+      context->cut.modified = true;
+      SDL_Log("Set OUT-marker to %.3fs (IN: %.3fs)", context->cut.out_point, context->cut.in_point);
       redraw_current_frame(context);
     }
     context->looping = false;
@@ -515,7 +539,7 @@ static bool handle_key_should_quit(SdlffContext *context,
         }
         Uint64 pos_ticks = context->paused ? context->pause_start_ticks : SDL_GetTicksNS();
         double pos_now = seconds_from_nanoseconds(pos_ticks - context->play_start_time);
-        handle_seek(context, context->in_point - pos_now);
+        handle_seek(context, context->cut.in_point - pos_now);
       }
       redraw_current_frame(context);
     }
@@ -527,8 +551,8 @@ static bool handle_key_should_quit(SdlffContext *context,
         char out_filename[1024];
         get_export_filename(context, out_filename, sizeof(out_filename));
         if (export_file_exists(out_filename)) {
-          snprintf(context->error_msg_text, sizeof(context->error_msg_text), "Export file already exists!");
-          context->error_msg_until_ticks = SDL_GetTicksNS() + 1000000000ULL;
+          snprintf(context->ui.error_msg_text, sizeof(context->ui.error_msg_text), "Export file already exists!");
+          context->ui.error_msg_until_ticks = SDL_GetTicksNS() + 1000000000ULL;
           redraw_current_frame(context);
           SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Export aborted: file '%s' already exists", out_filename);
         } else {
@@ -590,6 +614,94 @@ static bool handle_key_should_quit(SdlffContext *context,
   return false;
 }
 
+static double compute_elapsed(const SdlffContext *context, double duration) {
+  double elapsed = context->paused
+                       ? seconds_from_nanoseconds(context->pause_start_ticks -
+                                                  context->play_start_time)
+                       : seconds_from_nanoseconds(SDL_GetTicksNS() -
+                                                  context->play_start_time);
+  if (duration > 0.0 && (context->stream_ended || elapsed > duration)) {
+    elapsed = duration;
+  }
+  return elapsed;
+}
+
+static Sint32 compute_event_timeout(SdlffContext *context, double elapsed) {
+  double next_pts = 0.0;
+  Sint32 timeout_ms = 10; /* Fallback timeout if frame queue is empty */
+
+  if (context->paused) {
+    if (frame_queue_peek_pts(&context->frame_queue, &next_pts) &&
+        next_pts <= elapsed) {
+      timeout_ms = 0;
+    } else {
+      timeout_ms = 100;
+    }
+  } else if (frame_queue_peek_pts(&context->frame_queue, &next_pts)) {
+    double delay_sec = next_pts - elapsed;
+    if (delay_sec <= 0.0) {
+      timeout_ms = 0; /* Frame is already due */
+    } else {
+      timeout_ms = (Sint32)(delay_sec * 1000.0);
+      if (timeout_ms > 100) {
+        timeout_ms = 100; /* Cap maximum wait time for event responsiveness */
+      }
+    }
+  }
+  return timeout_ms;
+}
+
+static bool process_main_thread_commands(SdlffContext *context) {
+  bool should_break = false;
+  const bool has_cmd = mailbox_receive_and_lock(
+      &context->main_thread_mailbox, 1000 / 60);
+  if (has_cmd) {
+    const MainThreadCommand cmd = context->main_thread_mailbox_data;
+    mailbox_unlock(&context->main_thread_mailbox);
+    if (cmd == MTC_VIDEO_END) {
+      SDL_Log("main thread received video end command.");
+      context->stream_ended = true;
+      if (context->exit_at_end && !context->looping) {
+        should_break = true;
+      }
+    } else if (cmd == MTC_FFMPEG_DONE) {
+      SDL_Log("main thread received ffmpeg export done command.");
+      context->ffmpeg_busy = false;
+      context->cut.modified = false;
+      redraw_current_frame(context);
+    }
+  }
+  return should_break;
+}
+
+static void pop_and_render_frames(SdlffContext *context, double duration) {
+  /* Convert nanoseconds (SDL_GetTicksNS) to seconds */
+  double render_elapsed =
+      context->paused
+          ? seconds_from_nanoseconds(context->pause_start_ticks -
+                                     context->play_start_time)
+          : seconds_from_nanoseconds(SDL_GetTicksNS() -
+                                     context->play_start_time);
+  if (duration > 0.0 && (context->stream_ended || render_elapsed > duration)) {
+    render_elapsed = duration;
+  }
+  AVFrame *frame = NULL;
+  AVFrame *next_frame = NULL;
+
+  while ((next_frame = frame_queue_try_pop(&context->frame_queue,
+                                           render_elapsed)) != NULL) {
+    if (frame) {
+      av_frame_free(&frame);
+    }
+    frame = next_frame;
+  }
+
+  if (frame) {
+    render_frame_main_thread(context, frame);
+    av_frame_free(&frame);
+  }
+}
+
 void sdlffclib_main_loop(SdlffContext *context) {
   SDL_Event event;
   bool should_break = false;
@@ -611,58 +723,29 @@ void sdlffclib_main_loop(SdlffContext *context) {
 
   /* Record the wall-clock start time and kick the video thread */
   context->play_start_time = SDL_GetTicksNS();
-  context->overlay_mode = OVERLAY_TOP_LEFT;
+  context->ui.overlay_mode = OVERLAY_TOP_LEFT;
   VideoThreadMsg command = {.command = VTC_PLAY, .seek_target_sec = 0.0};
   mailbox_send_overwrite(&context->video_thread_mailbox, &command,
                          sizeof(command));
 
   while (!should_break) {
-    /* Handle looping if active */
-    double elapsed = context->paused
-                         ? seconds_from_nanoseconds(context->pause_start_ticks -
-                                                    context->play_start_time)
-                         : seconds_from_nanoseconds(SDL_GetTicksNS() -
-                                                    context->play_start_time);
+    double elapsed = compute_elapsed(context, duration);
 
     if (context->looping) {
-      double end_threshold = context->out_point + context->min_seek_increment;
+      double end_threshold = context->cut.out_point + context->min_seek_increment;
       if (elapsed >= end_threshold || context->stream_ended) {
         context->stream_ended = false;
-        handle_seek(context, context->in_point - elapsed);
-        elapsed = context->in_point;
+        handle_seek(context, context->cut.in_point - elapsed);
+        elapsed = context->cut.in_point;
       }
     }
 
-    if (duration > 0.0 && (context->stream_ended || elapsed > duration)) {
-      elapsed = duration;
-    }
-
-    double next_pts = 0.0;
-    Sint32 timeout_ms = 10; /* Fallback timeout if frame queue is empty */
-
-    if (context->paused) {
-      if (frame_queue_peek_pts(&context->frame_queue, &next_pts) &&
-          next_pts <= elapsed) {
-        timeout_ms = 0;
-      } else {
-        timeout_ms = 100;
-      }
-    } else if (frame_queue_peek_pts(&context->frame_queue, &next_pts)) {
-      double delay_sec = next_pts - elapsed;
-      if (delay_sec <= 0.0) {
-        timeout_ms = 0; /* Frame is already due */
-      } else {
-        timeout_ms = (Sint32)(delay_sec * 1000.0);
-        if (timeout_ms > 100) {
-          timeout_ms = 100; /* Cap maximum wait time for event responsiveness */
-        }
-      }
-    }
+    Sint32 timeout_ms = compute_event_timeout(context, elapsed);
 
     if (SDL_WaitEventTimeout(&event, timeout_ms)) {
       switch (event.type) {
       case SDL_EVENT_QUIT:
-        if (context->markers_modified) {
+        if (context->cut.modified) {
           print_ffmpeg_command(context);
         }
         should_break = true;
@@ -672,58 +755,14 @@ void sdlffclib_main_loop(SdlffContext *context) {
         break;
       default:
         if (event.type == context->main_thread_event) {
-          const bool has_cmd = mailbox_receive_and_lock(
-              &context->main_thread_mailbox, 1000 / 60);
-          if (has_cmd) {
-            const MainThreadCommand cmd = context->main_thread_mailbox_data;
-            mailbox_unlock(&context->main_thread_mailbox);
-            if (cmd == MTC_VIDEO_END) {
-              SDL_Log("main thread received video end command.");
-              context->stream_ended = true;
-              if (context->exit_at_end && !context->looping) {
-                should_break = true;
-              }
-            } else if (cmd == MTC_FFMPEG_DONE) {
-              SDL_Log("main thread received ffmpeg export done command.");
-              context->ffmpeg_busy = false;
-              context->markers_modified = false;
-              redraw_current_frame(context);
-            }
-          }
+          should_break = process_main_thread_commands(context);
         }
         break;
       }
     }
 
-    /* Pop and render any frame whose PTS has been reached.
-       If multiple frames are ready (due to latency/lag), drop older frames
-       so rendering catches up to real-time playback. */
     if (!should_break) {
-      /* Convert nanoseconds (SDL_GetTicksNS) to seconds */
-      double render_elapsed =
-          context->paused
-              ? seconds_from_nanoseconds(context->pause_start_ticks -
-                                         context->play_start_time)
-              : seconds_from_nanoseconds(SDL_GetTicksNS() -
-                                         context->play_start_time);
-      if (duration > 0.0 && (context->stream_ended || render_elapsed > duration)) {
-        render_elapsed = duration;
-      }
-      AVFrame *frame = NULL;
-      AVFrame *next_frame = NULL;
-
-      while ((next_frame = frame_queue_try_pop(&context->frame_queue,
-                                               render_elapsed)) != NULL) {
-        if (frame) {
-          av_frame_free(&frame);
-        }
-        frame = next_frame;
-      }
-
-      if (frame) {
-        render_frame_main_thread(context, frame);
-        av_frame_free(&frame);
-      }
+      pop_and_render_frames(context, duration);
     }
   }
   SDL_Log("Quit.");

@@ -8,16 +8,13 @@ bool frame_queue_init(FrameQueue *q) {
     memset(q, 0, sizeof(*q));
     q->mutex     = SDL_CreateMutex();
     q->not_full  = SDL_CreateCondition();
-    q->not_empty = SDL_CreateCondition();
-    return q->mutex && q->not_full && q->not_empty;
+    return q->mutex && q->not_full;
 }
 
 void frame_queue_done(FrameQueue *q) {
     frame_queue_flush(q);
-    SDL_DestroyCondition(q->not_empty);
     SDL_DestroyCondition(q->not_full);
     SDL_DestroyMutex(q->mutex);
-    q->not_empty = NULL;
     q->not_full  = NULL;
     q->mutex     = NULL;
 }
@@ -39,7 +36,6 @@ bool frame_queue_push(FrameQueue *q, AVFrame *frame, double pts,
     q->pts[idx]    = pts;
     q->write_idx   = (idx + 1) % FRAME_QUEUE_SIZE;
     q->count++;
-    SDL_SignalCondition(q->not_empty);
     SDL_UnlockMutex(q->mutex);
     return true;
 }

@@ -260,6 +260,8 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
           ctx->audio_context->sample_rate, 0, NULL);
       if (swr_res < 0 || swr_init(ctx->swr_ctx) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize SwrContext");
+        swr_free(&ctx->swr_ctx);
+        ctx->swr_ctx = NULL;
       }
       av_channel_layout_uninit(&out_ch_layout);
     }
@@ -304,13 +306,13 @@ bool sdlffclib_open_video(SdlffContext *context, const char *file_path) {
     }
   }
 
-  context->in_point = 0.0;
-  context->out_point = (duration_sec > context->min_seek_increment)
+  context->cut.in_point = 0.0;
+  context->cut.out_point = (duration_sec > context->min_seek_increment)
                            ? (duration_sec - context->min_seek_increment)
                            : 0.0;
   context->looping = false;
-  context->markers_modified = false;
-  context->overlay_mode = OVERLAY_TOP_LEFT;
+  context->cut.modified = false;
+  context->ui.overlay_mode = OVERLAY_TOP_LEFT;
   return true;
 }
 

@@ -62,33 +62,56 @@ typedef enum {
   OVERLAY_HIDDEN = 2
 } OverlayMode;
 
+/// Cut marker state for in/out trimming points
+typedef struct {
+  double in_point;                     ///< first frame of the cut in seconds
+  double out_point;                    ///< last frame (inclusive) of the cut in seconds
+  bool   modified;                     ///< true if in_point or out_point was changed by the user
+} CutMarkers;
+
+/// UI overlay and error banner state
+typedef struct {
+  Uint64 error_msg_until_ticks;        ///< ticks until which warning/error banner is displayed
+  OverlayMode overlay_mode;            ///< overlay visibility and position state
+  char   error_msg_text[256];          ///< text message to display in warning/error banner
+} UiState;
+
 struct _SdlffContext {
+  // SDL resources
   SDL_Window *window;
   SDL_Renderer *renderer;
   SDL_Texture *video_texture;
-  SDL_Thread *video_thread;
   SDL_AudioStream *audio_stream;
-  Uint64 play_start_time;              ///< SDL_GetTicksNS() captured when playback begins
-  Uint64 pause_start_ticks;            ///< SDL_GetTicksNS() captured when paused
-  SdlffVideoFileContext video_file_ctx;
+
+  // Threading
+  SDL_Thread *video_thread;
   FrameQueue frame_queue;              ///< decoded frames produced by video thread
   MailBox video_thread_mailbox;
   MailBox main_thread_mailbox;
   VideoThreadMsg video_thread_mailbox_data;
   Uint32 main_thread_event;
   MainThreadCommand main_thread_mailbox_data;
-  SDL_AtomicInt quit_requested;       ///< set to 1 to signal video thread to exit
-  char file_path[1024];               ///< path to the currently open video file
-  bool paused;                         ///< true if playback is paused
-  bool looping;                        ///< true if playback loops between in_point and out_point
-  bool markers_modified;               ///< true if in_point or out_point was changed by the user
-  bool ffmpeg_busy;                    ///< true if FFmpeg export process is currently running
-  Uint64 error_msg_until_ticks;        ///< ticks until which warning/error banner is displayed
-  char error_msg_text[256];            ///< text message to display in warning/error banner
-  OverlayMode overlay_mode;            ///< overlay visibility and position state
-  bool exit_at_end;
-  bool stream_ended;                   ///< true if stream reached EOF
+  SDL_AtomicInt quit_requested;        ///< set to 1 to signal video thread to exit
+
+  // Video file
+  SdlffVideoFileContext video_file_ctx;
+  char file_path[1024];                ///< path to the currently open video file
+
+  // Playback timing
+  Uint64 play_start_time;              ///< SDL_GetTicksNS() captured when playback begins
+  Uint64 pause_start_ticks;            ///< SDL_GetTicksNS() captured when paused
+  bool   paused;                       ///< true if playback is paused
+  bool   stream_ended;                 ///< true if stream reached EOF
+  bool   exit_at_end;
   double min_seek_increment;           ///< cached minimal seek increment in seconds (frame duration)
-  double in_point;                     ///< first frame of the cut in seconds
-  double out_point;                    ///< last frame (inclusive) of the cut in seconds
+
+  // Cut & loop
+  CutMarkers cut;
+  bool   looping;                      ///< true if playback loops between cut.in_point and cut.out_point
+
+  // UI
+  UiState ui;
+
+  // Export
+  bool   ffmpeg_busy;                  ///< true if FFmpeg export process is currently running
 };

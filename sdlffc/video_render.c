@@ -155,7 +155,7 @@ static bool init_font_context(SDL_Renderer *renderer) {
 }
 
 static void render_timestamp_overlay(SdlffContext *context) {
-  if (!context || context->overlay_mode == OVERLAY_HIDDEN) {
+  if (!context || context->ui.overlay_mode == OVERLAY_HIDDEN) {
     return;
   }
 
@@ -211,19 +211,19 @@ static void render_timestamp_overlay(SdlffContext *context) {
   snprintf(line1_str, sizeof(line1_str), "%02d:%02d:%02d.%03d / %02d:%02d:%02d.%03d%s",
            cur_h, cur_m, cur_s, cur_ms, dur_h, dur_m, dur_s, dur_ms, status_str);
 
-  int in_total = (int)context->in_point;
+  int in_total = (int)context->cut.in_point;
   int in_h = in_total / 3600;
   int in_m = (in_total % 3600) / 60;
   int in_s = in_total % 60;
-  int in_ms = (int)((context->in_point - (double)in_total) * 1000.0 + 0.5);
+  int in_ms = (int)((context->cut.in_point - (double)in_total) * 1000.0 + 0.5);
   if (in_ms < 0) in_ms = 0;
   if (in_ms >= 1000) in_ms = 999;
 
-  int out_total = (int)context->out_point;
+  int out_total = (int)context->cut.out_point;
   int out_h = out_total / 3600;
   int out_m = (out_total % 3600) / 60;
   int out_s = out_total % 60;
-  int out_ms = (int)((context->out_point - (double)out_total) * 1000.0 + 0.5);
+  int out_ms = (int)((context->cut.out_point - (double)out_total) * 1000.0 + 0.5);
   if (out_ms < 0) out_ms = 0;
   if (out_ms >= 1000) out_ms = 999;
 
@@ -244,7 +244,7 @@ static void render_timestamp_overlay(SdlffContext *context) {
 
     float text_x = 12.0f;
     float text_y = 12.0f;
-    if (context->overlay_mode == OVERLAY_BOTTOM_RIGHT) {
+    if (context->ui.overlay_mode == OVERLAY_BOTTOM_RIGHT) {
       text_x = (float)win_w - text_w - 16.0f;
       text_y = (float)win_h - text_h - 16.0f;
       if (text_x < 12.0f) text_x = 12.0f;
@@ -292,7 +292,7 @@ static void render_timestamp_overlay(SdlffContext *context) {
 
   float start_x = 12.0f;
   float start_y = 12.0f;
-  if (context->overlay_mode == OVERLAY_BOTTOM_RIGHT) {
+  if (context->ui.overlay_mode == OVERLAY_BOTTOM_RIGHT) {
     start_x = (float)win_w - bg_w - 18.0f;
     start_y = (float)win_h - bg_h - 18.0f;
     if (start_x < 12.0f) start_x = 12.0f;
@@ -622,9 +622,9 @@ static void render_busy_and_error_overlays(SdlffContext *context) {
 
   /* 2. Render Light Red 1-Second Warning / Error Banner */
   Uint64 now_ticks = SDL_GetTicksNS();
-  if (now_ticks < context->error_msg_until_ticks) {
-    const char *err_msg = context->error_msg_text[0]
-                              ? context->error_msg_text
+  if (now_ticks < context->ui.error_msg_until_ticks) {
+    const char *err_msg = context->ui.error_msg_text[0]
+                              ? context->ui.error_msg_text
                               : "waiting for the command to finish!";
     float banner_h = 44.0f;
     float banner_y = (float)win_h - banner_h;
@@ -777,4 +777,13 @@ void redraw_current_frame(SdlffContext *context) {
   render_timestamp_overlay(context);
   render_busy_and_error_overlays(context);
   SDL_RenderPresent(context->renderer);
+}
+
+void video_render_cleanup(void) {
+  if (g_font_ctx.texture) {
+    SDL_DestroyTexture(g_font_ctx.texture);
+    g_font_ctx.texture = NULL;
+  }
+  g_font_ctx.loaded = false;
+  g_font_ctx.failed = false;
 }
