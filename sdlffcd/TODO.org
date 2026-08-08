@@ -1,0 +1,4 @@
+* TODO use dstep to generate sdl3 bindings for necessary functions
+* TODO use dstep to generate ffmpeg libs bindings for necessary functions
+* TODO figure out how to add generation step to dub
+* TODO how to link sdl, ffmpeg libs in dub
