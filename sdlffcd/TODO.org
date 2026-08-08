@@ -1,3 +1,4 @@
+* TODO looks like too much work to adapt bindings, maybe keep to a C core that interfaces C libs and D as the driving logic?
 * TODO use dstep to generate sdl3 bindings for necessary functions
 * TODO use dstep to generate ffmpeg libs bindings for necessary functions
 * TODO figure out how to add generation step to dub
