@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/genbinds
+genbinds.so
+genbinds.dylib
+genbinds.dll
+libgenbinds.a
+genbinds.a
+genbinds.lib
+genbinds-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
