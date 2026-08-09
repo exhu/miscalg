@@ -1,0 +1,2 @@
+/// private api
+#pragma once

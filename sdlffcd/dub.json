@@ -1,0 +1,9 @@
+{
+	"description": "video player with trimming feature.",
+	"license": "MIT",
+	"authors": [
+		"yur"
+	],
+	"copyright": "Copyright © 2026, yur",
+	"name": "sdlffcd"
+}
