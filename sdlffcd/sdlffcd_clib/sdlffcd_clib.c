@@ -4,5 +4,5 @@
 #include <stdio.h>
 
 void hello(const char* hello) {
-  printf("hello: %s\n", hello);
+  printf("changed hello: %s\n", hello);
 }

@@ -5,5 +5,23 @@
 		"yur"
 	],
 	"copyright": "Copyright © 2026, yur",
-	"name": "sdlffcd"
+	"name": "sdlffcd",
+	"sourceFiles": [
+		"sdlffcd_clib/_build/libsdlffcd_clib.a"
+	],
+	"libs": [
+		"sdl3",
+		"avutil",
+		"avcodec",
+		"avformat",
+		"swscale",
+		"swresample",
+		"m"
+	],
+	"preGenerateCommands": [
+		"export PKG_CONFIG_PATH=\"$HOME/.local/lib/pkgconfig:$PKG_CONFIG_PATH\" && if [ ! -d \"sdlffcd_clib/_build\" ]; then meson setup sdlffcd_clib/_build sdlffcd_clib; fi && meson compile -C sdlffcd_clib/_build"
+	],
+	"extraDependencyFiles": [
+		"sdlffcd_clib/_build/libsdlffcd_clib.a"
+	]
 }

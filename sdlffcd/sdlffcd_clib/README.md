@@ -1,5 +1,7 @@
 sdlffcd_clib is a C99 library that helps avoid writing and keeping up to date full featured bindings to C dependencies for D application consumption.
 
+Public D api externals (opaque structs) goes to sdlffcd_clib.h, private api (real structs) into sdlffcd_clib_private.h
+
 It must implement some minimal chunks of logic split into C functions that would require a lot of calls to a third-party C library, e.g.
 SDL window setup/shutdown, text rendering, ffmpeg libs decoding code, by wrapping them into functions that are then called from D.
 
