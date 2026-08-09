@@ -1,8 +1,27 @@
-* TODO looks like too much work to adapt bindings, maybe keep to a C core that interfaces C libs and D as the driving logic?
-* TODO use dstep to generate sdl3 bindings for necessary functions
-* TODO use dstep to generate ffmpeg libs bindings for necessary functions
-* TODO figure out how to add generation step to dub
 * TODO how to link sdl, ffmpeg libs in dub
+* TODO design c core that interfaces SDL and ffmpeg libs
+** sdl interaction
+init, main loop, done, wake main loop -- implemented in C, main loop calls global D functions to
+notify of key events, or window resize etc via custom event types (i.e. we don't
+need to generate bindings for sdl types, use custom types, or generate bindings
+to constants like keycodes )
+
+** TODO study video decoding in sdlffc
+av decoder decodes to ringbuffer in a separate thread
+texture management in C, but need to split av part from sdl part
+
+** video presenting
+
+
+** audio decoding
+
+** TODO make video decoding work with multiple videos
+** TODO use dstep to translate keycodes?
+** TODO when to rerender scene?
+
+
+
+* DONE tried to generate bindings for SDL, but too much work to patch, many C-specific defines and intrinsics, keep to a C core that interfaces C libs and D as the driving logic
 
 * used headers
 SDL3/SDL_atomic.h
