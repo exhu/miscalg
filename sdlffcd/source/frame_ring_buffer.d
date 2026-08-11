@@ -127,6 +127,49 @@ final class FrameRingBuffer {
         }
     }
 
+    private double seekTargetPts = -1.0;
+    private bool seekRequested = false;
+
+    /**
+     * Request decoder thread to seek to targetPts and flush queued slots in buffer.
+     */
+    void requestSeek(double targetPts) {
+        synchronized (mutex) {
+            seekTargetPts = targetPts;
+            seekRequested = true;
+            head = 0;
+            tail = 0;
+            count = 0;
+            notFull.notifyAll();
+        }
+    }
+
+    /**
+     * Check if a seek request is pending. Returns true and outputs targetPts if pending.
+     */
+    bool checkAndClearSeekRequest(out double targetPts) {
+        synchronized (mutex) {
+            if (seekRequested) {
+                targetPts = seekTargetPts;
+                seekRequested = false;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Flush all queued slots from buffer without requesting stream seek.
+     */
+    void clear() {
+        synchronized (mutex) {
+            head = 0;
+            tail = 0;
+            count = 0;
+            notFull.notifyAll();
+        }
+    }
+
     /**
      * Signal worker thread to stop and unblock waiting condition variables.
      */

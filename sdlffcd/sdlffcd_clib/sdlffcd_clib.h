@@ -95,6 +95,7 @@ bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_Medi
  *         or SDLFFCD_DECODE_ERROR (-1) on decoding failure.
  */
 sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame);
+bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds);
 /**
  * Render a decoded video frame to the SDL renderer using the cached texture stored in vctx.
  *
@@ -114,5 +115,3 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
 
 /// Close video context and free all allocated FFmpeg resources.
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
-
-

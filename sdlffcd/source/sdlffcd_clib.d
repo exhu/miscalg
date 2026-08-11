@@ -58,6 +58,7 @@ struct sdlffcd_VideoFrame {
 sdlffcd_VideoContext* sdlffcd_video_open(const char* filename);
 bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_MediaInfo* out_info);
 sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame);
+bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds);
 bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const(sdlffcd_VideoFrame)* frame);
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
 

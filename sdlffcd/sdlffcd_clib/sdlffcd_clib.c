@@ -259,6 +259,23 @@ sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlf
     }
 }
 
+bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds) {
+    if (!vctx || !vctx->fmt_ctx || vctx->video_stream_idx < 0) return false;
+
+    AVStream* vst = vctx->fmt_ctx->streams[vctx->video_stream_idx];
+    int64_t target_ts = (int64_t)(target_pts_seconds / av_q2d(vst->time_base));
+
+    if (av_seek_frame(vctx->fmt_ctx, vctx->video_stream_idx, target_ts, AVSEEK_FLAG_BACKWARD) < 0) {
+        return false;
+    }
+
+    if (vctx->video_codec_ctx) {
+        avcodec_flush_buffers(vctx->video_codec_ctx);
+    }
+
+    return true;
+}
+
 bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const sdlffcd_VideoFrame* frame) {
     if (!app || !app->renderer || !vctx || !frame) return false;
 
