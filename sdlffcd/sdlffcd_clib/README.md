@@ -2,6 +2,8 @@ sdlffcd_clib is a C99 library that helps avoid writing and keeping up to date fu
 
 Public D api externals (opaque structs) goes to sdlffcd_clib.h, private api (real structs) into sdlffcd_clib_private.h
 
+All public symbols are prefixed with sdlffcd_.
+
 It must implement some minimal chunks of logic split into C functions that would require a lot of calls to a third-party C library, e.g.
 SDL window setup/shutdown, text rendering, ffmpeg libs decoding code, by wrapping them into functions that are then called from D.
 
@@ -14,11 +16,11 @@ and destuction functions e.g.
 sdlffcd_clib.h:
 
 /// returns NULL on failure
-AppContext* app_context_init(const char* title);
-void app_context_done(AppContext *context);
+sdlffcd_AppContext* sdlffcd_app_context_init(const char* title);
+void sdlffcd_app_context_done(AppContext *context);
 
 sdlffcd_clib.d:
 extern(C):
-struct AppContext;
-AppContext* app_context_init(...);
-void app_context_done(AppContext* context);
+struct sdlffcd_AppContext;
+AppContext* sdlffcd_app_context_init(...);
+void sdlffcd_app_context_done(AppContext* context);

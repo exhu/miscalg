@@ -5,4 +5,4 @@ All C library dependencies are accessible via sdlffcd_clib, see @sdlffcd_clib/RE
 
 source/sdlffcd_clib.d must contain D declarations that match sdlffcd_clib.h
 
-Put plan.md and walkthrough.md to doc-archive directory giving the files appropriate names (in case of conflict, choose a different name).
+Put conversation artifacts like plan.md and walkthrough.md to doc-archive directory giving the files appropriate names (in case of conflict, choose a different name).

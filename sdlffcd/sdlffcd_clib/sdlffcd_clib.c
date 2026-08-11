@@ -4,13 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-AppContext* app_init(const char* title, int width, int height) {
+sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
         return NULL;
     }
 
-    AppContext* app = (AppContext*)calloc(1, sizeof(AppContext));
+    sdlffcd_AppContext* app = (sdlffcd_AppContext*)calloc(1, sizeof(sdlffcd_AppContext));
     if (!app) {
         SDL_Quit();
         return NULL;
@@ -37,11 +37,11 @@ AppContext* app_init(const char* title, int width, int height) {
     return app;
 }
 
-bool app_is_running(const AppContext* app) {
+bool sdlffcd_app_is_running(const sdlffcd_AppContext* app) {
     return app && app->running;
 }
 
-void app_wait_events(AppContext* app) {
+void sdlffcd_app_wait_events(sdlffcd_AppContext* app) {
     if (!app) return;
     SDL_Event event;
     if (SDL_WaitEvent(&event)) {
@@ -57,14 +57,14 @@ void app_wait_events(AppContext* app) {
     }
 }
 
-void app_render(AppContext* app) {
+void sdlffcd_app_render(sdlffcd_AppContext* app) {
     if (!app || !app->renderer) return;
     SDL_SetRenderDrawColor(app->renderer, 30, 32, 40, 255);
     SDL_RenderClear(app->renderer);
     SDL_RenderPresent(app->renderer);
 }
 
-void app_shutdown(AppContext* app) {
+void sdlffcd_app_shutdown(sdlffcd_AppContext* app) {
     if (!app) return;
     if (app->renderer) SDL_DestroyRenderer(app->renderer);
     if (app->window) SDL_DestroyWindow(app->window);
