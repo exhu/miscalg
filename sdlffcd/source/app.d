@@ -2,11 +2,8 @@ import std.stdio;
 import std.string;
 import sdlffcd_clib;
 
-void main(string[] args)
+void decode_video_file(string filename)
 {
-    if (args.length > 1)
-    {
-        string filename = args[1];
         writeln("Opening video file: ", filename);
         sdlffcd_VideoContext* vctx = sdlffcd_video_open(toStringz(filename));
         if (vctx is null)
@@ -59,6 +56,14 @@ void main(string[] args)
                 break;
             }
         }
+}
+
+void main(string[] args)
+{
+    if (args.length > 1)
+    {
+        string filename = args[1];
+        decode_video_file(filename);
         return;
     }
 
