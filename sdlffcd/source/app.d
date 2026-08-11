@@ -26,21 +26,35 @@ void decode_video_file(string filename)
                 info.duration_seconds, info.fps, info.num_frames);
         }
 
+        // Log output window settings: show initial headFrames (5) and final tailFrames (5)
+        enum headFrames = 5;
+        enum tailFrames = 5;
+
+        // Calculate starting frame index for tail logging based on total video frame count.
+        // If total frames is known and exceeds (headFrames + tailFrames), log the final tailFrames.
+        // Otherwise, if total frames <= 10, log all frames without truncation.
+        // If frame count is unknown (<= 0), disable tail logging (tailStartFrame = int.max).
+        const long tailStartFrame = (info.num_frames > (headFrames + tailFrames))
+            ? (info.num_frames - tailFrames + 1)
+            : (info.num_frames > 0 ? (headFrames + 1) : long.max);
+
         writeln("\nDecoding video frames...");
         sdlffcd_VideoFrame frame;
-        int frameCount = 0;
+        long frameCount = 0;
         while (true)
         {
             sdlffcd_DecodeStatus status = sdlffcd_video_decode_frame(vctx, &frame);
             if (status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK)
             {
                 frameCount++;
-                if (frameCount <= 5 || frameCount >= 86)
+                // Log detailed metadata for the head (first 5) and tail (last 5) frames
+                if (frameCount <= headFrames || frameCount >= tailStartFrame)
                 {
                     writefln("Frame #%d: resolution %dx%d, pts %.3f s, plane0 ptr %s, linesize0 %d",
                         frameCount, frame.width, frame.height, frame.pts, frame.data[0], frame.linesize[0]);
                 }
-                else if (frameCount == 6)
+                // Log ellipsis once on frame 6 to indicate skipped intermediate frames
+                else if (frameCount == headFrames + 1)
                 {
                     writeln("...");
                 }
