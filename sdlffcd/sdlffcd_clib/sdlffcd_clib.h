@@ -73,8 +73,24 @@ bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_Medi
  * @return SDLFFCD_DECODE_OK (0) on success, SDLFFCD_DECODE_EOF (1) when end of file/stream is reached,
  *         or SDLFFCD_DECODE_ERROR (-1) on decoding failure.
  */
-sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame);
+/**
+ * Render a decoded video frame to the SDL renderer using the cached texture stored in vctx.
+ *
+ * Pointer lifetime semantics:
+ * - `app` and `vctx` must remain valid, initialized context pointers for the duration of the call.
+ * - `frame` and its plane data pointers (`frame->data`) reference frame buffer memory managed by `vctx`.
+ *   The `frame` struct and data pointers are only guaranteed valid until the next call to `sdlffcd_video_decode_frame`
+ *   or `sdlffcd_video_close`. `sdlffcd_video_render_frame` does not retain `frame` pointer references after returning.
+ * - The internal `SDL_Texture` pointer is owned and managed by `vctx` and freed during `sdlffcd_video_close`.
+ *
+ * @param app Pointer to initialized sdlffcd_AppContext.
+ * @param vctx Pointer to opened sdlffcd_VideoContext.
+ * @param frame Pointer to decoded sdlffcd_VideoFrame to render.
+ * @return true on successful render, false on error.
+ */
+bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const sdlffcd_VideoFrame* frame);
 
 /// Close video context and free all allocated FFmpeg resources.
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
+
 

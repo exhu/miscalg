@@ -166,6 +166,8 @@ bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_Medi
     return true;
 }
 
+#include <libavutil/imgutils.h>
+
 sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame) {
     if (!vctx || !out_frame || !vctx->video_codec_ctx || vctx->video_stream_idx < 0) {
         return SDLFFCD_DECODE_ERROR;
@@ -220,8 +222,70 @@ sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlf
     }
 }
 
+bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const sdlffcd_VideoFrame* frame) {
+    if (!app || !app->renderer || !vctx || !frame) return false;
+
+    if (!vctx->texture || vctx->texture_width != frame->width || vctx->texture_height != frame->height) {
+        if (vctx->texture) {
+            SDL_DestroyTexture(vctx->texture);
+            vctx->texture = NULL;
+        }
+        vctx->texture = SDL_CreateTexture(app->renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, frame->width, frame->height);
+        if (!vctx->texture) {
+            fprintf(stderr, "Failed to create SDL video texture: %s\n", SDL_GetError());
+            return false;
+        }
+        vctx->texture_width = frame->width;
+        vctx->texture_height = frame->height;
+    }
+
+    if (frame->pixel_format == AV_PIX_FMT_YUV420P || frame->pixel_format == AV_PIX_FMT_YUVJ420P) {
+        SDL_UpdateYUVTexture(vctx->texture, NULL,
+            frame->data[0], frame->linesize[0],
+            frame->data[1], frame->linesize[1],
+            frame->data[2], frame->linesize[2]);
+    } else {
+        if (!vctx->sws_ctx) {
+            vctx->sws_ctx = sws_getContext(
+                frame->width, frame->height, (enum AVPixelFormat)frame->pixel_format,
+                frame->width, frame->height, AV_PIX_FMT_YUV420P,
+                SWS_BILINEAR, NULL, NULL, NULL);
+            if (!vctx->sws_ctx) return false;
+
+            if (av_image_alloc(vctx->sws_data, vctx->sws_linesize, frame->width, frame->height, AV_PIX_FMT_YUV420P, 1) < 0) {
+                sws_freeContext(vctx->sws_ctx);
+                vctx->sws_ctx = NULL;
+                return false;
+            }
+        }
+
+        sws_scale(vctx->sws_ctx, (const uint8_t* const*)frame->data, frame->linesize, 0, frame->height, vctx->sws_data, vctx->sws_linesize);
+        SDL_UpdateYUVTexture(vctx->texture, NULL,
+            vctx->sws_data[0], vctx->sws_linesize[0],
+            vctx->sws_data[1], vctx->sws_linesize[1],
+            vctx->sws_data[2], vctx->sws_linesize[2]);
+    }
+
+    SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
+    SDL_RenderClear(app->renderer);
+    SDL_RenderTexture(app->renderer, vctx->texture, NULL, NULL);
+    SDL_RenderPresent(app->renderer);
+    return true;
+}
+
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx) {
     if (!vctx) return;
+    if (vctx->texture) {
+        SDL_DestroyTexture(vctx->texture);
+        vctx->texture = NULL;
+    }
+    if (vctx->sws_ctx) {
+        sws_freeContext(vctx->sws_ctx);
+        vctx->sws_ctx = NULL;
+    }
+    if (vctx->sws_data[0]) {
+        av_freep(&vctx->sws_data[0]);
+    }
     if (vctx->frame) av_frame_free(&vctx->frame);
     if (vctx->pkt) av_packet_free(&vctx->pkt);
     if (vctx->video_codec_ctx) avcodec_free_context(&vctx->video_codec_ctx);
@@ -229,3 +293,4 @@ void sdlffcd_video_close(sdlffcd_VideoContext* vctx) {
     if (vctx->fmt_ctx) avformat_close_input(&vctx->fmt_ctx);
     free(vctx);
 }
+

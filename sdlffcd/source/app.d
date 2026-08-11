@@ -1,8 +1,10 @@
 import std.stdio;
 import std.string;
+import core.thread;
+import std.datetime;
 import sdlffcd_clib;
 
-void decode_video_file(string filename)
+void decode_video_file(sdlffcd_AppContext* app, string filename)
 {
         writeln("Opening video file: ", filename);
         sdlffcd_VideoContext* vctx = sdlffcd_video_open(toStringz(filename));
@@ -31,17 +33,16 @@ void decode_video_file(string filename)
         enum tailFrames = 5;
 
         // Calculate starting frame index for tail logging based on total video frame count.
-        // If total frames is known and exceeds (headFrames + tailFrames), log the final tailFrames.
-        // Otherwise, if total frames <= 10, log all frames without truncation.
-        // If frame count is unknown (<= 0), disable tail logging (tailStartFrame = int.max).
         const long tailStartFrame = (info.num_frames > (headFrames + tailFrames))
             ? (info.num_frames - tailFrames + 1)
             : (info.num_frames > 0 ? (headFrames + 1) : long.max);
 
-        writeln("\nDecoding video frames...");
+        long frameDelayMs = (info.fps > 0) ? cast(long)(1000.0 / info.fps) : 33;
+
+        writeln("\nDecoding and rendering video frames...");
         sdlffcd_VideoFrame frame;
         long frameCount = 0;
-        while (true)
+        while (sdlffcd_app_is_running(app))
         {
             sdlffcd_DecodeStatus status = sdlffcd_video_decode_frame(vctx, &frame);
             if (status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK)
@@ -57,6 +58,15 @@ void decode_video_file(string filename)
                 else if (frameCount == headFrames + 1)
                 {
                     writeln("...");
+                }
+
+                // Render video frame to SDL window using reused texture in vctx
+                sdlffcd_video_render_frame(app, vctx, &frame);
+
+                // Frame rate timing and event handling
+                if (frameDelayMs > 0)
+                {
+                    Thread.sleep(dur!"msecs"(frameDelayMs));
                 }
             }
             else if (status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF)
@@ -74,32 +84,20 @@ void decode_video_file(string filename)
 
 void main(string[] args)
 {
-    if (args.length > 1)
-    {
-        string filename = args[1];
-        decode_video_file(filename);
-        return;
-    }
+    string filename = (args.length > 1) ? args[1] : "samplevideo.mp4";
 
     writeln("Initializing SDL application...");
-    sdlffcd_AppContext* app = sdlffcd_app_init("sdlffcd - Video Play&Trim", 800, 600);
+    sdlffcd_AppContext* app = sdlffcd_app_init("sdlffcd - Video Player", 800, 600);
     if (app is null)
     {
         stderr.writeln("Failed to initialize application context.");
         return;
     }
+    scope(exit) sdlffcd_app_shutdown(app);
 
-    // Initial frame render
-    sdlffcd_app_render(app);
+    // Decode and render video file
+    decode_video_file(app, filename);
 
-    writeln("Entering main loop (waiting for events)...");
-    while (sdlffcd_app_is_running(app))
-    {
-        sdlffcd_app_wait_events(app);
-        sdlffcd_app_render(app);
-    }
-
-    writeln("Shutting down application...");
-    sdlffcd_app_shutdown(app);
     writeln("Exited cleanly.");
 }
+
