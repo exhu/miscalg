@@ -4,66 +4,65 @@ import core.thread;
 import std.datetime;
 
 import sdlffcd_clib;
-import frame_ring_buffer;
 import video_player;
-
-__gshared VideoPlayer g_player = null;
+import app_context;
 
 extern(C) void handleKeyPress(void* userdata, uint key)
 {
-    sdlffcd_AppContext* app = cast(sdlffcd_AppContext*)userdata;
+    AppContext* app = cast(AppContext*)userdata;
     if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE || key == sdlffcd_Key.SDLFFCD_KEY_Q || key == 'Q')
     {
         writeln("Key press received in D (Q / ESCAPE). Requesting app stop...");
-        if (app !is null)
+        if (app.app !is null)
         {
-            sdlffcd_app_stop(app);
+            sdlffcd_app_stop(app.app);
         }
     }
     else if (key == ' ' || key == 'p' || key == 'P')
     {
-        if (g_player !is null)
+        if (app.player !is null)
         {
-            g_player.togglePause();
+            app.player.togglePause();
         }
     }
     else if (key == 'r' || key == 'R' || key == 1073741904) // Left arrow or 'R'
     {
-        if (g_player !is null)
+        if (app.player !is null)
         {
-            g_player.rewind(5.0);
+            app.player.rewind(5.0);
         }
     }
     else if (key == 'f' || key == 'F' || key == 1073741903) // Right arrow or 'F'
     {
-        if (g_player !is null)
+        if (app.player !is null)
         {
-            g_player.fastForward(5.0);
+            app.player.fastForward(5.0);
         }
     }
 }
 
 void main(string[] args)
 {
+    AppContext appContext;
     string filename = (args.length > 1) ? args[1] : "samplevideo.mp4";
 
     writeln("Initializing SDL application...");
-    sdlffcd_AppContext* app = sdlffcd_app_init("sdlffcd - Video Player", 800, 600);
-    if (app is null)
+    appContext.app = sdlffcd_app_init("sdlffcd - Video Player", 800, 600);
+    if (appContext.app is null)
     {
         stderr.writeln("Failed to initialize application context.");
         return;
     }
-    scope(exit) sdlffcd_app_shutdown(app);
+    scope(exit) sdlffcd_app_shutdown(appContext.app);
 
-    sdlffcd_app_set_key_callback(app, &handleKeyPress, app);
+    sdlffcd_app_set_key_callback(appContext.app, &handleKeyPress, &appContext);
 
     VideoPlayer player = new VideoPlayer();
-    g_player = player;
+    appContext.player = player;
     scope(exit)
     {
         player.close();
-        g_player = null;
+        appContext.player = null;
     }
 
     if (!player.open(filename))
@@ -75,12 +74,12 @@ void main(string[] args)
     writeln("\nStarting main event loop...");
     writeln("Controls: [Space/P] Pause/Resume, [R/Left] Rewind 5s, [F/Right] Fast Forward 5s, [Q/ESC] Quit\n");
 
-    while (sdlffcd_app_is_running(app))
+    while (sdlffcd_app_is_running(appContext.app))
     {
-        sdlffcd_app_poll_events(app);
-        if (!sdlffcd_app_is_running(app)) break;
+        sdlffcd_app_poll_events(appContext.app);
+        if (!sdlffcd_app_is_running(appContext.app)) break;
 
-        bool active = player.update(app);
+        bool active = player.update(appContext.app);
         if (!active && !player.isPaused())
         {
             writeln("Playback finished or stopped.");
