@@ -155,6 +155,14 @@ void decode_video_file(sdlffcd_AppContext* app, string filename)
         }
 }
 
+void main_thread_loop(sdlffcd_AppContext* app)
+{
+  while(sdlffcd_app_is_running(app))
+  {
+    sdlffcd_app_wait_events(app);
+  }
+}
+
 void main(string[] args)
 {
     string filename = (args.length > 1) ? args[1] : "samplevideo.mp4";
@@ -179,6 +187,7 @@ void main(string[] args)
     }
     decode_video_file(app, filename);
 
+    main_thread_loop(app);
+
     writeln("Exited cleanly.");
 }
-
