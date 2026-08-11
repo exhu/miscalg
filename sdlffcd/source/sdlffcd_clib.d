@@ -5,6 +5,7 @@ struct sdlffcd_AppContext;
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height);
 bool sdlffcd_app_is_running(const sdlffcd_AppContext* app);
 void sdlffcd_app_wait_events(sdlffcd_AppContext* app);
+bool sdlffcd_app_wake(sdlffcd_AppContext* app);
 void sdlffcd_app_render(sdlffcd_AppContext* app);
 void sdlffcd_app_shutdown(sdlffcd_AppContext* app);
 
@@ -22,24 +23,25 @@ struct sdlffcd_MediaInfo {
     char[64] format_name;
     char[64] video_codec_name;
     char[64] audio_codec_name;
+    double duration_seconds;
+    double fps;
+    long num_frames;
     int num_streams;
     int video_stream_index;
     int audio_stream_index;
     int width;
     int height;
-    double duration_seconds;
-    double fps;
-    long num_frames;
     int pixel_format;
 }
 
 struct sdlffcd_VideoFrame {
     ubyte*[8] data;
+    double pts;
     int[8] linesize;
     int width;
     int height;
     int pixel_format;
-    double pts;
+    ubyte[4] _pad;
 }
 
 sdlffcd_VideoContext* sdlffcd_video_open(const char* filename);

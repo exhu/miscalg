@@ -34,6 +34,10 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
     }
 
     app->running = true;
+    app->wake_event_type = SDL_RegisterEvents(1);
+    if (app->wake_event_type == (uint32_t)-1) {
+        fprintf(stderr, "Failed to register custom wake event: %s\n", SDL_GetError());
+    }
     return app;
 }
 
@@ -55,6 +59,14 @@ void sdlffcd_app_wait_events(sdlffcd_AppContext* app) {
             }
         } while (SDL_PollEvent(&event));
     }
+}
+
+bool sdlffcd_app_wake(sdlffcd_AppContext* app) {
+    if (!app || app->wake_event_type == (uint32_t)-1) return false;
+    SDL_Event event;
+    SDL_zero(event);
+    event.type = app->wake_event_type;
+    return SDL_PushEvent(&event);
 }
 
 void sdlffcd_app_render(sdlffcd_AppContext* app) {
@@ -293,4 +305,3 @@ void sdlffcd_video_close(sdlffcd_VideoContext* vctx) {
     if (vctx->fmt_ctx) avformat_close_input(&vctx->fmt_ctx);
     free(vctx);
 }
-

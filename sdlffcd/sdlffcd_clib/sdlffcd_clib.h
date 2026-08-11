@@ -13,6 +13,9 @@ bool sdlffcd_app_is_running(const sdlffcd_AppContext* app);
 /// Wait for next event and process all queued events (blocking when idle to save CPU).
 void sdlffcd_app_wait_events(sdlffcd_AppContext* app);
 
+/// Wake main event loop by pushing custom registered SDL event.
+bool sdlffcd_app_wake(sdlffcd_AppContext* app);
+
 /// Clear screen and present frame
 void sdlffcd_app_render(sdlffcd_AppContext* app);
 
@@ -33,14 +36,14 @@ typedef struct sdlffcd_MediaInfo {
     char format_name[64];
     char video_codec_name[64];
     char audio_codec_name[64];
+    double duration_seconds;
+    double fps;
+    int64_t num_frames;
     int num_streams;
     int video_stream_index;  /* Selected video stream index in container, or -1 if none */
     int audio_stream_index;  /* Selected audio stream index in container, or -1 if none */
     int width;
     int height;
-    double duration_seconds;
-    double fps;
-    int64_t num_frames;
     int pixel_format;
 } sdlffcd_MediaInfo;
 
@@ -52,11 +55,12 @@ typedef struct sdlffcd_MediaInfo {
  */
 typedef struct sdlffcd_VideoFrame {
     uint8_t* data[8];    /* Shallow pointers to decoded image planes in FFmpeg internal buffer */
+    double pts;          /* Presentation timestamp in seconds */
     int linesize[8];     /* Pitch/stride for each plane in bytes */
     int width;
     int height;
     int pixel_format;
-    double pts;          /* Presentation timestamp in seconds */
+    uint8_t _pad[4];     /* Explicit padding to 8-byte alignment boundary */
 } sdlffcd_VideoFrame;
 
 /// Open a video file and initialize FFmpeg demuxer and decoder contexts. Returns NULL on failure.
@@ -73,6 +77,7 @@ bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_Medi
  * @return SDLFFCD_DECODE_OK (0) on success, SDLFFCD_DECODE_EOF (1) when end of file/stream is reached,
  *         or SDLFFCD_DECODE_ERROR (-1) on decoding failure.
  */
+sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame);
 /**
  * Render a decoded video frame to the SDL renderer using the cached texture stored in vctx.
  *

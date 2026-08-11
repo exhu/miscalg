@@ -1,7 +1,18 @@
 /// private api
 #pragma once
 #include "sdlffcd_clib.h"
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpadded"
+#endif
+
 #include <SDL3/SDL.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
 #include <stdbool.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -11,7 +22,9 @@
 struct sdlffcd_AppContext {
     SDL_Window* window;
     SDL_Renderer* renderer;
+    uint32_t wake_event_type;
     bool running;
+    uint8_t _pad[3];
 };
 
 struct sdlffcd_VideoContext {
@@ -34,3 +47,4 @@ struct sdlffcd_VideoContext {
     uint8_t* sws_data[4];        /* Pointers to sws conversion output plane buffers owned by vctx */
     int sws_linesize[4];         /* Pitches/strides for sws conversion plane buffers */
 };
+

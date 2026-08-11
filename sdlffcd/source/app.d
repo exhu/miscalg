@@ -95,7 +95,12 @@ void main(string[] args)
     }
     scope(exit) sdlffcd_app_shutdown(app);
 
-    // Decode and render video file
+    // Test waking event loop via custom registered SDL event
+    if (sdlffcd_app_wake(app))
+    {
+        writeln("Custom wake event successfully sent to event loop.");
+        sdlffcd_app_wait_events(app);
+    }
     decode_video_file(app, filename);
 
     writeln("Exited cleanly.");
