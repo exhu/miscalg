@@ -222,10 +222,14 @@ sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlf
             out_frame->pixel_format = vctx->frame->format;
 
             AVStream* vst = vctx->fmt_ctx->streams[vctx->video_stream_idx];
-            if (vctx->frame->pts != AV_NOPTS_VALUE) {
-                out_frame->pts = (double)vctx->frame->pts * av_q2d(vst->time_base);
+            int64_t pts = vctx->frame->pts;
+            if (pts == AV_NOPTS_VALUE) {
+                pts = vctx->frame->best_effort_timestamp;
+            }
+            if (pts != AV_NOPTS_VALUE) {
+                out_frame->pts = (double)pts * av_q2d(vst->time_base);
             } else {
-                out_frame->pts = 0.0;
+                out_frame->pts = -1.0;
             }
 
             return SDLFFCD_DECODE_OK;

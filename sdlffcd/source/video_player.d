@@ -98,7 +98,11 @@ class VideoPlayer {
             sdlffcd_DecodeStatus status = sdlffcd_video_decode_frame(vctx, &frame);
             decodedCount++;
             bool pushed = ringBuffer.push(status, frame, decodedCount);
-            if (!pushed || status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_ERROR) {
+            if (!pushed) {
+                if (ringBuffer.isStopRequested()) break;
+                continue;
+            }
+            if (status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_ERROR) {
                 break;
             }
         }
@@ -138,7 +142,7 @@ class VideoPlayer {
         }
 
         double framePts = renderSlot.frame.pts;
-        if (framePts <= 0.0 && mediaInfo.fps > 0) {
+        if (framePts < 0.0 && mediaInfo.fps > 0) {
             framePts = cast(double)frameCount / mediaInfo.fps;
         }
 
@@ -206,6 +210,7 @@ class VideoPlayer {
         ringBuffer.requestSeek(targetPts);
         slotReady = false;
         currentPts = targetPts;
+        frameCount = mediaInfo.fps > 0 ? cast(long)(targetPts * mediaInfo.fps) : 0;
 
         // Reset clock baseline so frame rendering syncs immediately
         playbackStartTime = MonoTime.currTime - dur!"msecs"(cast(long)(targetPts * 1000.0));

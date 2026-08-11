@@ -57,11 +57,11 @@ final class FrameRingBuffer {
      */
     bool push(sdlffcd_DecodeStatus status, ref sdlffcd_VideoFrame srcFrame, long frameIdx) {
         synchronized (mutex) {
-            while (count == capacity && !stopRequested) {
+            while (count == capacity && !stopRequested && !seekRequested) {
                 notFull.wait();
             }
 
-            if (stopRequested) return false;
+            if (stopRequested || seekRequested) return false;
 
             DecodedSlot* slot = &slots[head];
             slot.status = status;
@@ -189,4 +189,30 @@ final class FrameRingBuffer {
             return stopRequested;
         }
     }
+}
+
+unittest {
+    auto rb = new FrameRingBuffer(4);
+    sdlffcd_VideoFrame dummyFrame;
+    dummyFrame.width = 10;
+    dummyFrame.height = 10;
+
+    // Test push and pop
+    assert(rb.push(sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK, dummyFrame, 1));
+    DecodedSlot slot;
+    assert(rb.pop(slot));
+    assert(slot.frameIndex == 1);
+
+    // Test requestSeek signaling
+    rb.requestSeek(5.5);
+    double targetPts;
+    assert(rb.checkAndClearSeekRequest(targetPts));
+    assert(targetPts == 5.5);
+    assert(!rb.checkAndClearSeekRequest(targetPts));
+
+    // Test push cancellation when seek requested
+    rb.requestSeek(10.0);
+    assert(!rb.push(sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK, dummyFrame, 2));
+    assert(rb.checkAndClearSeekRequest(targetPts));
+    assert(targetPts == 10.0);
 }
