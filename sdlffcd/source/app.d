@@ -11,8 +11,7 @@ extern(C) void handleKeyPress(void* userdata, uint key)
 {
     AppContext* app = cast(AppContext*)userdata;
     if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE ||
-        key == sdlffcd_Key.SDLFFCD_KEY_Q ||
-        key == sdlffcd_Key.SDLFFCD_KEY_Q_UPPER)
+        key == sdlffcd_Key.SDLFFCD_KEY_Q)
     {
         writeln("Key press received in D (Q / ESCAPE). Requesting app stop...");
         if (app.app !is null)
@@ -21,8 +20,7 @@ extern(C) void handleKeyPress(void* userdata, uint key)
         }
     }
     else if (key == sdlffcd_Key.SDLFFCD_KEY_SPACE ||
-             key == sdlffcd_Key.SDLFFCD_KEY_P ||
-             key == sdlffcd_Key.SDLFFCD_KEY_P_UPPER)
+             key == sdlffcd_Key.SDLFFCD_KEY_P)
     {
         if (app.player !is null)
         {
@@ -30,7 +28,6 @@ extern(C) void handleKeyPress(void* userdata, uint key)
         }
     }
     else if (key == sdlffcd_Key.SDLFFCD_KEY_R ||
-             key == sdlffcd_Key.SDLFFCD_KEY_R_UPPER ||
              key == sdlffcd_Key.SDLFFCD_KEY_LEFT) // Left arrow or 'R'
     {
         if (app.player !is null)
@@ -39,7 +36,6 @@ extern(C) void handleKeyPress(void* userdata, uint key)
         }
     }
     else if (key == sdlffcd_Key.SDLFFCD_KEY_F ||
-             key == sdlffcd_Key.SDLFFCD_KEY_F_UPPER ||
              key == sdlffcd_Key.SDLFFCD_KEY_RIGHT) // Right arrow or 'F'
     {
         if (app.player !is null)
