@@ -1,0 +1,1 @@
+Make decode_video_file multithreaded: implement a separate decoding thread in app.d that decodes some number of frames(which is configurable via a constant) into a shared ring buffer (array). The ring buffer is polled in the main loop to render decoded frames.

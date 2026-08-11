@@ -3,6 +3,23 @@ import std.string;
 import core.thread;
 import std.datetime;
 import sdlffcd_clib;
+import frame_ring_buffer;
+
+void decodingWorker(sdlffcd_VideoContext* vctx, FrameRingBuffer ringBuffer)
+{
+    long decodedCount = 0;
+    while (!ringBuffer.isStopRequested())
+    {
+        sdlffcd_VideoFrame frame;
+        sdlffcd_DecodeStatus status = sdlffcd_video_decode_frame(vctx, &frame);
+        decodedCount++;
+        bool pushed = ringBuffer.push(status, frame, decodedCount);
+        if (!pushed || status != sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK)
+        {
+            break;
+        }
+    }
+}
 
 void decode_video_file(sdlffcd_AppContext* app, string filename)
 {
@@ -39,45 +56,81 @@ void decode_video_file(sdlffcd_AppContext* app, string filename)
 
         long frameDelayMs = (info.fps > 0) ? cast(long)(1000.0 / info.fps) : 33;
 
+        FrameRingBuffer ringBuffer = new FrameRingBuffer(ringBufferCapacity);
+        Thread decoderThread = new Thread(() => decodingWorker(vctx, ringBuffer));
+        decoderThread.start();
+        scope(exit)
+        {
+            ringBuffer.requestStop();
+            decoderThread.join();
+        }
+
         writeln("\nDecoding and rendering video frames...");
-        sdlffcd_VideoFrame frame;
         long frameCount = 0;
+        MonoTime playbackStartTime;
+        bool playbackStarted = false;
+        DecodedSlot renderSlot;
+
         while (sdlffcd_app_is_running(app))
         {
-            sdlffcd_DecodeStatus status = sdlffcd_video_decode_frame(vctx, &frame);
-            if (status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK)
+            if (ringBuffer.pop(renderSlot))
             {
-                frameCount++;
-                // Log detailed metadata for the head (first 5) and tail (last 5) frames
-                if (frameCount <= headFrames || frameCount >= tailStartFrame)
+                if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK)
                 {
-                    writefln("Frame #%d: resolution %dx%d, pts %.3f s, plane0 ptr %s, linesize0 %d",
-                        frameCount, frame.width, frame.height, frame.pts, frame.data[0], frame.linesize[0]);
-                }
-                // Log ellipsis once on frame 6 to indicate skipped intermediate frames
-                else if (frameCount == headFrames + 1)
-                {
-                    writeln("...");
-                }
+                    if (!playbackStarted)
+                    {
+                        playbackStartTime = MonoTime.currTime;
+                        playbackStarted = true;
+                    }
 
-                // Render video frame to SDL window using reused texture in vctx
-                sdlffcd_video_render_frame(app, vctx, &frame);
+                    frameCount++;
+                    // Log detailed metadata for the head (first 5) and tail (last 5) frames
+                    if (frameCount <= headFrames || frameCount >= tailStartFrame)
+                    {
+                        writefln("Frame #%d: resolution %dx%d, pts %.3f s, plane0 ptr %s, linesize0 %d",
+                            frameCount, renderSlot.frame.width, renderSlot.frame.height, renderSlot.frame.pts, renderSlot.frame.data[0], renderSlot.frame.linesize[0]);
+                    }
+                    // Log ellipsis once on frame 6 to indicate skipped intermediate frames
+                    else if (frameCount == headFrames + 1)
+                    {
+                        writeln("...");
+                    }
 
-                // Frame rate timing and event handling
-                if (frameDelayMs > 0)
-                {
-                    Thread.sleep(dur!"msecs"(frameDelayMs));
+                    // Render video frame to SDL window using reused texture in vctx
+                    sdlffcd_video_render_frame(app, vctx, &renderSlot.frame);
+
+                    // Precise presentation timing using MonoTime and frame pts target
+                    if (info.fps > 0)
+                    {
+                        double targetPts = (renderSlot.frame.pts > 0.0) ? renderSlot.frame.pts : (cast(double)(frameCount - 1) / info.fps);
+                        long targetMs = cast(long)(targetPts * 1000.0);
+                        long elapsedMs = (MonoTime.currTime - playbackStartTime).total!"msecs"();
+                        long sleepMs = targetMs - elapsedMs;
+                        if (sleepMs > 0)
+                        {
+                            Thread.sleep(dur!"msecs"(sleepMs));
+                        }
+                    }
+                    else if (frameDelayMs > 0)
+                    {
+                        Thread.sleep(dur!"msecs"(frameDelayMs));
+                    }
                 }
-            }
-            else if (status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF)
-            {
-                writefln("End of video stream reached cleanly after %d frames.", frameCount);
-                break;
+                else if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF)
+                {
+                    writefln("End of video stream reached cleanly after %d frames.", frameCount);
+                    break;
+                }
+                else
+                {
+                    stderr.writeln("Error decoding frame.");
+                    break;
+                }
             }
             else
             {
-                stderr.writeln("Error decoding frame.");
-                break;
+                // Ring buffer empty: sleep briefly to yield CPU while waiting for producer
+                Thread.sleep(dur!"msecs"(1));
             }
         }
 }
