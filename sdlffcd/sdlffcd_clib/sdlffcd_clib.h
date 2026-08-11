@@ -4,10 +4,21 @@
 
 typedef struct sdlffcd_AppContext sdlffcd_AppContext;
 
+// TODO do we need upper/lower?
 typedef enum sdlffcd_Key {
     SDLFFCD_KEY_UNKNOWN = 0,
     SDLFFCD_KEY_ESCAPE = 27,
-    SDLFFCD_KEY_Q = 'q'
+    SDLFFCD_KEY_SPACE = ' ',
+    SDLFFCD_KEY_Q = 'q',
+    SDLFFCD_KEY_Q_UPPER = 'Q',
+    SDLFFCD_KEY_P = 'p',
+    SDLFFCD_KEY_P_UPPER = 'P',
+    SDLFFCD_KEY_R = 'r',
+    SDLFFCD_KEY_R_UPPER = 'R',
+    SDLFFCD_KEY_F = 'f',
+    SDLFFCD_KEY_F_UPPER = 'F',
+    SDLFFCD_KEY_LEFT = 1073741904,
+    SDLFFCD_KEY_RIGHT = 1073741903
 } sdlffcd_Key;
 
 typedef void (*sdlffcd_KeyCallback)(void* userdata, uint32_t key);

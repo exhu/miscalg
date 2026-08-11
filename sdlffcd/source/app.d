@@ -10,7 +10,9 @@ import app_context;
 extern(C) void handleKeyPress(void* userdata, uint key)
 {
     AppContext* app = cast(AppContext*)userdata;
-    if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE || key == sdlffcd_Key.SDLFFCD_KEY_Q || key == 'Q')
+    if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE ||
+        key == sdlffcd_Key.SDLFFCD_KEY_Q ||
+        key == sdlffcd_Key.SDLFFCD_KEY_Q_UPPER)
     {
         writeln("Key press received in D (Q / ESCAPE). Requesting app stop...");
         if (app.app !is null)
@@ -18,21 +20,27 @@ extern(C) void handleKeyPress(void* userdata, uint key)
             sdlffcd_app_stop(app.app);
         }
     }
-    else if (key == ' ' || key == 'p' || key == 'P')
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_SPACE ||
+             key == sdlffcd_Key.SDLFFCD_KEY_P ||
+             key == sdlffcd_Key.SDLFFCD_KEY_P_UPPER)
     {
         if (app.player !is null)
         {
             app.player.togglePause();
         }
     }
-    else if (key == 'r' || key == 'R' || key == 1073741904) // Left arrow or 'R'
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_R ||
+             key == sdlffcd_Key.SDLFFCD_KEY_R_UPPER ||
+             key == sdlffcd_Key.SDLFFCD_KEY_LEFT) // Left arrow or 'R'
     {
         if (app.player !is null)
         {
             app.player.rewind(5.0);
         }
     }
-    else if (key == 'f' || key == 'F' || key == 1073741903) // Right arrow or 'F'
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_F ||
+             key == sdlffcd_Key.SDLFFCD_KEY_F_UPPER ||
+             key == sdlffcd_Key.SDLFFCD_KEY_RIGHT) // Right arrow or 'F'
     {
         if (app.player !is null)
         {
@@ -46,26 +54,15 @@ void main(string[] args)
     AppContext appContext;
     string filename = (args.length > 1) ? args[1] : "samplevideo.mp4";
 
-    writeln("Initializing SDL application...");
-    appContext.app = sdlffcd_app_init("sdlffcd - Video Player", 800, 600);
-    if (appContext.app is null)
+    if (!appContext.init("sdlffcd - Video Player", 800, 600))
     {
-        stderr.writeln("Failed to initialize application context.");
         return;
     }
-    scope(exit) sdlffcd_app_shutdown(appContext.app);
+    scope(exit) appContext.close();
 
     sdlffcd_app_set_key_callback(appContext.app, &handleKeyPress, &appContext);
 
-    VideoPlayer player = new VideoPlayer();
-    appContext.player = player;
-    scope(exit)
-    {
-        player.close();
-        appContext.player = null;
-    }
-
-    if (!player.open(filename))
+    if (!appContext.player.open(filename))
     {
         stderr.writeln("Failed to open video file: ", filename);
         return;
@@ -79,8 +76,8 @@ void main(string[] args)
         sdlffcd_app_poll_events(appContext.app);
         if (!sdlffcd_app_is_running(appContext.app)) break;
 
-        bool active = player.update(appContext.app);
-        if (!active && !player.isPaused())
+        bool active = appContext.player.update(appContext.app);
+        if (!active && !appContext.player.isPaused())
         {
             writeln("Playback finished or stopped.");
             break;

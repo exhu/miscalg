@@ -5,7 +5,17 @@ struct sdlffcd_AppContext;
 enum sdlffcd_Key : uint {
     SDLFFCD_KEY_UNKNOWN = 0,
     SDLFFCD_KEY_ESCAPE = 27,
-    SDLFFCD_KEY_Q = 'q'
+    SDLFFCD_KEY_SPACE = ' ',
+    SDLFFCD_KEY_Q = 'q',
+    SDLFFCD_KEY_Q_UPPER = 'Q',
+    SDLFFCD_KEY_P = 'p',
+    SDLFFCD_KEY_P_UPPER = 'P',
+    SDLFFCD_KEY_R = 'r',
+    SDLFFCD_KEY_R_UPPER = 'R',
+    SDLFFCD_KEY_F = 'f',
+    SDLFFCD_KEY_F_UPPER = 'F',
+    SDLFFCD_KEY_LEFT = 1073741904,
+    SDLFFCD_KEY_RIGHT = 1073741903
 }
 
 alias sdlffcd_KeyCallback = void function(void* userdata, uint key);
@@ -61,4 +71,21 @@ sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlf
 bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds);
 bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const(sdlffcd_VideoFrame)* frame);
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
+
+extern(D) unittest
+{
+    assert(sdlffcd_Key.SDLFFCD_KEY_UNKNOWN == 0);
+    assert(sdlffcd_Key.SDLFFCD_KEY_ESCAPE == 27);
+    assert(sdlffcd_Key.SDLFFCD_KEY_SPACE == ' ');
+    assert(sdlffcd_Key.SDLFFCD_KEY_Q == 'q');
+    assert(sdlffcd_Key.SDLFFCD_KEY_Q_UPPER == 'Q');
+    assert(sdlffcd_Key.SDLFFCD_KEY_P == 'p');
+    assert(sdlffcd_Key.SDLFFCD_KEY_P_UPPER == 'P');
+    assert(sdlffcd_Key.SDLFFCD_KEY_R == 'r');
+    assert(sdlffcd_Key.SDLFFCD_KEY_R_UPPER == 'R');
+    assert(sdlffcd_Key.SDLFFCD_KEY_F == 'f');
+    assert(sdlffcd_Key.SDLFFCD_KEY_F_UPPER == 'F');
+    assert(sdlffcd_Key.SDLFFCD_KEY_LEFT == 1073741904);
+    assert(sdlffcd_Key.SDLFFCD_KEY_RIGHT == 1073741903);
+}
 
