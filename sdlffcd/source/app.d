@@ -5,6 +5,19 @@ import std.datetime;
 import sdlffcd_clib;
 import frame_ring_buffer;
 
+extern(C) void handleKeyPress(void* userdata, uint key)
+{
+    sdlffcd_AppContext* app = cast(sdlffcd_AppContext*)userdata;
+    if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE || key == sdlffcd_Key.SDLFFCD_KEY_Q || key == 'Q')
+    {
+        writeln("Key press received in D (Q / ESCAPE). Requesting app stop...");
+        if (app !is null)
+        {
+            sdlffcd_app_stop(app);
+        }
+    }
+}
+
 void decodingWorker(sdlffcd_VideoContext* vctx, FrameRingBuffer ringBuffer)
 {
     long decodedCount = 0;
@@ -73,6 +86,13 @@ void decode_video_file(sdlffcd_AppContext* app, string filename)
 
         while (sdlffcd_app_is_running(app))
         {
+            sdlffcd_app_poll_events(app);
+            if (!sdlffcd_app_is_running(app))
+            {
+                writeln("Playback stopped by user event.");
+                break;
+            }
+
             if (ringBuffer.pop(renderSlot))
             {
                 if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK)
@@ -147,6 +167,9 @@ void main(string[] args)
         return;
     }
     scope(exit) sdlffcd_app_shutdown(app);
+
+    // Register D key press callback to handle Q and ESCAPE keys
+    sdlffcd_app_set_key_callback(app, &handleKeyPress, app);
 
     // Test waking event loop via custom registered SDL event
     if (sdlffcd_app_wake(app))

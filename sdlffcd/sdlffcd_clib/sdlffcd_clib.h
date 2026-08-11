@@ -4,11 +4,28 @@
 
 typedef struct sdlffcd_AppContext sdlffcd_AppContext;
 
+typedef enum sdlffcd_Key {
+    SDLFFCD_KEY_UNKNOWN = 0,
+    SDLFFCD_KEY_ESCAPE = 27,
+    SDLFFCD_KEY_Q = 'q'
+} sdlffcd_Key;
+
+typedef void (*sdlffcd_KeyCallback)(void* userdata, uint32_t key);
+
 /// Initialize SDL3, create window and renderer. Returns NULL on failure.
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height);
 
 /// Check if application is running.
 bool sdlffcd_app_is_running(const sdlffcd_AppContext* app);
+
+/// Request application to stop.
+void sdlffcd_app_stop(sdlffcd_AppContext* app);
+
+/// Register callback for key press events.
+void sdlffcd_app_set_key_callback(sdlffcd_AppContext* app, sdlffcd_KeyCallback cb, void* userdata);
+
+/// Poll and process all pending SDL events non-blocking.
+void sdlffcd_app_poll_events(sdlffcd_AppContext* app);
 
 /// Wait for next event and process all queued events (blocking when idle to save CPU).
 void sdlffcd_app_wait_events(sdlffcd_AppContext* app);

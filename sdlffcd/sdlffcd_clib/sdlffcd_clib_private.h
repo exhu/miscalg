@@ -25,6 +25,8 @@ struct sdlffcd_AppContext {
     uint32_t wake_event_type;
     bool running;
     uint8_t _pad[3];
+    sdlffcd_KeyCallback key_callback;
+    void* key_callback_userdata;
 };
 
 struct sdlffcd_VideoContext {

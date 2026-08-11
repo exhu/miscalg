@@ -45,18 +45,43 @@ bool sdlffcd_app_is_running(const sdlffcd_AppContext* app) {
     return app && app->running;
 }
 
+void sdlffcd_app_stop(sdlffcd_AppContext* app) {
+    if (app) {
+        app->running = false;
+    }
+}
+
+void sdlffcd_app_set_key_callback(sdlffcd_AppContext* app, sdlffcd_KeyCallback cb, void* userdata) {
+    if (!app) return;
+    app->key_callback = cb;
+    app->key_callback_userdata = userdata;
+}
+
+static void process_single_event(sdlffcd_AppContext* app, const SDL_Event* event) {
+    if (!app || !event) return;
+    if (event->type == SDL_EVENT_QUIT) {
+        app->running = false;
+    } else if (event->type == SDL_EVENT_KEY_DOWN) {
+        if (app->key_callback) {
+            app->key_callback(app->key_callback_userdata, (uint32_t)event->key.key);
+        }
+    }
+}
+
+void sdlffcd_app_poll_events(sdlffcd_AppContext* app) {
+    if (!app) return;
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        process_single_event(app, &event);
+    }
+}
+
 void sdlffcd_app_wait_events(sdlffcd_AppContext* app) {
     if (!app) return;
     SDL_Event event;
     if (SDL_WaitEvent(&event)) {
         do {
-            if (event.type == SDL_EVENT_QUIT) {
-                app->running = false;
-            } else if (event.type == SDL_EVENT_KEY_DOWN) {
-                if (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_Q) {
-                    app->running = false;
-                }
-            }
+            process_single_event(app, &event);
         } while (SDL_PollEvent(&event));
     }
 }

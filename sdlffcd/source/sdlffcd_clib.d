@@ -2,8 +2,19 @@ extern(C):
 
 struct sdlffcd_AppContext;
 
+enum sdlffcd_Key : uint {
+    SDLFFCD_KEY_UNKNOWN = 0,
+    SDLFFCD_KEY_ESCAPE = 27,
+    SDLFFCD_KEY_Q = 'q'
+}
+
+alias sdlffcd_KeyCallback = void function(void* userdata, uint key);
+
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height);
 bool sdlffcd_app_is_running(const sdlffcd_AppContext* app);
+void sdlffcd_app_stop(sdlffcd_AppContext* app);
+void sdlffcd_app_set_key_callback(sdlffcd_AppContext* app, sdlffcd_KeyCallback cb, void* userdata);
+void sdlffcd_app_poll_events(sdlffcd_AppContext* app);
 void sdlffcd_app_wait_events(sdlffcd_AppContext* app);
 bool sdlffcd_app_wake(sdlffcd_AppContext* app);
 void sdlffcd_app_render(sdlffcd_AppContext* app);
