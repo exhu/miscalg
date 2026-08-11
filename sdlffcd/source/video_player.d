@@ -8,11 +8,38 @@ import core.thread;
 import sdlffcd_clib;
 import frame_ring_buffer;
 
+enum PlayerStatus {
+    error,
+    videoEnd,
+    updateAgain
+}
+
+struct PlayerUpdateState {
+    PlayerStatus status;
+    int nextUpdateMs;
+
+    @property bool isError() const { return status == PlayerStatus.error; }
+    @property bool isVideoEnd() const { return status == PlayerStatus.videoEnd; }
+    @property bool isUpdateAgain() const { return status == PlayerStatus.updateAgain; }
+
+    static PlayerUpdateState updateAgain(int nextUpdateMs = 0) {
+        return PlayerUpdateState(PlayerStatus.updateAgain, nextUpdateMs);
+    }
+
+    static PlayerUpdateState videoEnd() {
+        return PlayerUpdateState(PlayerStatus.videoEnd, 0);
+    }
+
+    static PlayerUpdateState error() {
+        return PlayerUpdateState(PlayerStatus.error, 0);
+    }
+}
+
 /**
  * Non-blocking video player designed to run safely within a main event loop.
  * Does NOT call sdlffcd_app_poll_events or sdlffcd_app_wait_events.
  */
-class VideoPlayer {
+final class VideoPlayer {
     private sdlffcd_VideoContext* vctx;
     private sdlffcd_MediaInfo mediaInfo;
     private FrameRingBuffer ringBuffer;
@@ -110,30 +137,33 @@ class VideoPlayer {
 
     /**
      * Non-blocking update method. Call once per main event loop iteration.
-     * Returns true while video is actively playing / paused, or false on EOF/Error/Closed.
+     * Returns PlayerUpdateState: error, videoEnd, or updateAgain with next delay in milliseconds.
      */
-    bool update(sdlffcd_AppContext* app) {
-        if (!loaded || app is null) return false;
+    PlayerUpdateState update(sdlffcd_AppContext* app) {
+        if (!loaded || app is null) return PlayerUpdateState.error();
 
         if (paused) {
-            return true; // Active, but paused
+            return PlayerUpdateState.updateAgain(-1);
         }
 
         if (!slotReady) {
             if (ringBuffer.pop(renderSlot)) {
                 slotReady = true;
             } else {
-                return true; // Waiting for producer thread
+                if (decoderThread !is null && !decoderThread.isRunning) {
+                    return PlayerUpdateState.videoEnd();
+                }
+                return PlayerUpdateState.updateAgain(1);
             }
         }
 
         if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF) {
             writeln("VideoPlayer: Reached end of video stream.");
-            return false;
+            return PlayerUpdateState.videoEnd();
         }
         if (renderSlot.status != sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
             stderr.writeln("VideoPlayer: Error decoding frame.");
-            return false;
+            return PlayerUpdateState.error();
         }
 
         if (!playbackStarted) {
@@ -149,15 +179,38 @@ class VideoPlayer {
         long targetMs = cast(long)(framePts * 1000.0);
         long elapsedMs = (MonoTime.currTime - playbackStartTime).total!"msecs"();
 
-        if (elapsedMs >= targetMs) {
-            frameCount++;
-            currentPts = framePts;
-
-            sdlffcd_video_render_frame(app, vctx, &renderSlot.frame);
-            slotReady = false; // Ready for next frame
+        if (elapsedMs < targetMs) {
+            long remainingMs = targetMs - elapsedMs;
+            if (remainingMs < 0) remainingMs = 0;
+            return PlayerUpdateState.updateAgain(cast(int)remainingMs);
         }
 
-        return true;
+        // Render ready frame
+        frameCount++;
+        currentPts = framePts;
+        sdlffcd_video_render_frame(app, vctx, &renderSlot.frame);
+        slotReady = false;
+
+        // Pre-fetch next slot to compute wait timeout for next iteration
+        if (ringBuffer.pop(renderSlot)) {
+            slotReady = true;
+            if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF ||
+                renderSlot.status != sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
+                return PlayerUpdateState.updateAgain(0);
+            }
+
+            double nextPts = renderSlot.frame.pts;
+            if (nextPts < 0.0 && mediaInfo.fps > 0) {
+                nextPts = cast(double)frameCount / mediaInfo.fps;
+            }
+            long nextTargetMs = cast(long)(nextPts * 1000.0);
+            long nextElapsedMs = (MonoTime.currTime - playbackStartTime).total!"msecs"();
+            long waitMs = nextTargetMs - nextElapsedMs;
+            if (waitMs < 0) waitMs = 0;
+            return PlayerUpdateState.updateAgain(cast(int)waitMs);
+        }
+
+        return PlayerUpdateState.updateAgain(1);
     }
 
     void pause() {
@@ -226,4 +279,22 @@ class VideoPlayer {
     void fastForward(double seconds = 5.0) {
         seekTo(currentPts + seconds);
     }
+}
+
+unittest {
+    auto stateAgain = PlayerUpdateState.updateAgain(33);
+    assert(stateAgain.isUpdateAgain);
+    assert(!stateAgain.isError);
+    assert(!stateAgain.isVideoEnd);
+    assert(stateAgain.nextUpdateMs == 33);
+
+    auto stateEnd = PlayerUpdateState.videoEnd();
+    assert(stateEnd.isVideoEnd);
+    assert(!stateEnd.isError);
+    assert(!stateEnd.isUpdateAgain);
+
+    auto stateErr = PlayerUpdateState.error();
+    assert(stateErr.isError);
+    assert(!stateErr.isVideoEnd);
+    assert(!stateErr.isUpdateAgain);
 }

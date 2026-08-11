@@ -69,17 +69,21 @@ void main(string[] args)
 
     while (sdlffcd_app_is_running(appContext.app))
     {
-        sdlffcd_app_poll_events(appContext.app);
-        if (!sdlffcd_app_is_running(appContext.app)) break;
-
-        bool active = appContext.player.update(appContext.app);
-        if (!active && !appContext.player.isPaused())
+        auto state = appContext.player.update(appContext.app);
+        if (state.isVideoEnd)
         {
-            writeln("Playback finished or stopped.");
+            writeln("Playback finished (end of video stream).");
+            break;
+        }
+        if (state.isError)
+        {
+            stderr.writeln("Playback stopped due to error.");
             break;
         }
 
-        Thread.sleep(dur!"msecs"(1));
+        if (!sdlffcd_app_is_running(appContext.app)) break;
+
+        sdlffcd_app_wait_events(appContext.app, state.nextUpdateMs);
     }
 
     writeln("Exited cleanly.");

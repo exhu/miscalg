@@ -33,8 +33,8 @@ void sdlffcd_app_set_key_callback(sdlffcd_AppContext* app, sdlffcd_KeyCallback c
 /// Poll and process all pending SDL events non-blocking.
 void sdlffcd_app_poll_events(sdlffcd_AppContext* app);
 
-/// Wait for next event and process all queued events (blocking when idle to save CPU).
-void sdlffcd_app_wait_events(sdlffcd_AppContext* app);
+/// Wait for next event with timeout in ms and process all queued events (timeout_ms < 0 waits indefinitely).
+void sdlffcd_app_wait_events(sdlffcd_AppContext* app, int timeout_ms);
 
 /// Wake main event loop by pushing custom registered SDL event.
 bool sdlffcd_app_wake(sdlffcd_AppContext* app);

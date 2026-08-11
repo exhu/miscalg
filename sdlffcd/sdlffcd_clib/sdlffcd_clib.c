@@ -81,10 +81,18 @@ void sdlffcd_app_poll_events(sdlffcd_AppContext* app) {
     }
 }
 
-void sdlffcd_app_wait_events(sdlffcd_AppContext* app) {
+void sdlffcd_app_wait_events(sdlffcd_AppContext* app, int timeout_ms) {
     if (!app) return;
     SDL_Event event;
-    if (SDL_WaitEvent(&event)) {
+    bool status;
+    if (timeout_ms < 0) {
+        status = SDL_WaitEvent(&event);
+    } else if (timeout_ms == 0) {
+        status = SDL_PollEvent(&event);
+    } else {
+        status = SDL_WaitEventTimeout(&event, timeout_ms);
+    }
+    if (status) {
         do {
             process_single_event(app, &event);
         } while (SDL_PollEvent(&event));
