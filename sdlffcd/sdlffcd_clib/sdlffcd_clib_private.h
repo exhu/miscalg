@@ -8,6 +8,7 @@
 #endif
 
 #include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
@@ -22,11 +23,20 @@
 struct sdlffcd_AppContext {
     SDL_Window* window;
     SDL_Renderer* renderer;
+    TTF_TextEngine* text_engine;
     uint32_t wake_event_type;
     bool running;
     uint8_t _pad[3];
     sdlffcd_KeyCallback key_callback;
     void* key_callback_userdata;
+};
+
+struct sdlffcd_Font {
+    TTF_Font* ttf_font;
+};
+
+struct sdlffcd_Text {
+    TTF_Text* ttf_text;
 };
 
 struct sdlffcd_VideoContext {

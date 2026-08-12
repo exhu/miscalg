@@ -38,6 +38,7 @@ m_dep = cc.find_library('m', required : true)
 
 # MAIN
 deps = [sdl_dep,
+        sdlttf_dep,
         libavutil_dep,
         libavcodec_dep,
         libavformat_dep,

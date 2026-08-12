@@ -68,6 +68,22 @@ bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds);
 bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const(sdlffcd_VideoFrame)* frame);
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
 
+/* --- Text API --- */
+
+struct sdlffcd_Font;
+struct sdlffcd_Text;
+
+void sdlffcd_app_present(sdlffcd_AppContext* app);
+sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize);
+void sdlffcd_font_close(sdlffcd_Font* font);
+sdlffcd_Text* sdlffcd_text_create(sdlffcd_AppContext* app, sdlffcd_Font* font, const char* text);
+bool sdlffcd_text_set_string(sdlffcd_Text* text_obj, const char* new_text);
+bool sdlffcd_text_set_color(sdlffcd_Text* text_obj, ubyte r, ubyte g, ubyte b, ubyte a);
+bool sdlffcd_text_get_size(const sdlffcd_Text* text_obj, int* out_w, int* out_h);
+bool sdlffcd_text_draw(sdlffcd_Text* text_obj, float x, float y);
+bool sdlffcd_text_draw_with_bg(sdlffcd_AppContext* app, sdlffcd_Text* text_obj, float x, float y, ubyte bg_r, ubyte bg_g, ubyte bg_b, ubyte bg_a, float padding);
+void sdlffcd_text_destroy(sdlffcd_Text* text_obj);
+
 extern(D) unittest
 {
     assert(sdlffcd_Key.SDLFFCD_KEY_UNKNOWN == 0);
@@ -79,5 +95,14 @@ extern(D) unittest
     assert(sdlffcd_Key.SDLFFCD_KEY_F == 'f');
     assert(sdlffcd_Key.SDLFFCD_KEY_LEFT == 1073741904);
     assert(sdlffcd_Key.SDLFFCD_KEY_RIGHT == 1073741903);
+
+    // Verify null handling for text API functions
+    assert(sdlffcd_font_open(null, 12.0f) is null);
+    assert(sdlffcd_text_create(null, null, null) is null);
+    assert(!sdlffcd_text_set_string(null, null));
+    assert(!sdlffcd_text_set_color(null, 255, 255, 255, 255));
+    assert(!sdlffcd_text_get_size(null, null, null));
+    assert(!sdlffcd_text_draw(null, 0, 0));
+    assert(!sdlffcd_text_draw_with_bg(null, null, 0, 0, 0, 0, 0, 0, 0));
 }
 

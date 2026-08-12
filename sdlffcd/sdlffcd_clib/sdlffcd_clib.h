@@ -121,3 +121,39 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
 
 /// Close video context and free all allocated FFmpeg resources.
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
+
+/* --- Text API --- */
+
+typedef struct sdlffcd_Font sdlffcd_Font;
+typedef struct sdlffcd_Text sdlffcd_Text;
+
+/// Present current renderer frame.
+void sdlffcd_app_present(sdlffcd_AppContext* app);
+
+/// Open font from file path at size in points. Returns NULL on failure.
+sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize);
+
+/// Close font resource.
+void sdlffcd_font_close(sdlffcd_Font* font);
+
+/// Create reusable text object using app renderer text engine. Returns NULL on failure.
+sdlffcd_Text* sdlffcd_text_create(sdlffcd_AppContext* app, sdlffcd_Font* font, const char* text);
+
+/// Update string content of an existing text object, reusing memory and engine textures.
+bool sdlffcd_text_set_string(sdlffcd_Text* text_obj, const char* new_text);
+
+/// Set text ink RGBA color (0-255 range).
+bool sdlffcd_text_set_color(sdlffcd_Text* text_obj, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+
+/// Query text object size in pixels.
+bool sdlffcd_text_get_size(const sdlffcd_Text* text_obj, int* out_w, int* out_h);
+
+/// Render text object at (x, y) coordinates.
+bool sdlffcd_text_draw(sdlffcd_Text* text_obj, float x, float y);
+
+/// Render text object at (x, y) coordinates with a filled solid background rectangle.
+bool sdlffcd_text_draw_with_bg(sdlffcd_AppContext* app, sdlffcd_Text* text_obj, float x, float y, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b, uint8_t bg_a, float padding);
+
+/// Destroy text object and free associated resources.
+void sdlffcd_text_destroy(sdlffcd_Text* text_obj);
+

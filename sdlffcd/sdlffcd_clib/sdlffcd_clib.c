@@ -33,6 +33,26 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
         return NULL;
     }
 
+    if (!TTF_Init()) {
+        fprintf(stderr, "Failed to initialize SDL_ttf: %s\n", SDL_GetError());
+        SDL_DestroyRenderer(app->renderer);
+        SDL_DestroyWindow(app->window);
+        free(app);
+        SDL_Quit();
+        return NULL;
+    }
+
+    app->text_engine = TTF_CreateRendererTextEngine(app->renderer);
+    if (!app->text_engine) {
+        fprintf(stderr, "Failed to create renderer text engine: %s\n", SDL_GetError());
+        TTF_Quit();
+        SDL_DestroyRenderer(app->renderer);
+        SDL_DestroyWindow(app->window);
+        free(app);
+        SDL_Quit();
+        return NULL;
+    }
+
     app->running = true;
     app->wake_event_type = SDL_RegisterEvents(1);
     if (app->wake_event_type == (uint32_t)-1) {
@@ -116,6 +136,11 @@ void sdlffcd_app_render(sdlffcd_AppContext* app) {
 
 void sdlffcd_app_shutdown(sdlffcd_AppContext* app) {
     if (!app) return;
+    if (app->text_engine) {
+        TTF_DestroyRendererTextEngine(app->text_engine);
+        app->text_engine = NULL;
+    }
+    TTF_Quit();
     if (app->renderer) SDL_DestroyRenderer(app->renderer);
     if (app->window) SDL_DestroyWindow(app->window);
     SDL_Quit();
@@ -340,7 +365,6 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
     SDL_RenderTexture(app->renderer, vctx->texture, NULL, NULL);
-    SDL_RenderPresent(app->renderer);
     return true;
 }
 
@@ -363,4 +387,96 @@ void sdlffcd_video_close(sdlffcd_VideoContext* vctx) {
     if (vctx->audio_codec_ctx) avcodec_free_context(&vctx->audio_codec_ctx);
     if (vctx->fmt_ctx) avformat_close_input(&vctx->fmt_ctx);
     free(vctx);
+}
+
+/* --- Text API Implementation --- */
+
+void sdlffcd_app_present(sdlffcd_AppContext* app) {
+    if (!app || !app->renderer) return;
+    SDL_RenderPresent(app->renderer);
+}
+
+sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize) {
+    if (!filepath || ptsize <= 0.0f) return NULL;
+    TTF_Font* ttf_font = TTF_OpenFont(filepath, ptsize);
+    if (!ttf_font) {
+        fprintf(stderr, "Failed to open font %s: %s\n", filepath, SDL_GetError());
+        return NULL;
+    }
+    sdlffcd_Font* font = (sdlffcd_Font*)calloc(1, sizeof(sdlffcd_Font));
+    if (!font) {
+        TTF_CloseFont(ttf_font);
+        return NULL;
+    }
+    font->ttf_font = ttf_font;
+    return font;
+}
+
+void sdlffcd_font_close(sdlffcd_Font* font) {
+    if (!font) return;
+    if (font->ttf_font) {
+        TTF_CloseFont(font->ttf_font);
+        font->ttf_font = NULL;
+    }
+    free(font);
+}
+
+sdlffcd_Text* sdlffcd_text_create(sdlffcd_AppContext* app, sdlffcd_Font* font, const char* text) {
+    if (!app || !app->text_engine || !font || !font->ttf_font || !text) return NULL;
+    TTF_Text* ttf_text = TTF_CreateText(app->text_engine, font->ttf_font, text, 0);
+    if (!ttf_text) {
+        fprintf(stderr, "Failed to create text object: %s\n", SDL_GetError());
+        return NULL;
+    }
+    sdlffcd_Text* text_obj = (sdlffcd_Text*)calloc(1, sizeof(sdlffcd_Text));
+    if (!text_obj) {
+        TTF_DestroyText(ttf_text);
+        return NULL;
+    }
+    text_obj->ttf_text = ttf_text;
+    return text_obj;
+}
+
+bool sdlffcd_text_set_string(sdlffcd_Text* text_obj, const char* new_text) {
+    if (!text_obj || !text_obj->ttf_text || !new_text) return false;
+    return TTF_SetTextString(text_obj->ttf_text, new_text, 0);
+}
+
+bool sdlffcd_text_set_color(sdlffcd_Text* text_obj, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    if (!text_obj || !text_obj->ttf_text) return false;
+    return TTF_SetTextColor(text_obj->ttf_text, r, g, b, a);
+}
+
+bool sdlffcd_text_get_size(const sdlffcd_Text* text_obj, int* out_w, int* out_h) {
+    if (!text_obj || !text_obj->ttf_text) return false;
+    return TTF_GetTextSize(text_obj->ttf_text, out_w, out_h);
+}
+
+bool sdlffcd_text_draw(sdlffcd_Text* text_obj, float x, float y) {
+    if (!text_obj || !text_obj->ttf_text) return false;
+    return TTF_DrawRendererText(text_obj->ttf_text, x, y);
+}
+
+bool sdlffcd_text_draw_with_bg(sdlffcd_AppContext* app, sdlffcd_Text* text_obj, float x, float y, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b, uint8_t bg_a, float padding) {
+    if (!app || !app->renderer || !text_obj || !text_obj->ttf_text) return false;
+    int w = 0, h = 0;
+    if (TTF_GetTextSize(text_obj->ttf_text, &w, &h)) {
+        SDL_FRect bg_rect;
+        bg_rect.x = x - padding;
+        bg_rect.y = y - padding;
+        bg_rect.w = (float)w + 2.0f * padding;
+        bg_rect.h = (float)h + 2.0f * padding;
+        SDL_SetRenderDrawColor(app->renderer, bg_r, bg_g, bg_b, bg_a);
+        SDL_RenderFillRect(app->renderer, &bg_rect);
+    }
+    return TTF_DrawRendererText(text_obj->ttf_text, x, y);
+}
+
+void sdlffcd_text_destroy(sdlffcd_Text* text_obj) {
+    if (!text_obj) return;
+    if (text_obj->ttf_text) {
+        TTF_DestroyText(text_obj->ttf_text);
+        text_obj->ttf_text = NULL;
+    }
+    free(text_obj);
 }

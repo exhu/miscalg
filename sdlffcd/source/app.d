@@ -81,6 +81,11 @@ void main(string[] args)
             break;
         }
 
+        if (state.frameRendered)
+        {
+            appContext.renderTimestamp();
+        }
+
         if (!sdlffcd_app_is_running(appContext.app)) break;
 
         sdlffcd_app_wait_events(appContext.app, state.nextUpdateMs);

@@ -17,21 +17,22 @@ enum PlayerStatus {
 struct PlayerUpdateState {
     PlayerStatus status;
     int nextUpdateMs;
+    bool frameRendered;
 
     @property bool isError() const { return status == PlayerStatus.error; }
     @property bool isVideoEnd() const { return status == PlayerStatus.videoEnd; }
     @property bool isUpdateAgain() const { return status == PlayerStatus.updateAgain; }
 
-    static PlayerUpdateState updateAgain(int nextUpdateMs = 0) {
-        return PlayerUpdateState(PlayerStatus.updateAgain, nextUpdateMs);
+    static PlayerUpdateState updateAgain(int nextUpdateMs = 0, bool frameRendered = false) {
+        return PlayerUpdateState(PlayerStatus.updateAgain, nextUpdateMs, frameRendered);
     }
 
     static PlayerUpdateState videoEnd() {
-        return PlayerUpdateState(PlayerStatus.videoEnd, 0);
+        return PlayerUpdateState(PlayerStatus.videoEnd, 0, false);
     }
 
     static PlayerUpdateState error() {
-        return PlayerUpdateState(PlayerStatus.error, 0);
+        return PlayerUpdateState(PlayerStatus.error, 0, false);
     }
 }
 
@@ -196,7 +197,7 @@ final class VideoPlayer {
             slotReady = true;
             if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF ||
                 renderSlot.status != sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
-                return PlayerUpdateState.updateAgain(0);
+                return PlayerUpdateState.updateAgain(0, true);
             }
 
             double nextPts = renderSlot.frame.pts;
@@ -207,10 +208,10 @@ final class VideoPlayer {
             long nextElapsedMs = (MonoTime.currTime - playbackStartTime).total!"msecs"();
             long waitMs = nextTargetMs - nextElapsedMs;
             if (waitMs < 0) waitMs = 0;
-            return PlayerUpdateState.updateAgain(cast(int)waitMs);
+            return PlayerUpdateState.updateAgain(cast(int)waitMs, true);
         }
 
-        return PlayerUpdateState.updateAgain(1);
+        return PlayerUpdateState.updateAgain(1, true);
     }
 
     void pause() {
