@@ -4,6 +4,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static bool SDLCALL window_event_watch(void* userdata, SDL_Event* event) {
+    sdlffcd_AppContext* app = (sdlffcd_AppContext*)userdata;
+    if (!app || !event) return true;
+    if (event->type == SDL_EVENT_WINDOW_RESIZED ||
+        event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
+        event->type == SDL_EVENT_WINDOW_EXPOSED) {
+        app->need_redraw = true;
+    }
+    return true;
+}
+
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
@@ -58,6 +69,8 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
     if (app->wake_event_type == (uint32_t)-1) {
         fprintf(stderr, "Failed to register custom wake event: %s\n", SDL_GetError());
     }
+
+    SDL_AddEventWatch(window_event_watch, app);
     return app;
 }
 
@@ -81,6 +94,10 @@ static void process_single_event(sdlffcd_AppContext* app, const SDL_Event* event
     if (!app || !event) return;
     if (event->type == SDL_EVENT_QUIT) {
         app->running = false;
+    } else if (event->type == SDL_EVENT_WINDOW_RESIZED ||
+               event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
+               event->type == SDL_EVENT_WINDOW_EXPOSED) {
+        app->need_redraw = true;
     } else if (event->type == SDL_EVENT_KEY_DOWN) {
         if (app->key_callback) {
             uint32_t key = (uint32_t)event->key.key;
@@ -136,6 +153,7 @@ void sdlffcd_app_render(sdlffcd_AppContext* app) {
 
 void sdlffcd_app_shutdown(sdlffcd_AppContext* app) {
     if (!app) return;
+    SDL_RemoveEventWatch(window_event_watch, app);
     if (app->text_engine) {
         TTF_DestroyRendererTextEngine(app->text_engine);
         app->text_engine = NULL;
@@ -145,6 +163,23 @@ void sdlffcd_app_shutdown(sdlffcd_AppContext* app) {
     if (app->window) SDL_DestroyWindow(app->window);
     SDL_Quit();
     free(app);
+}
+
+bool sdlffcd_app_need_redraw(const sdlffcd_AppContext* app) {
+    return app && app->need_redraw;
+}
+
+bool sdlffcd_app_check_and_clear_redraw(sdlffcd_AppContext* app) {
+    if (!app) return false;
+    bool req = app->need_redraw;
+    app->need_redraw = false;
+    return req;
+}
+
+void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw) {
+    if (app) {
+        app->need_redraw = need_redraw;
+    }
 }
 
 /* --- Video API Implementation --- */
@@ -365,6 +400,16 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
     SDL_RenderTexture(app->renderer, vctx->texture, NULL, NULL);
+    return true;
+}
+
+bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx) {
+    if (!app || !app->renderer || !vctx) return false;
+    SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
+    SDL_RenderClear(app->renderer);
+    if (vctx->texture) {
+        SDL_RenderTexture(app->renderer, vctx->texture, NULL, NULL);
+    }
     return true;
 }
 

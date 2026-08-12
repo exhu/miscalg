@@ -45,6 +45,15 @@ void sdlffcd_app_render(sdlffcd_AppContext* app);
 /// Destroy window/renderer and quit SDL3.
 void sdlffcd_app_shutdown(sdlffcd_AppContext* app);
 
+/// Check if window redraw is requested.
+bool sdlffcd_app_need_redraw(const sdlffcd_AppContext* app);
+
+/// Check if window redraw is requested, and clear the flag if set.
+bool sdlffcd_app_check_and_clear_redraw(sdlffcd_AppContext* app);
+
+/// Set or clear the window redraw requested flag.
+void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw);
+
 /* --- Video API --- */
 
 typedef struct sdlffcd_VideoContext sdlffcd_VideoContext;
@@ -118,6 +127,9 @@ bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds);
  * @return true on successful render, false on error.
  */
 bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const sdlffcd_VideoFrame* frame);
+
+/// Redraw the last rendered video frame texture to the current renderer viewport.
+bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx);
 
 /// Close video context and free all allocated FFmpeg resources.
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);

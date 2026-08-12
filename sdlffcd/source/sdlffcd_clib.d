@@ -25,6 +25,9 @@ void sdlffcd_app_wait_events(sdlffcd_AppContext* app, int timeout_ms);
 bool sdlffcd_app_wake(sdlffcd_AppContext* app);
 void sdlffcd_app_render(sdlffcd_AppContext* app);
 void sdlffcd_app_shutdown(sdlffcd_AppContext* app);
+bool sdlffcd_app_need_redraw(const sdlffcd_AppContext* app);
+bool sdlffcd_app_check_and_clear_redraw(sdlffcd_AppContext* app);
+void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw);
 
 /* --- Video API --- */
 
@@ -66,6 +69,7 @@ bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_Medi
 sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame);
 bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds);
 bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const(sdlffcd_VideoFrame)* frame);
+bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx);
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
 
 /* --- Text API --- */
@@ -95,6 +99,11 @@ extern(D) unittest
     assert(sdlffcd_Key.SDLFFCD_KEY_F == 'f');
     assert(sdlffcd_Key.SDLFFCD_KEY_LEFT == 1073741904);
     assert(sdlffcd_Key.SDLFFCD_KEY_RIGHT == 1073741903);
+
+    assert(!sdlffcd_app_need_redraw(null));
+    assert(!sdlffcd_app_check_and_clear_redraw(null));
+    sdlffcd_app_set_need_redraw(null, true);
+    assert(!sdlffcd_video_redraw(null, null));
 
     // Verify null handling for text API functions
     assert(sdlffcd_font_open(null, 12.0f) is null);

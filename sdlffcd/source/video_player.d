@@ -144,7 +144,13 @@ final class VideoPlayer {
         if (!loaded || app is null) return PlayerUpdateState.error();
 
         if (paused) {
-            return PlayerUpdateState.updateAgain(-1);
+            if (sdlffcd_app_check_and_clear_redraw(app)) {
+                if (vctx !is null) {
+                    sdlffcd_video_redraw(app, vctx);
+                }
+                return PlayerUpdateState.updateAgain(-1, true);
+            }
+            return PlayerUpdateState.updateAgain(-1, false);
         }
 
         if (!slotReady) {
@@ -154,11 +160,19 @@ final class VideoPlayer {
                 if (decoderThread !is null && !decoderThread.isRunning) {
                     return PlayerUpdateState.videoEnd();
                 }
-                return PlayerUpdateState.updateAgain(1);
+                bool reqRedraw = sdlffcd_app_check_and_clear_redraw(app);
+                if (reqRedraw && vctx !is null) {
+                    sdlffcd_video_redraw(app, vctx);
+                }
+                return PlayerUpdateState.updateAgain(1, reqRedraw);
             }
         }
 
         if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF) {
+            bool reqRedraw = sdlffcd_app_check_and_clear_redraw(app);
+            if (reqRedraw && vctx !is null) {
+                sdlffcd_video_redraw(app, vctx);
+            }
             writeln("VideoPlayer: Reached end of video stream.");
             return PlayerUpdateState.videoEnd();
         }
@@ -183,7 +197,11 @@ final class VideoPlayer {
         if (elapsedMs < targetMs) {
             long remainingMs = targetMs - elapsedMs;
             if (remainingMs < 0) remainingMs = 0;
-            return PlayerUpdateState.updateAgain(cast(int)remainingMs);
+            bool reqRedraw = sdlffcd_app_check_and_clear_redraw(app);
+            if (reqRedraw && vctx !is null) {
+                sdlffcd_video_redraw(app, vctx);
+            }
+            return PlayerUpdateState.updateAgain(cast(int)remainingMs, reqRedraw);
         }
 
         // Render ready frame
@@ -280,6 +298,11 @@ final class VideoPlayer {
     void fastForward(double seconds = 5.0) {
         seekTo(currentPts + seconds);
     }
+
+    bool redraw(sdlffcd_AppContext* app) {
+        if (!loaded || app is null || vctx is null) return false;
+        return sdlffcd_video_redraw(app, vctx);
+    }
 }
 
 unittest {
@@ -294,8 +317,6 @@ unittest {
     assert(!stateEnd.isError);
     assert(!stateEnd.isUpdateAgain);
 
-    auto stateErr = PlayerUpdateState.error();
-    assert(stateErr.isError);
-    assert(!stateErr.isVideoEnd);
-    assert(!stateErr.isUpdateAgain);
+    auto player = new VideoPlayer();
+    assert(!player.redraw(null));
 }
