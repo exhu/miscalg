@@ -1,10 +1,10 @@
-module app_context;
+module sdlffcd.app_context;
 
 import std.stdio;
 import std.string;
 import std.format;
-import sdlffcd_clib;
-import video_player;
+import sdlffcd.sdlffcd_clib;
+import sdlffcd.video_player;
 
 struct AppContext
 {

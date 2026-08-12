@@ -1,12 +1,12 @@
-module video_player;
+module sdlffcd.video_player;
 
 import std.stdio;
 import std.string;
 import std.datetime;
 import core.thread;
 
-import sdlffcd_clib;
-import frame_ring_buffer;
+import sdlffcd.sdlffcd_clib;
+import sdlffcd.frame_ring_buffer;
 
 enum PlayerStatus {
     error,

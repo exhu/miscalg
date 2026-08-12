@@ -1,11 +1,14 @@
+module sdlffcd.app;
+
 import std.stdio;
 import std.string;
 import core.thread;
 import std.datetime;
 
-import sdlffcd_clib;
-import video_player;
-import app_context;
+import sdlffcd.sdlffcd_clib;
+import sdlffcd.video_player;
+import sdlffcd.app_context;
+import sdlffcd.ui_view_model;
 
 extern(C) void handleKeyPress(void* userdata, uint key)
 {

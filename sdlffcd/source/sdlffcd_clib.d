@@ -1,3 +1,4 @@
+module sdlffcd.sdlffcd_clib;
 extern(C):
 
 struct sdlffcd_AppContext;
@@ -114,4 +115,3 @@ extern(D) unittest
     assert(!sdlffcd_text_draw(null, 0, 0));
     assert(!sdlffcd_text_draw_with_bg(null, null, 0, 0, 0, 0, 0, 0, 0));
 }
-

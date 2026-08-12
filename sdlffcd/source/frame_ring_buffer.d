@@ -1,9 +1,9 @@
-module frame_ring_buffer;
+module sdlffcd.frame_ring_buffer;
 
 import core.sync.mutex;
 import core.sync.condition;
 import std.algorithm.mutation : swap;
-import sdlffcd_clib;
+import sdlffcd.sdlffcd_clib;
 
 /// Default capacity for shared decoded frame ring buffer (D camelCase convention)
 enum ringBufferCapacity = 8;
