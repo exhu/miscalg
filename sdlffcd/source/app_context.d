@@ -14,7 +14,7 @@ struct AppContext
     sdlffcd_Font* timestampFont;
     sdlffcd_Text* timestampText;
 
-    bool init(string title = "sdlffcd - Video Player", int width = 800, int height = 600)
+    bool initialize(string title = "sdlffcd - Video Player", int width = 800, int height = 600)
     {
         writeln("Initializing SDL application...");
         app = sdlffcd_app_init(toStringz(title), width, height);
@@ -64,7 +64,7 @@ struct AppContext
         sdlffcd_app_present(app);
     }
 
-    void close()
+    void destroy()
     {
         if (timestampText !is null)
         {

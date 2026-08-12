@@ -50,11 +50,11 @@ void main(string[] args)
     AppContext appContext;
     string filename = (args.length > 1) ? args[1] : "samplevideo.mp4";
 
-    if (!appContext.init("sdlffcd - Video Player", 800, 600))
+    if (!appContext.initialize("sdlffcd - Video Player", 800, 600))
     {
         return;
     }
-    scope(exit) appContext.close();
+    scope(exit) appContext.destroy();
 
     sdlffcd_app_set_key_callback(appContext.app, &handleKeyPress, &appContext);
 
