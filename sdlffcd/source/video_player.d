@@ -136,6 +136,31 @@ final class VideoPlayer {
         }
     }
 
+    /// Check pending redraw flag and redraw current vctx surface if set.
+    /// Returns true if a redraw was issued.
+    private bool checkRedraw(sdlffcd_AppContext* app) {
+        if (sdlffcd_app_check_and_clear_redraw(app)) {
+            if (vctx !is null) {
+                sdlffcd_video_redraw(app, vctx);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /// Return effective PTS, synthesising from frameCount when raw pts is negative.
+    private double resolvePts(double rawPts) const {
+        if (rawPts < 0.0 && mediaInfo.fps > 0) {
+            return cast(double)frameCount / mediaInfo.fps;
+        }
+        return rawPts;
+    }
+
+    /// Return elapsed time in milliseconds since playback started.
+    private long elapsedMs() const {
+        return (MonoTime.currTime - playbackStartTime).total!"msecs"();
+    }
+
     /**
      * Non-blocking update method. Call once per main event loop iteration.
      * Returns PlayerUpdateState: error, videoEnd, or updateAgain with next delay in milliseconds.
@@ -143,36 +168,32 @@ final class VideoPlayer {
     PlayerUpdateState update(sdlffcd_AppContext* app) {
         if (!loaded || app is null) return PlayerUpdateState.error();
 
-        if (paused) {
-            if (sdlffcd_app_check_and_clear_redraw(app)) {
-                if (vctx !is null) {
-                    sdlffcd_video_redraw(app, vctx);
-                }
-                return PlayerUpdateState.updateAgain(-1, true);
-            }
-            return PlayerUpdateState.updateAgain(-1, false);
-        }
+        if (paused) return handlePaused(app);
+        if (!slotReady) return handleBufferWait(app);
+        return handlePlayback(app);
+    }
 
-        if (!slotReady) {
-            if (ringBuffer.pop(renderSlot)) {
-                slotReady = true;
-            } else {
-                if (decoderThread !is null && !decoderThread.isRunning) {
-                    return PlayerUpdateState.videoEnd();
-                }
-                bool reqRedraw = sdlffcd_app_check_and_clear_redraw(app);
-                if (reqRedraw && vctx !is null) {
-                    sdlffcd_video_redraw(app, vctx);
-                }
-                return PlayerUpdateState.updateAgain(1, reqRedraw);
-            }
-        }
+    private PlayerUpdateState handlePaused(sdlffcd_AppContext* app) {
+        bool reqRedraw = checkRedraw(app);
+        return PlayerUpdateState.updateAgain(-1, reqRedraw);
+    }
 
+    private PlayerUpdateState handleBufferWait(sdlffcd_AppContext* app) {
+        if (ringBuffer.pop(renderSlot)) {
+            slotReady = true;
+            return handlePlayback(app);
+        } else {
+            if (!decoderThread.isRunning) {
+                return PlayerUpdateState.videoEnd();
+            }
+            bool reqRedraw = checkRedraw(app);
+            return PlayerUpdateState.updateAgain(1, reqRedraw);
+        }
+    }
+
+    private PlayerUpdateState handlePlayback(sdlffcd_AppContext* app) {
         if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF) {
-            bool reqRedraw = sdlffcd_app_check_and_clear_redraw(app);
-            if (reqRedraw && vctx !is null) {
-                sdlffcd_video_redraw(app, vctx);
-            }
+            bool reqRedraw = checkRedraw(app);
             writeln("VideoPlayer: Reached end of video stream.");
             return PlayerUpdateState.videoEnd();
         }
@@ -186,21 +207,14 @@ final class VideoPlayer {
             playbackStarted = true;
         }
 
-        double framePts = renderSlot.frame.pts;
-        if (framePts < 0.0 && mediaInfo.fps > 0) {
-            framePts = cast(double)frameCount / mediaInfo.fps;
-        }
-
+        double framePts = resolvePts(renderSlot.frame.pts);
         long targetMs = cast(long)(framePts * 1000.0);
-        long elapsedMs = (MonoTime.currTime - playbackStartTime).total!"msecs"();
+        long currElapsedMs = elapsedMs();
 
-        if (elapsedMs < targetMs) {
-            long remainingMs = targetMs - elapsedMs;
+        if (currElapsedMs < targetMs) {
+            long remainingMs = targetMs - currElapsedMs;
             if (remainingMs < 0) remainingMs = 0;
-            bool reqRedraw = sdlffcd_app_check_and_clear_redraw(app);
-            if (reqRedraw && vctx !is null) {
-                sdlffcd_video_redraw(app, vctx);
-            }
+            bool reqRedraw = checkRedraw(app);
             return PlayerUpdateState.updateAgain(cast(int)remainingMs, reqRedraw);
         }
 
@@ -210,20 +224,23 @@ final class VideoPlayer {
         sdlffcd_video_render_frame(app, vctx, &renderSlot.frame);
         slotReady = false;
 
+        return preFetchNext(app);
+    }
+
+    private PlayerUpdateState preFetchNext(sdlffcd_AppContext* app) {
         // Pre-fetch next slot to compute wait timeout for next iteration
         if (ringBuffer.pop(renderSlot)) {
             slotReady = true;
             if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF ||
                 renderSlot.status != sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
+                // Pre-fetched slot is EOF/error; return immediately so next
+                // update() loop iteration handles it without extra delay.
                 return PlayerUpdateState.updateAgain(0, true);
             }
 
-            double nextPts = renderSlot.frame.pts;
-            if (nextPts < 0.0 && mediaInfo.fps > 0) {
-                nextPts = cast(double)frameCount / mediaInfo.fps;
-            }
+            double nextPts = resolvePts(renderSlot.frame.pts);
             long nextTargetMs = cast(long)(nextPts * 1000.0);
-            long nextElapsedMs = (MonoTime.currTime - playbackStartTime).total!"msecs"();
+            long nextElapsedMs = elapsedMs();
             long waitMs = nextTargetMs - nextElapsedMs;
             if (waitMs < 0) waitMs = 0;
             return PlayerUpdateState.updateAgain(cast(int)waitMs, true);
@@ -255,11 +272,11 @@ final class VideoPlayer {
         else pause();
     }
 
-    bool isPaused() const {
+    @property bool isPaused() const {
         return paused;
     }
 
-    bool isLoaded() const {
+    @property bool isLoaded() const {
         return loaded;
     }
 
