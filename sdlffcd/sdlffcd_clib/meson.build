@@ -10,10 +10,12 @@ project('sdlffcd_clib', 'c',
 
 # DEPENDENCIES
 # sdl3 3.4.10, ffmpeg libs 6.1.1
+# SDL3_ttf-3.2.2
 
 # libsdl.org
 # prepend ~/.local/lib/pkgconfig to PKG_CONFIG_PATH before setup.
 sdl_dep = dependency('sdl3')
+sdlttf_dep = dependency('sdl3-ttf')
 
 # ffmpeg dependencies
 # libavutil -- common library shared between other ffmpeg libs

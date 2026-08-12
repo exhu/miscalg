@@ -16,7 +16,8 @@
 		"avformat",
 		"swscale",
 		"swresample",
-		"m"
+		"m",
+		"sdl3-ttf"
 	],
 	"preGenerateCommands": [
 		"export PKG_CONFIG_PATH=\"$HOME/.local/lib/pkgconfig:$PKG_CONFIG_PATH\" && if [ ! -d \"sdlffcd_clib/_build\" ]; then meson setup sdlffcd_clib/_build sdlffcd_clib; fi && meson compile -C sdlffcd_clib/_build"
