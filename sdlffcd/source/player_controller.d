@@ -83,6 +83,7 @@ struct PlayerController
     Status status;
     int nextUpdateMs;
   }
+
   UpdateResult update(ref AppContext appContext)
   {
     auto state = appContext.player.update(appContext.app);
@@ -99,6 +100,7 @@ struct PlayerController
 
     if (state.frameRendered)
     {
+      // TODO move renderTimestamp into View class via PlayerModel, ViewModel update
       appContext.renderTimestamp();
     }
 
@@ -112,10 +114,13 @@ struct PlayerController
     if (editModel.consumesUpdate())
     {
       dirty = true;
-      // TODO future edit features placeholder
+      // future edit features placeholder
     }
     if (dirty)
       view.update(viewModel);
+
+    if (!sdlffcd_app_is_running(appContext.app))
+      return UpdateResult(UpdateResult.Status.quit);
 
     return UpdateResult(UpdateResult.Status.callAgain, state.nextUpdateMs);
   }

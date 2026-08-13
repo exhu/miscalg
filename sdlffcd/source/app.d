@@ -57,9 +57,6 @@ void main(string[] args)
     if (result.status == PlayerController.UpdateResult.Status.quit)
       break;
 
-    if (!sdlffcd_app_is_running(appContext.app))
-      break;
-
     sdlffcd_app_wait_events(appContext.app, result.nextUpdateMs);
   }
 
