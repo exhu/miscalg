@@ -337,5 +337,7 @@ unittest {
     assert(!stateEnd.isUpdateAgain);
 
     auto player = new VideoPlayer();
+    assert(!player.isLoaded);
+    assert(!player.isPaused);
     assert(!player.redraw(null));
 }

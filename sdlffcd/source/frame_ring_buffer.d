@@ -215,4 +215,9 @@ unittest {
     assert(!rb.push(sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK, dummyFrame, 2));
     assert(rb.checkAndClearSeekRequest(targetPts));
     assert(targetPts == 10.0);
+
+    // Test clear()
+    assert(rb.push(sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK, dummyFrame, 3));
+    rb.clear();
+    assert(!rb.pop(slot));
 }

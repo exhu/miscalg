@@ -112,6 +112,7 @@ struct PlayerController
     {
       playerModel.timePosition = appContext.player.getCurrentPts();
       playerModel.timeDuration = appContext.player.getDuration();
+      playerModel.isPaused = appContext.player.isPaused;
     }
 
     bool dirty = false;
@@ -123,11 +124,6 @@ struct PlayerController
     if (viewModel.pollUpdate())
     {
       dirty = true;
-    }
-    if (editModel.pollUpdate())
-    {
-      dirty = true;
-      // TODO: implement edit features
     }
 
     if (state.frameRendered || dirty)

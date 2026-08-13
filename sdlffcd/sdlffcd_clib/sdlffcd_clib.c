@@ -101,7 +101,7 @@ static void process_single_event(sdlffcd_AppContext* app, const SDL_Event* event
     } else if (event->type == SDL_EVENT_KEY_DOWN) {
         if (app->key_callback) {
             uint32_t key = (uint32_t)event->key.key;
-            // TODO do we need this? there SDLK_A .. SDLKV_Z etc constants, so no case variation
+            /* Normalize uppercase character key codes to lowercase for consistent key mapping */
             if (key >= 'A' && key <= 'Z') {
                 key += ('a' - 'A');
             }
