@@ -48,14 +48,13 @@ struct View
     }
   }
 
-  void render(sdlffcd_AppContext* app, ref const(ViewModel) viewModel)
+  void renderTimeStamp(sdlffcd_AppContext* app, ref const(ViewModel) viewModel)
   {
     if (app is null || timestampText is null)
       return;
 
     if (viewModel.timePosition == TimePosition.invisible)
     {
-      sdlffcd_app_present(app);
       return;
     }
 
@@ -91,17 +90,15 @@ struct View
       posY = windowH - textH - 10.0f;
       break;
     case TimePosition.invisible:
-      sdlffcd_app_present(app);
       return;
     }
 
     sdlffcd_text_draw_with_bg(app, timestampText, posX, posY, 0, 0, 0, 255, 4.0f);
+  }
+
+  void render(sdlffcd_AppContext* app, ref const(ViewModel) viewModel)
+  {
+    renderTimeStamp(app, viewModel);
     sdlffcd_app_present(app);
   }
-
-  void update(in ViewModel m)
-  {
-    // TODO redraw
-  }
 }
-
