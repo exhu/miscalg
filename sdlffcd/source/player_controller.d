@@ -1,16 +1,8 @@
 module sdlffcd.ui_view_model;
 
 import std.format;
-import sdlffcd.observable;
-
-enum TimePosition
-{
-  topLeft,
-  topRight,
-  bottomRight,
-  bottomLeft,
-  invisible,
-}
+import sdlffcd.player_view;
+import sdlffcd.models;
 
 struct Hms1000
 {
@@ -28,14 +20,6 @@ struct Hms1000
     hours = sec / 3600;
     minutes = (sec % 3600) / 60;
     seconds = sec % 60;
-  }
-}
-
-struct View
-{
-  void update(in ViewModel m)
-  {
-    // TODO redraw
   }
 }
 
@@ -73,17 +57,6 @@ struct Controller
   }
 
 private:
-  /// updates old version if older, and returns true.
-  bool versionUpdated(ref ModelVersion old, in ModelVersion current)
-  {
-    if (old != current)
-    {
-      old = current;
-      return true;
-    }
-    return false;
-  }
-
   string formatTimestamp(double posSec, double totalSec)
   {
     if (posSec < 0.0)
@@ -102,38 +75,3 @@ private:
   }
 
 }
-
-/** This depends on Model, and also controls display mode, e.g. timestamp position which is
-    cycled by key press.
-*/
-struct ViewFields
-{
-  string formattedCurrentTotalTime;
-  TimePosition timePosition;
-}
-
-alias ViewModel = ObservableModel!ViewFields;
-
-/** Some values that a retrieved/changed in VideoPlayer and other lower components
-   are replicated in the Model as a logic update step. So the model depends
-   on the state of the program.
- */
-private struct PlayerFields
-{
-  bool isPaused;
-  bool isLooping;
-  double timePosition;
-  double timeDuration;
-}
-
-alias PlayerModel = ObservableModel!PlayerFields;
-
-private struct EditFields
-{
-  /// In cut point (always less than timeDuration)
-  double timeIn;
-  /// Out cut point (the time of the beginning of the frame), always less than timeDuration
-  double timeOut;
-}
-
-alias EditModel = ObservableModel!EditFields;
