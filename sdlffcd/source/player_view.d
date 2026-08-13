@@ -68,8 +68,8 @@ struct View
 
     float posX = 10.0f;
     float posY = 10.0f;
-    float windowW = 800.0f;
-    float windowH = 600.0f;
+    float windowW = cast(float) viewModel.windowWidth;
+    float windowH = cast(float) viewModel.windowHeight;
 
     final switch (viewModel.timePosition)
     {

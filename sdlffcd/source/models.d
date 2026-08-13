@@ -12,6 +12,9 @@ enum TimePosition
   invisible,
 }
 
+enum defaultWindowWidth = 800;
+enum defaultWindowHeight = 600;
+
 /** This depends on Model, and also controls display mode, e.g. timestamp position which is
     cycled by key press.
 */
@@ -19,6 +22,8 @@ struct ViewFields
 {
   string formattedCurrentTotalTime;
   TimePosition timePosition;
+  int windowWidth = defaultWindowWidth;
+  int windowHeight = defaultWindowHeight;
 }
 
 alias ViewModel = ObservableModel!ViewFields;

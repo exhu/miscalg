@@ -6,7 +6,7 @@ import std.algorithm.mutation : swap;
 import sdlffcd.sdlffcd_clib;
 
 /// Default capacity for shared decoded frame ring buffer (D camelCase convention)
-enum ringBufferCapacity = 8;
+enum defaultRingBufferCapacity = 8;
 
 /**
  * Slot in ring buffer holding a decoded video frame and its plane data.
@@ -43,7 +43,7 @@ final class FrameRingBuffer {
     private Condition notFull;
     private Condition notEmpty;
 
-    this(size_t capacity = ringBufferCapacity) {
+    this(size_t capacity = defaultRingBufferCapacity) {
         this.capacity = capacity;
         this.slots = new DecodedSlot[capacity];
         this.mutex = new Mutex();

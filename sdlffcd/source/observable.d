@@ -61,7 +61,7 @@ struct Tracked(T)
     ModelVersion lastSeenVersion;
 
     /// Checks if the inner model version has changed, updating the tracker automatically.
-    bool consumesUpdate()
+    bool pollUpdate()
     {
         if (lastSeenVersion != model.version_)
         {
@@ -85,9 +85,9 @@ unittest
   alias MyModel = ObservableModel!MyFields;
   Tracked!MyModel m;
   m.yes = true;
-  assert(m.consumesUpdate() == true);
+  assert(m.pollUpdate() == true);
   m.yes = true;
-  assert(m.consumesUpdate() == false);
+  assert(m.pollUpdate() == false);
   m.yes = false;
-  assert(m.consumesUpdate() == true);
+  assert(m.pollUpdate() == true);
 }

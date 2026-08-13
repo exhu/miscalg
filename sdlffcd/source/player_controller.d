@@ -99,15 +99,15 @@ struct PlayerController
     }
 
     bool dirty = false;
-    if (playerModel.consumesUpdate())
+    if (playerModel.pollUpdate())
     {
       dirty = true;
       viewModel.formattedCurrentTotalTime = formatTimestamp(playerModel.timePosition, playerModel.timeDuration);
     }
-    if (editModel.consumesUpdate())
+    if (editModel.pollUpdate())
     {
       dirty = true;
-      // future edit features placeholder
+      // TODO: implement edit features
     }
 
     if (state.frameRendered || dirty)
