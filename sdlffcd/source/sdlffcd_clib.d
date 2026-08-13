@@ -11,6 +11,7 @@ enum sdlffcd_Key : uint {
     SDLFFCD_KEY_P = 'p',
     SDLFFCD_KEY_R = 'r',
     SDLFFCD_KEY_F = 'f',
+    SDLFFCD_KEY_T = 't',
     SDLFFCD_KEY_LEFT = 1073741904,
     SDLFFCD_KEY_RIGHT = 1073741903
 }

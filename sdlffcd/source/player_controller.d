@@ -9,25 +9,6 @@ import sdlffcd.observable;
 import sdlffcd.app_context;
 import sdlffcd.sdlffcd_clib;
 
-struct Hms1000
-{
-  long hours, minutes, seconds;
-  int mSeconds;
-
-  void fromSeconds(double dsec)
-  {
-    long sec = cast(long) dsec;
-    mSeconds = cast(int)((dsec - sec) * 1000.0);
-    if (mSeconds < 0)
-      mSeconds = 0;
-    if (mSeconds > 999)
-      mSeconds = 999;
-    hours = sec / 3600;
-    minutes = (sec % 3600) / 60;
-    seconds = sec % 60;
-  }
-}
-
 struct PlayerController
 {
   View view;
@@ -35,9 +16,18 @@ struct PlayerController
   Tracked!PlayerModel playerModel;
   Tracked!EditModel editModel;
 
+  bool initialize(ref AppContext appContext)
+  {
+    return view.initialize(appContext.app);
+  }
+
+  void destroy()
+  {
+    view.destroy();
+  }
+
   void handleKeyPress(ref AppContext app, uint key)
   {
-    // TODO update playerModel to be in sync with appContext.player state
     if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE ||
         key == sdlffcd_Key.SDLFFCD_KEY_Q)
     {
@@ -71,6 +61,10 @@ struct PlayerController
             app.player.fastForward(5.0);
         }
     }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_T)
+    {
+        cycleTimePosition();
+    }
   }
 
   struct UpdateResult
@@ -98,26 +92,28 @@ struct PlayerController
       return UpdateResult(UpdateResult.Status.quit);
     }
 
-    if (state.frameRendered)
+    if (appContext.player !is null)
     {
-      // TODO move renderTimestamp into View class via PlayerModel, ViewModel update
-      appContext.renderTimestamp();
+      playerModel.timePosition = appContext.player.getCurrentPts();
+      playerModel.timeDuration = appContext.player.getDuration();
     }
 
     bool dirty = false;
     if (playerModel.consumesUpdate())
     {
       dirty = true;
-      viewModel.formattedCurrentTotalTime = formatTimestamp(playerModel.timePosition, playerModel
-          .timeDuration);
+      viewModel.formattedCurrentTotalTime = formatTimestamp(playerModel.timePosition, playerModel.timeDuration);
     }
     if (editModel.consumesUpdate())
     {
       dirty = true;
       // future edit features placeholder
     }
-    if (dirty)
-      view.update(viewModel);
+
+    if (state.frameRendered || dirty)
+    {
+      view.render(appContext.app, viewModel);
+    }
 
     if (!sdlffcd_app_is_running(appContext.app))
       return UpdateResult(UpdateResult.Status.quit);
@@ -127,28 +123,8 @@ struct PlayerController
 
   void cycleTimePosition()
   {
-    if (playerModel.timePosition == TimePosition.max)
-      playerModel.timePosition = TimePosition.min;
-    else
-      playerModel.timePosition = playerModel.timePosition+1;
+    auto nextPos = cast(TimePosition)((cast(int) viewModel.timePosition + 1) % (cast(int) TimePosition.invisible + 1));
+    viewModel.timePosition = nextPos;
   }
-
-private:
-  string formatTimestamp(double posSec, double totalSec)
-  {
-    if (posSec < 0.0)
-      posSec = 0.0;
-    if (totalSec < 0.0)
-      totalSec = 0.0;
-
-    long pSec = cast(long) posSec;
-    Hms1000 current, total;
-    current.fromSeconds(posSec);
-    total.fromSeconds(totalSec);
-
-    return format("%02d:%02d:%02d.%03d / %02d:%02d:%02d.%03d",
-      current.hours, current.minutes, current.seconds, current.mSeconds,
-      total.hours, total.minutes, total.seconds, total.mSeconds);
-  }
-
 }
+

@@ -34,6 +34,13 @@ void main(string[] args)
     appContext.destroy();
 
   PlayerController playerController;
+  if (!playerController.initialize(appContext))
+  {
+    stderr.writeln("Failed to initialize player controller resources.");
+    return;
+  }
+  scope (exit)
+    playerController.destroy();
 
   KeyPressCbUserData userData;
   userData.appContext = &appContext;
@@ -49,7 +56,7 @@ void main(string[] args)
 
   writeln("\nStarting main event loop...");
   writeln(
-    "Controls: [Space/P] Pause/Resume, [R/Left] Rewind 5s, [F/Right] Fast Forward 5s, [Q/ESC] Quit\n");
+    "Controls: [Space/P] Pause/Resume, [R/Left] Rewind 5s, [F/Right] Fast Forward 5s, [T] Cycle Timestamp Position, [Q/ESC] Quit\n");
 
   while (sdlffcd_app_is_running(appContext.app))
   {
