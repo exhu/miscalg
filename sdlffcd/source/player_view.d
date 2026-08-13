@@ -1,4 +1,4 @@
-module sdlffcd.main_view;
+module sdlffcd.player_view;
 import sdlffcd.models;
 
 struct View

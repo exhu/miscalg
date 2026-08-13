@@ -3,6 +3,7 @@ module sdlffcd.ui_view_model;
 import std.format;
 import sdlffcd.player_view;
 import sdlffcd.models;
+import sdlffcd.observable;
 
 struct Hms1000
 {
