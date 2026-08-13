@@ -18,12 +18,26 @@ struct PlayerController
 
   bool initialize(ref AppContext appContext)
   {
+    updateWindowSize(appContext);
     return view.initialize(appContext.app);
   }
 
   void destroy()
   {
     view.destroy();
+  }
+
+  void updateWindowSize(ref AppContext appContext)
+  {
+    if (appContext.app !is null)
+    {
+      int w = 0, h = 0;
+      if (sdlffcd_app_get_window_size(appContext.app, &w, &h) && w > 0 && h > 0)
+      {
+        viewModel.windowWidth = w;
+        viewModel.windowHeight = h;
+      }
+    }
   }
 
   void handleKeyPress(ref AppContext app, uint key)
@@ -80,6 +94,8 @@ struct PlayerController
 
   UpdateResult update(ref AppContext appContext)
   {
+    updateWindowSize(appContext);
+
     auto state = appContext.player.update(appContext.app);
     if (state.isVideoEnd)
     {
@@ -104,6 +120,10 @@ struct PlayerController
       dirty = true;
       viewModel.formattedCurrentTotalTime = formatTimestamp(playerModel.timePosition, playerModel.timeDuration);
     }
+    if (viewModel.pollUpdate())
+    {
+      dirty = true;
+    }
     if (editModel.pollUpdate())
     {
       dirty = true;
@@ -126,5 +146,22 @@ struct PlayerController
     auto nextPos = cast(TimePosition)((cast(int) viewModel.timePosition + 1) % (cast(int) TimePosition.invisible + 1));
     viewModel.timePosition = nextPos;
   }
+}
+
+unittest
+{
+  PlayerController controller;
+  assert(controller.viewModel.windowWidth == defaultWindowWidth);
+  assert(controller.viewModel.windowHeight == defaultWindowHeight);
+  assert(controller.viewModel.pollUpdate());
+  assert(!controller.viewModel.pollUpdate());
+
+  controller.viewModel.windowWidth = 1280;
+  controller.viewModel.windowHeight = 720;
+
+  assert(controller.viewModel.pollUpdate());
+  assert(controller.viewModel.windowWidth == 1280);
+  assert(controller.viewModel.windowHeight == 720);
+  assert(!controller.viewModel.pollUpdate());
 }
 

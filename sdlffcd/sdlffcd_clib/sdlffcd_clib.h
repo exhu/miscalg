@@ -55,6 +55,9 @@ bool sdlffcd_app_check_and_clear_redraw(sdlffcd_AppContext* app);
 /// Set or clear the window redraw requested flag.
 void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw);
 
+/// Get current window size in pixels/logical units. Returns false on invalid context or error.
+bool sdlffcd_app_get_window_size(const sdlffcd_AppContext* app, int* out_w, int* out_h);
+
 /* --- Video API --- */
 
 typedef struct sdlffcd_VideoContext sdlffcd_VideoContext;

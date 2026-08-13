@@ -182,6 +182,11 @@ void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw) {
     }
 }
 
+bool sdlffcd_app_get_window_size(const sdlffcd_AppContext* app, int* out_w, int* out_h) {
+    if (!app || !app->window || !out_w || !out_h) return false;
+    return SDL_GetWindowSize(app->window, out_w, out_h);
+}
+
 /* --- Video API Implementation --- */
 
 sdlffcd_VideoContext* sdlffcd_video_open(const char* filename) {

@@ -30,6 +30,7 @@ void sdlffcd_app_shutdown(sdlffcd_AppContext* app);
 bool sdlffcd_app_need_redraw(const sdlffcd_AppContext* app);
 bool sdlffcd_app_check_and_clear_redraw(sdlffcd_AppContext* app);
 void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw);
+bool sdlffcd_app_get_window_size(const sdlffcd_AppContext* app, int* out_w, int* out_h);
 
 /* --- Video API --- */
 
@@ -105,6 +106,7 @@ extern(D) unittest
     assert(!sdlffcd_app_need_redraw(null));
     assert(!sdlffcd_app_check_and_clear_redraw(null));
     sdlffcd_app_set_need_redraw(null, true);
+    assert(!sdlffcd_app_get_window_size(null, null, null));
     assert(!sdlffcd_video_redraw(null, null));
 
     // Verify null handling for text API functions
