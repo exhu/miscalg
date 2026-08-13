@@ -1,6 +1,7 @@
 module sdlffcd.ui_view_model;
 
 import std.format;
+import sdlffcd.observable;
 
 enum TimePosition
 {
@@ -41,23 +42,20 @@ struct View
 struct Controller
 {
   View view;
-  ViewModel viewModel;
-  PlayerModel playerModel;
-  ModelVersion playerModelVersion;
-  EditModel editModel;
-  ModelVersion editModelVersion;
+  Tracked!ViewModel viewModel;
+  Tracked!PlayerModel playerModel;
+  Tracked!EditModel editModel;
 
-  // TODO refactor versionUpdated -- repetitive and can introduce mistake (versions of different models)
   void update()
   {
     bool dirty = false;
-    if (versionUpdated(playerModelVersion, playerModel.version_))
+    if (playerModel.consumesUpdate())
     {
       dirty = true;
       viewModel.formattedCurrentTotalTime = formatTimestamp(playerModel.timePosition, playerModel
           .timeDuration);
     }
-    if (versionUpdated(editModelVersion, editModel.version_))
+    if (editModel.consumesUpdate())
     {
       dirty = true;
       // TODO
@@ -108,11 +106,13 @@ private:
 /** This depends on Model, and also controls display mode, e.g. timestamp position which is
     cycled by key press.
 */
-struct ViewModel
+struct ViewFields
 {
   string formattedCurrentTotalTime;
   TimePosition timePosition;
 }
+
+alias ViewModel = ObservableModel!ViewFields;
 
 /** Some values that a retrieved/changed in VideoPlayer and other lower components
    are replicated in the Model as a logic update step. So the model depends
@@ -137,57 +137,3 @@ private struct EditFields
 }
 
 alias EditModel = ObservableModel!EditFields;
-
-import std.traits : FieldNameTuple;
-
-alias ModelVersion = size_t;
-
-template ObservableModel(T) if (is(T == struct))
-{
-  struct ObservableModel
-  {
-    // Encapsulated underlying model instance
-    private T model;
-    // 0 is used to mark uninitialized
-    private ModelVersion _version = 1;
-
-    /// Read-only version counter tracking modifications
-    @property ModelVersion version_() const @safe pure nothrow @nogc
-    {
-      return _version;
-    }
-
-    // Generate getters and setters for each field in the source struct
-    static foreach (fieldName; FieldNameTuple!T)
-    {
-      // Public Getter
-      mixin("@property auto ", fieldName, "() const @safe pure nothrow @nogc { return model.", fieldName, "; }");
-
-      // Public Setter (increments version_ on change)
-      mixin("@property void ", fieldName, "(typeof(T.", fieldName, ") value) @safe { ",
-        "if (model.", fieldName, " != value) { ",
-        "model.", fieldName, " = value; ",
-        "_version++;",
-        "} ",
-        "}");
-    }
-  }
-}
-
-unittest
-{
-  struct MyFields
-  {
-    bool yes;
-  }
-
-  alias MyModel = ObservableModel!MyFields;
-  MyModel m;
-  assert(m.version_ == 1);
-  m.yes = true;
-  assert(m.version_ == 2);
-  m.yes = true;
-  assert(m.version_ == 2);
-  m.yes = false;
-  assert(m.version_ == 3);
-}
