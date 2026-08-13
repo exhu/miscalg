@@ -2,97 +2,66 @@ module sdlffcd.app;
 
 import std.stdio;
 import std.string;
-import core.thread;
 import std.datetime;
 
 import sdlffcd.sdlffcd_clib;
-import sdlffcd.video_player;
 import sdlffcd.app_context;
-import sdlffcd.ui_view_model;
+import sdlffcd.player_controller;
 
-extern(C) void handleKeyPress(void* userdata, uint key)
+extern (C) struct KeyPressCbUserData
 {
-    AppContext* app = cast(AppContext*)userdata;
-    if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE ||
-        key == sdlffcd_Key.SDLFFCD_KEY_Q)
-    {
-        writeln("Key press received in D (Q / ESCAPE). Requesting app stop...");
-        if (app.app !is null)
-        {
-            sdlffcd_app_stop(app.app);
-        }
-    }
-    else if (key == sdlffcd_Key.SDLFFCD_KEY_SPACE ||
-             key == sdlffcd_Key.SDLFFCD_KEY_P)
-    {
-        if (app.player !is null)
-        {
-            app.player.togglePause();
-        }
-    }
-    else if (key == sdlffcd_Key.SDLFFCD_KEY_R ||
-             key == sdlffcd_Key.SDLFFCD_KEY_LEFT) // Left arrow or 'R'
-    {
-        if (app.player !is null)
-        {
-            app.player.rewind(5.0);
-        }
-    }
-    else if (key == sdlffcd_Key.SDLFFCD_KEY_F ||
-             key == sdlffcd_Key.SDLFFCD_KEY_RIGHT) // Right arrow or 'F'
-    {
-        if (app.player !is null)
-        {
-            app.player.fastForward(5.0);
-        }
-    }
+  AppContext* appContext;
+  PlayerController* playerController;
+}
+
+extern (C) void handleKeyPress(void* userDataPtr, uint key)
+{
+  KeyPressCbUserData* userData = cast(KeyPressCbUserData*) userDataPtr;
+  AppContext* app = userData.appContext;
+  userData.playerController.handleKeyPress(*app, key);
 }
 
 void main(string[] args)
 {
-    AppContext appContext;
-    string filename = (args.length > 1) ? args[1] : "samplevideo.mp4";
+  AppContext appContext;
+  string filename = (args.length > 1) ? args[1] : "samplevideo.mp4";
 
-    if (!appContext.initialize("sdlffcd - Video Player", 800, 600))
-    {
-        return;
-    }
-    scope(exit) appContext.destroy();
+  if (!appContext.initialize("sdlffcd - Video Player", 800, 600))
+  {
+    return;
+  }
+  scope (exit)
+    appContext.destroy();
 
-    sdlffcd_app_set_key_callback(appContext.app, &handleKeyPress, &appContext);
+  PlayerController playerController;
 
-    if (!appContext.player.open(filename))
-    {
-        stderr.writeln("Failed to open video file: ", filename);
-        return;
-    }
+  KeyPressCbUserData userData;
+  userData.appContext = &appContext;
+  userData.playerController = &playerController;
 
-    writeln("\nStarting main event loop...");
-    writeln("Controls: [Space/P] Pause/Resume, [R/Left] Rewind 5s, [F/Right] Fast Forward 5s, [Q/ESC] Quit\n");
+  sdlffcd_app_set_key_callback(appContext.app, &handleKeyPress, &userData);
 
-    while (sdlffcd_app_is_running(appContext.app))
-    {
-        auto state = appContext.player.update(appContext.app);
-        if (state.isVideoEnd)
-        {
-            writeln("Playback finished (end of video stream).");
-            break;
-        }
-        if (state.isError)
-        {
-            stderr.writeln("Playback stopped due to error.");
-            break;
-        }
+  if (!appContext.player.open(filename))
+  {
+    stderr.writeln("Failed to open video file: ", filename);
+    return;
+  }
 
-        if (state.frameRendered)
-        {
-            appContext.renderTimestamp();
-        }
+  writeln("\nStarting main event loop...");
+  writeln(
+    "Controls: [Space/P] Pause/Resume, [R/Left] Rewind 5s, [F/Right] Fast Forward 5s, [Q/ESC] Quit\n");
 
-        if (!sdlffcd_app_is_running(appContext.app)) break;
+  while (sdlffcd_app_is_running(appContext.app))
+  {
+    PlayerController.UpdateResult result = playerController.update(appContext);
+    if (result.status == PlayerController.UpdateResult.Status.quit)
+      break;
 
-        sdlffcd_app_wait_events(appContext.app, state.nextUpdateMs);
-    }
+    if (!sdlffcd_app_is_running(appContext.app))
+      break;
 
-    writeln("Exited cleanly.");
+    sdlffcd_app_wait_events(appContext.app, result.nextUpdateMs);
+  }
+
+  writeln("Exited cleanly.");
 }
