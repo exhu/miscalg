@@ -62,6 +62,7 @@ final class VideoPlayer {
     private DecodedSlot renderSlot;
     private bool slotReady = false;
     private bool pausedSeekPending = false;
+    private bool atEnd = false;
 
     this() {}
 
@@ -215,6 +216,7 @@ final class VideoPlayer {
             return handlePlayback(app);
         } else {
             if (!decoderThread.isRunning) {
+                atEnd = true;
                 return PlayerUpdateState.videoEnd();
             }
             bool reqRedraw = checkRedraw(app);
@@ -226,6 +228,7 @@ final class VideoPlayer {
         if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF) {
             bool reqRedraw = checkRedraw(app);
             info("VideoPlayer: Reached end of video stream.");
+            atEnd = true;
             return PlayerUpdateState.videoEnd();
         }
         if (renderSlot.status != sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
@@ -297,6 +300,9 @@ final class VideoPlayer {
 
     void resume() {
         if (loaded && paused) {
+            if (atEnd) {
+                seekTo(0.0);
+            }
             paused = false;
             pausedSeekPending = false;
             if (playbackStarted) {
@@ -322,12 +328,38 @@ final class VideoPlayer {
         return loaded;
     }
 
+    @property bool isAtEnd() const {
+        return atEnd;
+    }
+
     double getDuration() const {
         return (loaded && mediaInfo.duration_seconds > 0.0) ? mediaInfo.duration_seconds : 0.0;
     }
 
     double getFps() const {
         return (loaded && mediaInfo.fps > 0.0) ? mediaInfo.fps : 0.0;
+    }
+
+    long getTotalFrames() const {
+        if (!loaded) return 0;
+        if (mediaInfo.num_frames > 0) return mediaInfo.num_frames;
+        if (mediaInfo.fps > 0.0 && mediaInfo.duration_seconds > 0.0) {
+            return cast(long)(mediaInfo.duration_seconds * mediaInfo.fps + 0.5);
+        }
+        return 0;
+    }
+
+    long getCurrentFrame() const {
+        if (!loaded) return 0;
+        long total = getTotalFrames();
+        if (total <= 0) return 0;
+        if (atEnd) return total;
+        if (mediaInfo.fps <= 0.0) return 1;
+
+        long frame = cast(long)(currentPts * mediaInfo.fps + 0.5) + 1;
+        if (frame < 1) frame = 1;
+        if (frame > total) frame = total;
+        return frame;
     }
 
     double getEndFrameTime() const {
@@ -349,6 +381,7 @@ final class VideoPlayer {
         }
 
         infof("VideoPlayer: Seeking to %.2f seconds", targetPts);
+        atEnd = false;
         currentPts = targetPts;
         if (vctx !is null) {
             sdlffcd_video_clear_audio(vctx);

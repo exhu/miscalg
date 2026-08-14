@@ -39,8 +39,11 @@ struct PlayerFields
   bool isPaused;
   bool isLooping;
   bool isMuted;
+  bool isEnd;
   double timePosition;
   double timeDuration;
+  long currentFrame;
+  long totalFrames;
 }
 
 alias PlayerModel = ObservableModel!PlayerFields;
@@ -75,7 +78,15 @@ struct Hms1000
   }
 }
 
-string formatTimestamp(double posSec, double totalSec, bool isLooping = false, bool isPaused = false, bool isMuted = false)
+string formatTimestamp(
+  double posSec,
+  double totalSec,
+  long currentFrame = 0,
+  long totalFrames = 0,
+  bool isLooping = false,
+  bool isPaused = false,
+  bool isMuted = false,
+  bool isEnd = false)
 {
   if (posSec < 0.0)
     posSec = 0.0;
@@ -86,12 +97,25 @@ string formatTimestamp(double posSec, double totalSec, bool isLooping = false, b
   current.fromSeconds(posSec);
   total.fromSeconds(totalSec);
 
-  string res = format("%02d:%02d:%02d.%03d / %02d:%02d:%02d.%03d",
-    current.hours, current.minutes, current.seconds, current.mSeconds,
-    total.hours, total.minutes, total.seconds, total.mSeconds);
+  string res;
+  if (totalFrames > 0)
+  {
+    res = format("%02d:%02d:%02d.%03d / %02d:%02d:%02d.%03d (Frame %d/%d)",
+      current.hours, current.minutes, current.seconds, current.mSeconds,
+      total.hours, total.minutes, total.seconds, total.mSeconds,
+      currentFrame, totalFrames);
+  }
+  else
+  {
+    res = format("%02d:%02d:%02d.%03d / %02d:%02d:%02d.%03d",
+      current.hours, current.minutes, current.seconds, current.mSeconds,
+      total.hours, total.minutes, total.seconds, total.mSeconds);
+  }
 
   if (isLooping)
     res ~= " [LOOP]";
+  if (isEnd)
+    res ~= " [END]";
   if (isPaused)
     res ~= " [PAUSED]";
   if (isMuted)
@@ -154,20 +178,26 @@ unittest
   string ts1 = formatTimestamp(12.3456, 125.789);
   assert(ts1 == "00:00:12.345 / 00:02:05.789");
 
-  string ts2 = formatTimestamp(3661.050, 7200.0, true, false);
+  string ts2 = formatTimestamp(3661.050, 7200.0, 0, 0, true, false);
   assert(ts2 == "01:01:01.050 / 02:00:00.000 [LOOP]");
 
-  string ts3 = formatTimestamp(0.0, 0.0, false, true);
+  string ts3 = formatTimestamp(0.0, 0.0, 0, 0, false, true);
   assert(ts3 == "00:00:00.000 / 00:00:00.000 [PAUSED]");
 
-  string ts4 = formatTimestamp(10.0, 20.0, true, true);
+  string ts4 = formatTimestamp(10.0, 20.0, 0, 0, true, true);
   assert(ts4 == "00:00:10.000 / 00:00:20.000 [LOOP] [PAUSED]");
 
-  string ts5 = formatTimestamp(10.0, 20.0, false, false, true);
+  string ts5 = formatTimestamp(10.0, 20.0, 0, 0, false, false, true);
   assert(ts5 == "00:00:10.000 / 00:00:20.000 [MUTE]");
 
-  string ts6 = formatTimestamp(10.0, 20.0, true, true, true);
+  string ts6 = formatTimestamp(10.0, 20.0, 0, 0, true, true, true);
   assert(ts6 == "00:00:10.000 / 00:00:20.000 [LOOP] [PAUSED] [MUTE]");
+
+  string ts7 = formatTimestamp(9.960, 10.000, 250, 250, false, true, false, true);
+  assert(ts7 == "00:00:09.960 / 00:00:10.000 (Frame 250/250) [END] [PAUSED]");
+
+  string ts8 = formatTimestamp(1.000, 10.000, 25, 250, false, false, false, false);
+  assert(ts8 == "00:00:01.000 / 00:00:10.000 (Frame 25/250)");
 
   string inOut1 = formatInOut(5.0, 25.5);
   assert(inOut1 == "IN: 00:00:05.000  OUT: 00:00:25.500");

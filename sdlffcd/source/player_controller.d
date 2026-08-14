@@ -251,6 +251,9 @@ struct PlayerController
       playerModel.timeDuration = appContext.player.getDuration();
       playerModel.isPaused = appContext.player.isPaused;
       playerModel.isMuted = appContext.player.isMuted;
+      playerModel.isEnd = appContext.player.isAtEnd;
+      playerModel.currentFrame = appContext.player.getCurrentFrame();
+      playerModel.totalFrames = appContext.player.getTotalFrames();
 
       // Check looping boundary during normal playback
       if (playerModel.isLooping && !playerModel.isPaused)
@@ -270,9 +273,12 @@ struct PlayerController
       viewModel.formattedCurrentTotalTime = formatTimestamp(
         playerModel.timePosition,
         playerModel.timeDuration,
+        playerModel.currentFrame,
+        playerModel.totalFrames,
         playerModel.isLooping,
         playerModel.isPaused,
-        playerModel.isMuted);
+        playerModel.isMuted,
+        playerModel.isEnd);
       viewModel.formattedInOutTime = formatInOut(editModel.timeIn, editModel.timeOut);
     }
     if (viewModel.pollUpdate())
