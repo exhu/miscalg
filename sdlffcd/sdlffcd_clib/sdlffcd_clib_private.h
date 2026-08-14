@@ -57,6 +57,9 @@ struct sdlffcd_VideoContext {
     SDL_Texture* texture;        /* Owned by vctx; created on demand and destroyed in sdlffcd_video_close */
     int texture_width;           /* Width of current vctx->texture in pixels */
     int texture_height;          /* Height of current vctx->texture in pixels */
+    int last_render_w;           /* Cached renderer output width */
+    int last_render_h;           /* Cached renderer output height */
+    SDL_FRect dst_rect;          /* Cached letterbox destination rectangle */
 
     /* Software format conversion context (lifetime managed by vctx until sdlffcd_video_close) */
     struct SwsContext* sws_ctx;  /* Owned by vctx; allocated when pixel format conversion is required */
