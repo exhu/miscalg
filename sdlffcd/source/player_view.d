@@ -1,6 +1,6 @@
 module sdlffcd.player_view;
 
-import std.stdio;
+import std.logger : error, errorf;
 import std.string;
 import sdlffcd.sdlffcd_clib;
 import sdlffcd.models;
@@ -26,7 +26,7 @@ struct View
       }
       else
       {
-        stderr.writeln("Failed to create timestamp text object.");
+        error("Failed to create timestamp text object.");
       }
 
       if (inOutText !is null)
@@ -35,12 +35,12 @@ struct View
       }
       else
       {
-        stderr.writeln("Failed to create in-out text object.");
+        error("Failed to create in-out text object.");
       }
     }
     else
     {
-      stderr.writefln("Failed to open font %s", fontPath);
+      errorf("Failed to open font %s", fontPath);
     }
     return timestampFont !is null && timestampText !is null && inOutText !is null;
   }

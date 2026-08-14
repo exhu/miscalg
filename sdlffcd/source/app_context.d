@@ -1,6 +1,6 @@
 module sdlffcd.app_context;
 
-import std.stdio;
+import std.logger : info, error;
 import std.string;
 import sdlffcd.sdlffcd_clib;
 import sdlffcd.video_player;
@@ -12,11 +12,11 @@ struct AppContext
 
     bool initialize(string title = "sdlffcd video trimming tool", int width = 800, int height = 600)
     {
-        writeln("Initializing SDL application...");
+        info("Initializing SDL application...");
         app = sdlffcd_app_init(toStringz(title), width, height);
         if (app is null)
         {
-            stderr.writeln("Failed to initialize application context.");
+            error("Failed to initialize application context.");
             return false;
         }
 

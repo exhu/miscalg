@@ -1,10 +1,12 @@
 module sdlffcd.app;
 
+import std.logger;
 import std.stdio;
 import std.string;
 import std.datetime;
 
 import sdlffcd.sdlffcd_clib;
+import sdlffcd.sdl_logger;
 import sdlffcd.app_context;
 import sdlffcd.player_controller;
 
@@ -47,6 +49,8 @@ void printHelp()
 
 int main(string[] args)
 {
+  sharedLog = cast(shared) new SdlLogger(LogLevel.info);
+
   if (args.length <= 1)
   {
     printHelp();
@@ -70,7 +74,7 @@ int main(string[] args)
     }
     else if (arg.length > 0 && arg[0] == '-')
     {
-      stderr.writefln("Unknown option: %s\n", arg);
+      errorf("Unknown option: %s", arg);
       printHelp();
       return 1;
     }
@@ -98,7 +102,7 @@ int main(string[] args)
   PlayerController playerController;
   if (!playerController.initialize(appContext, filename, quitOnEnd))
   {
-    stderr.writeln("Failed to initialize player controller resources.");
+    error("Failed to initialize player controller resources.");
     return 1;
   }
   scope (exit)
@@ -112,11 +116,11 @@ int main(string[] args)
 
   if (!appContext.player.open(filename))
   {
-    stderr.writeln("Failed to open video file: ", filename);
+    errorf("Failed to open video file: %s", filename);
     return 1;
   }
 
-  writeln("\nStarting main event loop...");
+  info("Starting main event loop...");
 
   while (sdlffcd_app_is_running(appContext.app))
   {
@@ -127,6 +131,6 @@ int main(string[] args)
     sdlffcd_app_wait_events(appContext.app, result.nextUpdateMs);
   }
 
-  writeln("Exited cleanly.");
+  info("Exited cleanly.");
   return 0;
 }

@@ -17,7 +17,7 @@ static bool SDLCALL window_event_watch(void* userdata, SDL_Event* event) {
 
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
-        fprintf(stderr, "Failed to initialize SDL: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize SDL: %s", SDL_GetError());
         return NULL;
     }
 
@@ -29,7 +29,7 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
 
     app->window = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE);
     if (!app->window) {
-        fprintf(stderr, "Failed to create SDL window: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create SDL window: %s", SDL_GetError());
         free(app);
         SDL_Quit();
         return NULL;
@@ -37,7 +37,7 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
 
     app->renderer = SDL_CreateRenderer(app->window, NULL);
     if (!app->renderer) {
-        fprintf(stderr, "Failed to create SDL renderer: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create SDL renderer: %s", SDL_GetError());
         SDL_DestroyWindow(app->window);
         free(app);
         SDL_Quit();
@@ -45,7 +45,7 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
     }
 
     if (!TTF_Init()) {
-        fprintf(stderr, "Failed to initialize SDL_ttf: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize SDL_ttf: %s", SDL_GetError());
         SDL_DestroyRenderer(app->renderer);
         SDL_DestroyWindow(app->window);
         free(app);
@@ -55,7 +55,7 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
 
     app->text_engine = TTF_CreateRendererTextEngine(app->renderer);
     if (!app->text_engine) {
-        fprintf(stderr, "Failed to create renderer text engine: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create renderer text engine: %s", SDL_GetError());
         TTF_Quit();
         SDL_DestroyRenderer(app->renderer);
         SDL_DestroyWindow(app->window);
@@ -67,7 +67,7 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
     app->running = true;
     app->wake_event_type = SDL_RegisterEvents(1);
     if (app->wake_event_type == (uint32_t)-1) {
-        fprintf(stderr, "Failed to register custom wake event: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to register custom wake event: %s", SDL_GetError());
     }
 
     SDL_AddEventWatch(window_event_watch, app);
@@ -412,7 +412,7 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
         }
         vctx->texture = SDL_CreateTexture(app->renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, frame->width, frame->height);
         if (!vctx->texture) {
-            fprintf(stderr, "Failed to create SDL video texture: %s\n", SDL_GetError());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create SDL video texture: %s", SDL_GetError());
             return false;
         }
         vctx->texture_width = frame->width;
@@ -494,7 +494,7 @@ sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize) {
     if (!filepath || ptsize <= 0.0f) return NULL;
     TTF_Font* ttf_font = TTF_OpenFont(filepath, ptsize);
     if (!ttf_font) {
-        fprintf(stderr, "Failed to open font %s: %s\n", filepath, SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to open font %s: %s", filepath, SDL_GetError());
         return NULL;
     }
     sdlffcd_Font* font = (sdlffcd_Font*)calloc(1, sizeof(sdlffcd_Font));
@@ -519,7 +519,7 @@ sdlffcd_Text* sdlffcd_text_create(sdlffcd_AppContext* app, sdlffcd_Font* font, c
     if (!app || !app->text_engine || !font || !font->ttf_font || !text) return NULL;
     TTF_Text* ttf_text = TTF_CreateText(app->text_engine, font->ttf_font, text, 0);
     if (!ttf_text) {
-        fprintf(stderr, "Failed to create text object: %s\n", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create text object: %s", SDL_GetError());
         return NULL;
     }
     sdlffcd_Text* text_obj = (sdlffcd_Text*)calloc(1, sizeof(sdlffcd_Text));

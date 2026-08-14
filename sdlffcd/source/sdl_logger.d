@@ -9,9 +9,9 @@ class SdlLogger : Logger
 {
     private int category_;
 
-    /// Construct with a D LogLevel and an SDL log category
+    /// Construct with a D LogLevel (LogLevel.all by default) and an SDL log category
     /// (0 = SDL_LOG_CATEGORY_APPLICATION by default).
-    this(LogLevel lv, int sdlCategory = 0) @safe
+    this(LogLevel lv = LogLevel.all, int sdlCategory = 0) @safe
     {
         super(lv);
         this.category_ = sdlCategory;

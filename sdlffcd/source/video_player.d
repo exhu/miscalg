@@ -1,6 +1,6 @@
 module sdlffcd.video_player;
 
-import std.stdio;
+import std.logger : info, infof, error, errorf;
 import std.string;
 import std.datetime;
 import core.thread;
@@ -70,19 +70,19 @@ final class VideoPlayer {
     bool open(string filename) {
         close();
 
-        writeln("VideoPlayer: Opening video file: ", filename);
+        infof("VideoPlayer: Opening video file: %s", filename);
         vctx = sdlffcd_video_open(toStringz(filename));
         if (vctx is null) {
-            stderr.writeln("VideoPlayer: Failed to open video file: ", filename);
+            errorf("VideoPlayer: Failed to open video file: %s", filename);
             return false;
         }
 
         if (sdlffcd_video_get_media_info(vctx, &mediaInfo)) {
-            writefln("Container format: %s", mediaInfo.format_name.ptr.fromStringz);
-            writefln("Video codec: %s", mediaInfo.video_codec_name.ptr.fromStringz);
-            writefln("Audio codec: %s", mediaInfo.audio_codec_name.ptr.fromStringz);
-            writefln("Resolution: %dx%d", mediaInfo.width, mediaInfo.height);
-            writefln("Duration: %.2f sec, FPS: %.2f, Frames: %d",
+            infof("Container format: %s", mediaInfo.format_name.ptr.fromStringz);
+            infof("Video codec: %s", mediaInfo.video_codec_name.ptr.fromStringz);
+            infof("Audio codec: %s", mediaInfo.audio_codec_name.ptr.fromStringz);
+            infof("Resolution: %dx%d", mediaInfo.width, mediaInfo.height);
+            infof("Duration: %.2f sec, FPS: %.2f, Frames: %d",
                 mediaInfo.duration_seconds, mediaInfo.fps, mediaInfo.num_frames);
         }
 
@@ -221,11 +221,11 @@ final class VideoPlayer {
     private PlayerUpdateState handlePlayback(sdlffcd_AppContext* app) {
         if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_EOF) {
             bool reqRedraw = checkRedraw(app);
-            writeln("VideoPlayer: Reached end of video stream.");
+            info("VideoPlayer: Reached end of video stream.");
             return PlayerUpdateState.videoEnd();
         }
         if (renderSlot.status != sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
-            stderr.writeln("VideoPlayer: Error decoding frame.");
+            error("VideoPlayer: Error decoding frame.");
             return PlayerUpdateState.error();
         }
 
@@ -281,7 +281,7 @@ final class VideoPlayer {
             paused = true;
             pausedSeekPending = false;
             pauseStartTime = MonoTime.currTime;
-            writefln("VideoPlayer: Paused at %.2f s", currentPts);
+            infof("VideoPlayer: Paused at %.2f s", currentPts);
         }
     }
 
@@ -292,7 +292,7 @@ final class VideoPlayer {
             if (playbackStarted) {
                 playbackStartTime += (MonoTime.currTime - pauseStartTime);
             }
-            writefln("VideoPlayer: Resumed at %.2f s", currentPts);
+            infof("VideoPlayer: Resumed at %.2f s", currentPts);
         }
     }
 
@@ -335,7 +335,7 @@ final class VideoPlayer {
             targetPts = mediaInfo.duration_seconds;
         }
 
-        writefln("VideoPlayer: Seeking to %.2f seconds", targetPts);
+        infof("VideoPlayer: Seeking to %.2f seconds", targetPts);
         ringBuffer.requestSeek(targetPts);
         slotReady = false;
 

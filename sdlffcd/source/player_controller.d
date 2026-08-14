@@ -1,7 +1,8 @@
 module sdlffcd.player_controller;
 
 import std.format;
-import std.stdio;
+import std.logger : info, infof, error;
+import std.stdio : writeln;
 
 import sdlffcd.player_view;
 import sdlffcd.models;
@@ -65,7 +66,7 @@ struct PlayerController
         {
             printFfmpegCutCommand(app);
         }
-        writeln("Key press received in D (Q / ESCAPE). Requesting app stop...");
+        info("Key press received in D (Q / ESCAPE). Requesting app stop...");
         if (app.app !is null)
         {
             sdlffcd_app_stop(app.app);
@@ -139,7 +140,7 @@ struct PlayerController
             {
                 double cur = app.player.getCurrentPts();
                 setInMarker(cur);
-                writefln("IN-marker set to %.3f s (OUT: %.3f s)", editModel.timeIn, editModel.timeOut);
+                infof("IN-marker set to %.3f s (OUT: %.3f s)", editModel.timeIn, editModel.timeOut);
             }
         }
     }
@@ -162,14 +163,14 @@ struct PlayerController
             {
                 double cur = app.player.getCurrentPts();
                 setOutMarker(cur);
-                writefln("OUT-marker set to %.3f s (IN: %.3f s)", editModel.timeOut, editModel.timeIn);
+                infof("OUT-marker set to %.3f s (IN: %.3f s)", editModel.timeOut, editModel.timeIn);
             }
         }
     }
     else if (key == sdlffcd_Key.SDLFFCD_KEY_L)
     {
         playerModel.isLooping = !playerModel.isLooping;
-        writefln("Loop mode: %s", playerModel.isLooping ? "ON" : "OFF");
+        infof("Loop mode: %s", playerModel.isLooping ? "ON" : "OFF");
     }
     else if (key == sdlffcd_Key.SDLFFCD_KEY_F)
     {
@@ -220,7 +221,7 @@ struct PlayerController
       }
       else if (quitOnEnd)
       {
-        writeln("Playback finished (end of video stream). Quitting...");
+        info("Playback finished (end of video stream). Quitting...");
         return UpdateResult(UpdateResult.Status.quit);
       }
       else
@@ -233,7 +234,7 @@ struct PlayerController
     }
     if (state.isError)
     {
-      stderr.writeln("Playback stopped due to error.");
+      error("Playback stopped due to error.");
       return UpdateResult(UpdateResult.Status.quit);
     }
 
