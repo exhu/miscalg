@@ -15,6 +15,7 @@ enum sdlffcd_Key : uint {
     SDLFFCD_KEY_F = 'f',
     SDLFFCD_KEY_I = 'i',
     SDLFFCD_KEY_L = 'l',
+    SDLFFCD_KEY_M = 'm',
     SDLFFCD_KEY_O = 'o',
     SDLFFCD_KEY_P = 'p',
     SDLFFCD_KEY_Q = 'q',
@@ -146,6 +147,7 @@ extern(D) unittest
     assert(sdlffcd_Key.SDLFFCD_KEY_F == 'f');
     assert(sdlffcd_Key.SDLFFCD_KEY_I == 'i');
     assert(sdlffcd_Key.SDLFFCD_KEY_L == 'l');
+    assert(sdlffcd_Key.SDLFFCD_KEY_M == 'm');
     assert(sdlffcd_Key.SDLFFCD_KEY_O == 'o');
     assert(sdlffcd_Key.SDLFFCD_KEY_P == 'p');
     assert(sdlffcd_Key.SDLFFCD_KEY_Q == 'q');

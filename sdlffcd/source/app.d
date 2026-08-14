@@ -41,6 +41,7 @@ void printHelp()
   writeln("  Shift + I     Seek to IN-marker position (pauses if playing)");
   writeln("  Shift + O     Seek to OUT-marker position (pauses if playing)");
   writeln("  L             Toggle looping between IN and OUT markers");
+  writeln("  M             Toggle audio mute / unmute");
   writeln("  F             Toggle fullscreen window mode");
   writeln("  V             Cycle current time overlay position (Top-Left -> Top-Right -> Bottom-Right -> Bottom-Left -> Hidden)");
   writeln("  Enter         Print lossless FFmpeg cut command to stdout");

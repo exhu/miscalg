@@ -38,6 +38,7 @@ struct PlayerFields
 {
   bool isPaused;
   bool isLooping;
+  bool isMuted;
   double timePosition;
   double timeDuration;
 }
@@ -74,7 +75,7 @@ struct Hms1000
   }
 }
 
-string formatTimestamp(double posSec, double totalSec, bool isLooping = false, bool isPaused = false)
+string formatTimestamp(double posSec, double totalSec, bool isLooping = false, bool isPaused = false, bool isMuted = false)
 {
   if (posSec < 0.0)
     posSec = 0.0;
@@ -93,6 +94,8 @@ string formatTimestamp(double posSec, double totalSec, bool isLooping = false, b
     res ~= " [LOOP]";
   if (isPaused)
     res ~= " [PAUSED]";
+  if (isMuted)
+    res ~= " [MUTE]";
 
   return res;
 }
@@ -159,6 +162,12 @@ unittest
 
   string ts4 = formatTimestamp(10.0, 20.0, true, true);
   assert(ts4 == "00:00:10.000 / 00:00:20.000 [LOOP] [PAUSED]");
+
+  string ts5 = formatTimestamp(10.0, 20.0, false, false, true);
+  assert(ts5 == "00:00:10.000 / 00:00:20.000 [MUTE]");
+
+  string ts6 = formatTimestamp(10.0, 20.0, true, true, true);
+  assert(ts6 == "00:00:10.000 / 00:00:20.000 [LOOP] [PAUSED] [MUTE]");
 
   string inOut1 = formatInOut(5.0, 25.5);
   assert(inOut1 == "IN: 00:00:05.000  OUT: 00:00:25.500");

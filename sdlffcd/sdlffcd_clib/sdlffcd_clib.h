@@ -16,6 +16,7 @@ typedef enum sdlffcd_Key {
     SDLFFCD_KEY_F = 'f',
     SDLFFCD_KEY_I = 'i',
     SDLFFCD_KEY_L = 'l',
+    SDLFFCD_KEY_M = 'm',
     SDLFFCD_KEY_O = 'o',
     SDLFFCD_KEY_P = 'p',
     SDLFFCD_KEY_Q = 'q',

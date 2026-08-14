@@ -172,6 +172,13 @@ struct PlayerController
         playerModel.isLooping = !playerModel.isLooping;
         infof("Loop mode: %s", playerModel.isLooping ? "ON" : "OFF");
     }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_M)
+    {
+        if (app.player !is null)
+        {
+            app.player.toggleMute();
+        }
+    }
     else if (key == sdlffcd_Key.SDLFFCD_KEY_F)
     {
         if (app.app !is null)
@@ -243,6 +250,7 @@ struct PlayerController
       playerModel.timePosition = appContext.player.getCurrentPts();
       playerModel.timeDuration = appContext.player.getDuration();
       playerModel.isPaused = appContext.player.isPaused;
+      playerModel.isMuted = appContext.player.isMuted;
 
       // Check looping boundary during normal playback
       if (playerModel.isLooping && !playerModel.isPaused)
@@ -263,7 +271,8 @@ struct PlayerController
         playerModel.timePosition,
         playerModel.timeDuration,
         playerModel.isLooping,
-        playerModel.isPaused);
+        playerModel.isPaused,
+        playerModel.isMuted);
       viewModel.formattedInOutTime = formatInOut(editModel.timeIn, editModel.timeOut);
     }
     if (viewModel.pollUpdate())

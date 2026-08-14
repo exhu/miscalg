@@ -50,6 +50,8 @@ final class VideoPlayer {
 
     private bool loaded = false;
     private bool paused = false;
+    private bool muted = false;
+    private float unmutedVolume = 1.0f;
     private MonoTime pauseStartTime;
 
     private MonoTime playbackStartTime;
@@ -93,6 +95,8 @@ final class VideoPlayer {
         loaded = true;
         playbackStarted = false;
         paused = false;
+        muted = false;
+        unmutedVolume = 1.0f;
         frameCount = 0;
         currentPts = 0.0;
         slotReady = false;
@@ -392,14 +396,39 @@ final class VideoPlayer {
 
     bool setVolume(float volume) {
         if (!loaded || vctx is null) return false;
-        return sdlffcd_video_set_audio_volume(vctx, volume);
+        unmutedVolume = volume;
+        if (!muted) {
+            return sdlffcd_video_set_audio_volume(vctx, volume);
+        }
+        return true;
     }
 
     float getVolume() const {
         if (!loaded || vctx is null) return 0.0f;
+        if (muted) return 0.0f;
         float vol = 1.0f;
         if (sdlffcd_video_get_audio_volume(vctx, &vol)) return vol;
         return 0.0f;
+    }
+
+    void toggleMute() {
+        setMuted(!muted);
+    }
+
+    void setMuted(bool mute) {
+        muted = mute;
+        if (loaded && vctx !is null) {
+            if (muted) {
+                sdlffcd_video_set_audio_volume(vctx, 0.0f);
+            } else {
+                sdlffcd_video_set_audio_volume(vctx, unmutedVolume);
+            }
+        }
+        infof("VideoPlayer: Audio %s", muted ? "muted" : "unmuted");
+    }
+
+    @property bool isMuted() const {
+        return muted;
     }
 }
 
@@ -418,6 +447,11 @@ unittest {
     auto player = new VideoPlayer();
     assert(!player.isLoaded);
     assert(!player.isPaused);
+    assert(!player.isMuted);
+    player.toggleMute();
+    assert(player.isMuted);
+    player.toggleMute();
+    assert(!player.isMuted);
     assert(player.getEndFrameTime() == 0.0);
     assert(player.getFps() == 0.0);
     assert(!player.redraw(null));
