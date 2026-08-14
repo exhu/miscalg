@@ -1,0 +1,35 @@
+Change current keys and add new features based on the following description:
+
+Space         Pause / Resume video playback
+Left / Right  Seek backward / forward by 5 seconds
+[ / ]         Step 1 frame backward / forward (pauses if playing)
+B             Seek to video start frame (00:00:00, ignores IN-marker)
+E             Seek to video end frame (ignores OUT-marker)
+I             Set IN-marker (start of cut) to current frame time
+O             Set OUT-marker (last frame of cut) to current frame time
+Shift + I     Seek to IN-marker position
+Shift + O     Seek to OUT-marker position
+L             Toggle looping between IN and OUT markers
+F             Toggle fullscreen window mode
+V             Cycle current time overlay position (Top-Left -> Top-Right -> Bottom-Right -> Botton-Left -> Hidden)
+Enter         Print lossless FFmpeg cut command to stdout
+Q / Esc       Quit application (auto-prints FFmpeg command if markers modified)
+
+Display that help to stdout when --help or no arguments are passed to the program.
+
+End frame = start time of the last playable frame in the video, i.e. it's total_video_duration-single_frame_display_time.
+
+"ffmpeg command cut command" means lossless ffmpeg video trimming command (see -ss -t -cv copy -ca copy options) that produces
+new video which contains source video between IN-marker and OUT-marker frames (inclusive).
+
+IN/OUT markers are set to first frame time and last frame time by default.
+
+There is already a model in @source/models.d for in/out markers (see EditFields).
+
+Make formattedCurrentTotalTime contain "[LOOP]" and "[PAUSED]" strings when the player is in loop mode, and/or paused.
+
+Introduce new text element for IN-OUT points which is displayed below formattedCurrentTotalTime, it follows the same visual style and follows the setting regarding toggling visibility and position.
+
+Program should not quit reaching the end of video unless a command line flag --quit is passed.
+
+Change long app name in window title, cli help text, README.md to "sdlffcd video trimming tool".
