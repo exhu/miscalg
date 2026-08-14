@@ -338,8 +338,6 @@ final class VideoPlayer {
         writefln("VideoPlayer: Seeking to %.2f seconds", targetPts);
         ringBuffer.requestSeek(targetPts);
         slotReady = false;
-        currentPts = targetPts;
-        frameCount = mediaInfo.fps > 0 ? cast(long)(targetPts * mediaInfo.fps) : 0;
 
         // Reset clock baseline so frame rendering syncs immediately
         playbackStartTime = MonoTime.currTime - dur!"msecs"(cast(long)(targetPts * 1000.0));

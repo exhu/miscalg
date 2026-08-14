@@ -280,8 +280,16 @@ struct PlayerController
       dirty = true;
     }
 
-    if (state.frameRendered || dirty)
+    if (state.frameRendered)
     {
+      view.render(appContext.app, viewModel);
+    }
+    else if (dirty)
+    {
+      if (appContext.player !is null)
+      {
+        appContext.player.redraw(appContext.app);
+      }
       view.render(appContext.app, viewModel);
     }
 

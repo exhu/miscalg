@@ -30,11 +30,12 @@ Successfully implemented new keybindings, frame-accurate stepping, IN/OUT cut ma
   - Added `markersModified` to `EditFields` to track user edits.
   - Added `formattedInOutTime` to `ViewFields`.
 
-### 3. Video Player Core (`source/video_player.d`)
+### 3. Video Player Core & Clean Frame Transition (`source/video_player.d`, `source/player_controller.d`)
 - Added `stepFrame(int direction)` to pause if active and seek single frames backward or forward by `1.0 / fps`.
-- Added `getFps()` and `getEndFrameTime()` helper methods.
-- Added `pausedSeekPending` flag so that when the player is paused, event wakeups (such as non-seek keypresses or window events) do not consume/render buffered frames or advance playback.
-- Updated `handlePaused` to consume and render the frame when a seek/step is actively initiated while paused.
+- Fixed frame flicker / wrong frame flash:
+  - Removed premature `currentPts` updates during `seekTo()`. `currentPts` is now only updated when the exact seek target frame is decoded and rendered.
+  - In `PlayerController.update()`, non-frame dirty updates (e.g. HUD position cycling) now invoke `appContext.player.redraw()` prior to drawing HUD text and presenting, preventing backbuffer swap glitches.
+- Added `pausedSeekPending` flag so that when the player is paused, event wakeups do not consume buffered frames or advance playback.
 
 ### 4. Player View & HUD Overlay (`source/player_view.d`)
 - Added `inOutText` alongside `timestampText`.
