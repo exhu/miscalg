@@ -138,13 +138,8 @@ struct PlayerController
             if (app.player !is null)
             {
                 double cur = app.player.getCurrentPts();
-                if (cur > editModel.timeOut)
-                {
-                    editModel.timeOut = cur;
-                }
-                editModel.timeIn = cur;
-                editModel.markersModified = true;
-                writefln("IN-marker set to %.3f s", cur);
+                setInMarker(cur);
+                writefln("IN-marker set to %.3f s (OUT: %.3f s)", editModel.timeIn, editModel.timeOut);
             }
         }
     }
@@ -166,13 +161,8 @@ struct PlayerController
             if (app.player !is null)
             {
                 double cur = app.player.getCurrentPts();
-                if (cur < editModel.timeIn)
-                {
-                    editModel.timeIn = cur;
-                }
-                editModel.timeOut = cur;
-                editModel.markersModified = true;
-                writefln("OUT-marker set to %.3f s", cur);
+                setOutMarker(cur);
+                writefln("OUT-marker set to %.3f s (IN: %.3f s)", editModel.timeOut, editModel.timeIn);
             }
         }
     }
@@ -299,6 +289,40 @@ struct PlayerController
     return UpdateResult(UpdateResult.Status.callAgain, state.nextUpdateMs);
   }
 
+  void setInMarker(double pos)
+  {
+    if (pos < 0.0)
+      pos = 0.0;
+    if (pos > editModel.timeOut)
+    {
+      double prevOut = editModel.timeOut;
+      editModel.timeIn = prevOut;
+      editModel.timeOut = pos;
+    }
+    else
+    {
+      editModel.timeIn = pos;
+    }
+    editModel.markersModified = true;
+  }
+
+  void setOutMarker(double pos)
+  {
+    if (pos < 0.0)
+      pos = 0.0;
+    if (pos < editModel.timeIn)
+    {
+      double prevIn = editModel.timeIn;
+      editModel.timeOut = prevIn;
+      editModel.timeIn = pos;
+    }
+    else
+    {
+      editModel.timeOut = pos;
+    }
+    editModel.markersModified = true;
+  }
+
   void cycleTimePosition()
   {
     auto nextPos = cast(TimePosition)((cast(int) viewModel.timePosition + 1) % (cast(int) TimePosition.invisible + 1));
@@ -332,6 +356,30 @@ unittest
   controller.editModel.markersModified = true;
   assert(controller.editModel.pollUpdate());
   assert(controller.editModel.markersModified);
+
+  // Test setInMarker and setOutMarker swapping
+  controller.editModel.timeIn = 5.0;
+  controller.editModel.timeOut = 20.0;
+
+  // Normal setInMarker: 2.0 < 20.0
+  controller.setInMarker(2.0);
+  assert(controller.editModel.timeIn == 2.0);
+  assert(controller.editModel.timeOut == 20.0);
+
+  // Swapped setInMarker: 25.0 > 20.0 -> IN becomes old OUT (20.0), OUT becomes 25.0
+  controller.setInMarker(25.0);
+  assert(controller.editModel.timeIn == 20.0);
+  assert(controller.editModel.timeOut == 25.0);
+
+  // Normal setOutMarker: 30.0 > 20.0
+  controller.setOutMarker(30.0);
+  assert(controller.editModel.timeIn == 20.0);
+  assert(controller.editModel.timeOut == 30.0);
+
+  // Swapped setOutMarker: 10.0 < 20.0 -> OUT becomes old IN (20.0), IN becomes 10.0
+  controller.setOutMarker(10.0);
+  assert(controller.editModel.timeIn == 10.0);
+  assert(controller.editModel.timeOut == 20.0);
 
   controller.viewModel.timePosition = TimePosition.topLeft;
   controller.cycleTimePosition();
