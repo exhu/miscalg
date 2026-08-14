@@ -523,6 +523,34 @@ bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds) {
     return true;
 }
 
+/** Compute an aspect-ratio-preserving destination rectangle that fits
+ *  src_w × src_h into the current renderer output area (letterbox/pillarbox). */
+static SDL_FRect sdlffcd_compute_letterbox(SDL_Renderer* renderer, int src_w, int src_h) {
+    int out_w = 0, out_h = 0;
+    SDL_GetCurrentRenderOutputSize(renderer, &out_w, &out_h);
+
+    SDL_FRect dst = {0.0f, 0.0f, (float)out_w, (float)out_h};
+    if (src_w <= 0 || src_h <= 0 || out_w <= 0 || out_h <= 0) return dst;
+
+    float src_aspect = (float)src_w / (float)src_h;
+    float dst_aspect = (float)out_w / (float)out_h;
+
+    if (src_aspect > dst_aspect) {
+        /* Video is wider than window → pillarbox (bars top & bottom) */
+        dst.w = (float)out_w;
+        dst.h = (float)out_w / src_aspect;
+        dst.x = 0.0f;
+        dst.y = ((float)out_h - dst.h) * 0.5f;
+    } else {
+        /* Video is taller than window → letterbox (bars left & right) */
+        dst.h = (float)out_h;
+        dst.w = (float)out_h * src_aspect;
+        dst.x = ((float)out_w - dst.w) * 0.5f;
+        dst.y = 0.0f;
+    }
+    return dst;
+}
+
 bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const sdlffcd_VideoFrame* frame) {
     if (!app || !app->renderer || !vctx || !frame) return false;
 
@@ -569,7 +597,8 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
 
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
-    SDL_RenderTexture(app->renderer, vctx->texture, NULL, NULL);
+    SDL_FRect dst = sdlffcd_compute_letterbox(app->renderer, vctx->texture_width, vctx->texture_height);
+    SDL_RenderTexture(app->renderer, vctx->texture, NULL, &dst);
     return true;
 }
 
@@ -578,7 +607,8 @@ bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx) {
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
     if (vctx->texture) {
-        SDL_RenderTexture(app->renderer, vctx->texture, NULL, NULL);
+        SDL_FRect dst = sdlffcd_compute_letterbox(app->renderer, vctx->texture_width, vctx->texture_height);
+        SDL_RenderTexture(app->renderer, vctx->texture, NULL, &dst);
     }
     return true;
 }
