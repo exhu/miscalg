@@ -574,3 +574,14 @@ void sdlffcd_text_destroy(sdlffcd_Text* text_obj) {
     }
     free(text_obj);
 }
+
+/* --- Log API --- */
+
+void sdlffcd_log_message(int category, sdlffcd_LogPriority priority, const char* message) {
+    if (!message) return;
+    SDL_LogMessage(category, (SDL_LogPriority)priority, "%s", message);
+}
+
+void sdlffcd_log_set_all_priority(sdlffcd_LogPriority priority) {
+    SDL_SetLogPriorities((SDL_LogPriority)priority);
+}

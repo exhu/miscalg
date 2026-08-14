@@ -109,6 +109,21 @@ bool sdlffcd_text_draw(sdlffcd_Text* text_obj, float x, float y);
 bool sdlffcd_text_draw_with_bg(sdlffcd_AppContext* app, sdlffcd_Text* text_obj, float x, float y, ubyte bg_r, ubyte bg_g, ubyte bg_b, ubyte bg_a, float padding);
 void sdlffcd_text_destroy(sdlffcd_Text* text_obj);
 
+/* --- Log API --- */
+
+enum sdlffcd_LogPriority : int {
+    SDLFFCD_LOG_PRIORITY_TRACE    = 1,
+    SDLFFCD_LOG_PRIORITY_VERBOSE  = 2,
+    SDLFFCD_LOG_PRIORITY_DEBUG    = 3,
+    SDLFFCD_LOG_PRIORITY_INFO     = 4,
+    SDLFFCD_LOG_PRIORITY_WARN     = 5,
+    SDLFFCD_LOG_PRIORITY_ERROR    = 6,
+    SDLFFCD_LOG_PRIORITY_CRITICAL = 7
+}
+
+void sdlffcd_log_message(int category, sdlffcd_LogPriority priority, const char* message);
+void sdlffcd_log_set_all_priority(sdlffcd_LogPriority priority);
+
 extern(D) unittest
 {
     assert(sdlffcd_Key.SDLFFCD_KEY_UNKNOWN == 0);
@@ -136,6 +151,14 @@ extern(D) unittest
     assert(sdlffcd_KeyMod.SDLFFCD_KMOD_CTRL == 2);
     assert(sdlffcd_KeyMod.SDLFFCD_KMOD_ALT == 4);
 
+    assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_TRACE == 1);
+    assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_VERBOSE == 2);
+    assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_DEBUG == 3);
+    assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_INFO == 4);
+    assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_WARN == 5);
+    assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_ERROR == 6);
+    assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_CRITICAL == 7);
+
     assert(!sdlffcd_app_need_redraw(null));
     assert(!sdlffcd_app_check_and_clear_redraw(null));
     sdlffcd_app_set_need_redraw(null, true);
@@ -152,4 +175,7 @@ extern(D) unittest
     assert(!sdlffcd_text_get_size(null, null, null));
     assert(!sdlffcd_text_draw(null, 0, 0));
     assert(!sdlffcd_text_draw_with_bg(null, null, 0, 0, 0, 0, 0, 0, 0));
+
+    // Verify null handling for log API functions
+    sdlffcd_log_message(0, sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_INFO, null);
 }
