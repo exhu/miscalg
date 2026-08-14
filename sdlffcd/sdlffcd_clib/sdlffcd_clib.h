@@ -186,11 +186,32 @@ bool sdlffcd_video_get_audio_volume(const sdlffcd_VideoContext* vctx, float* out
 typedef struct sdlffcd_Font sdlffcd_Font;
 typedef struct sdlffcd_Text sdlffcd_Text;
 
+/// Font hinting flags (matches TTF_HintingFlags values).
+typedef enum sdlffcd_FontHinting {
+    SDLFFCD_FONT_HINTING_NORMAL         = 0,
+    SDLFFCD_FONT_HINTING_LIGHT          = 1,
+    SDLFFCD_FONT_HINTING_MONO           = 2,
+    SDLFFCD_FONT_HINTING_NONE           = 3,
+    SDLFFCD_FONT_HINTING_LIGHT_SUBPIXEL = 4
+} sdlffcd_FontHinting;
+
 /// Present current renderer frame.
 void sdlffcd_app_present(sdlffcd_AppContext* app);
 
+/// Get window display content scale factor (e.g. 1.0, 1.5, 2.0 for HiDPI).
+float sdlffcd_app_get_display_scale(const sdlffcd_AppContext* app);
+
 /// Open font from file path at size in points. Returns NULL on failure.
 sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize);
+
+/// Set font hinting level.
+bool sdlffcd_font_set_hinting(sdlffcd_Font* font, sdlffcd_FontHinting hinting);
+
+/// Get current font hinting level.
+sdlffcd_FontHinting sdlffcd_font_get_hinting(const sdlffcd_Font* font);
+
+/// Set font point size and horizontal/vertical DPI.
+bool sdlffcd_font_set_size_dpi(sdlffcd_Font* font, float ptsize, int hdpi, int vdpi);
 
 /// Close font resource.
 void sdlffcd_font_close(sdlffcd_Font* font);

@@ -2,6 +2,7 @@ module sdlffcd.player_view;
 
 import std.logger : error, errorf;
 import std.string;
+import std.math : floor;
 import sdlffcd.sdlffcd_clib;
 import sdlffcd.models;
 
@@ -11,12 +12,25 @@ struct View
   sdlffcd_Text* timestampText;
   sdlffcd_Text* inOutText;
 
+  void updateDisplayScale(sdlffcd_AppContext* app)
+  {
+    if (app is null || timestampFont is null)
+      return;
+    float displayScale = sdlffcd_app_get_display_scale(app);
+    if (displayScale < 1.0f)
+      displayScale = 1.0f;
+    int dpi = cast(int)(72.0f * displayScale + 0.5f);
+    sdlffcd_font_set_size_dpi(timestampFont, 19.0f, dpi, dpi);
+  }
+
   bool initialize(sdlffcd_AppContext* app)
   {
     string fontPath = "fonts/GoogleSansCode-Regular.ttf";
     timestampFont = sdlffcd_font_open(toStringz(fontPath), 19.0f);
     if (timestampFont !is null)
     {
+      sdlffcd_font_set_hinting(timestampFont, sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL);
+      updateDisplayScale(app);
       timestampText = sdlffcd_text_create(app, timestampFont, "00:00:00.000 / 00:00:00.000");
       inOutText = sdlffcd_text_create(app, timestampFont, "IN: 00:00:00.000  OUT: 00:00:00.000");
 
@@ -134,6 +148,11 @@ struct View
     case TimePosition.invisible:
       return;
     }
+
+    tsX = floor(tsX);
+    tsY = floor(tsY);
+    ioX = floor(ioX);
+    ioY = floor(ioY);
 
     sdlffcd_text_draw_with_bg(app, timestampText, tsX, tsY, 0, 0, 0, 255, 4.0f);
     if (inOutText !is null && viewModel.formattedInOutTime.length > 0)

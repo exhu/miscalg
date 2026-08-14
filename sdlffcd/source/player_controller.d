@@ -43,6 +43,7 @@ struct PlayerController
         viewModel.windowWidth = w;
         viewModel.windowHeight = h;
       }
+      view.updateDisplayScale(appContext.app);
     }
   }
 

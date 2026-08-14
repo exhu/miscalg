@@ -108,13 +108,25 @@ bool sdlffcd_video_get_audio_volume(const(sdlffcd_VideoContext)* vctx, float* ou
 struct sdlffcd_Font;
 struct sdlffcd_Text;
 
+enum sdlffcd_FontHinting : int {
+    SDLFFCD_FONT_HINTING_NORMAL         = 0,
+    SDLFFCD_FONT_HINTING_LIGHT          = 1,
+    SDLFFCD_FONT_HINTING_MONO           = 2,
+    SDLFFCD_FONT_HINTING_NONE           = 3,
+    SDLFFCD_FONT_HINTING_LIGHT_SUBPIXEL = 4
+}
+
 void sdlffcd_app_present(sdlffcd_AppContext* app);
+float sdlffcd_app_get_display_scale(const(sdlffcd_AppContext)* app);
 sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize);
+bool sdlffcd_font_set_hinting(sdlffcd_Font* font, sdlffcd_FontHinting hinting);
+sdlffcd_FontHinting sdlffcd_font_get_hinting(const(sdlffcd_Font)* font);
+bool sdlffcd_font_set_size_dpi(sdlffcd_Font* font, float ptsize, int hdpi, int vdpi);
 void sdlffcd_font_close(sdlffcd_Font* font);
 sdlffcd_Text* sdlffcd_text_create(sdlffcd_AppContext* app, sdlffcd_Font* font, const char* text);
 bool sdlffcd_text_set_string(sdlffcd_Text* text_obj, const char* new_text);
 bool sdlffcd_text_set_color(sdlffcd_Text* text_obj, ubyte r, ubyte g, ubyte b, ubyte a);
-bool sdlffcd_text_get_size(const sdlffcd_Text* text_obj, int* out_w, int* out_h);
+bool sdlffcd_text_get_size(const(sdlffcd_Text)* text_obj, int* out_w, int* out_h);
 bool sdlffcd_text_draw(sdlffcd_Text* text_obj, float x, float y);
 bool sdlffcd_text_draw_with_bg(sdlffcd_AppContext* app, sdlffcd_Text* text_obj, float x, float y, ubyte bg_r, ubyte bg_g, ubyte bg_b, ubyte bg_a, float padding);
 void sdlffcd_text_destroy(sdlffcd_Text* text_obj);
@@ -162,6 +174,12 @@ extern(D) unittest
     assert(sdlffcd_KeyMod.SDLFFCD_KMOD_CTRL == 2);
     assert(sdlffcd_KeyMod.SDLFFCD_KMOD_ALT == 4);
 
+    assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL == 0);
+    assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_LIGHT == 1);
+    assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_MONO == 2);
+    assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NONE == 3);
+    assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_LIGHT_SUBPIXEL == 4);
+
     assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_TRACE == 1);
     assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_VERBOSE == 2);
     assert(sdlffcd_LogPriority.SDLFFCD_LOG_PRIORITY_DEBUG == 3);
@@ -174,6 +192,7 @@ extern(D) unittest
     assert(!sdlffcd_app_check_and_clear_redraw(null));
     sdlffcd_app_set_need_redraw(null, true);
     assert(!sdlffcd_app_get_window_size(null, null, null));
+    assert(sdlffcd_app_get_display_scale(null) == 1.0f);
     assert(!sdlffcd_app_toggle_fullscreen(null));
     assert(!sdlffcd_app_is_fullscreen(null));
     assert(!sdlffcd_video_redraw(null, null));
@@ -188,6 +207,9 @@ extern(D) unittest
 
     // Verify null handling for text API functions
     assert(sdlffcd_font_open(null, 12.0f) is null);
+    assert(!sdlffcd_font_set_hinting(null, sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL));
+    assert(sdlffcd_font_get_hinting(null) == sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL);
+    assert(!sdlffcd_font_set_size_dpi(null, 12.0f, 96, 96));
     assert(sdlffcd_text_create(null, null, null) is null);
     assert(!sdlffcd_text_set_string(null, null));
     assert(!sdlffcd_text_set_color(null, 255, 255, 255, 255));

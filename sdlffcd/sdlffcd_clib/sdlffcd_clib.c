@@ -705,6 +705,12 @@ void sdlffcd_app_present(sdlffcd_AppContext* app) {
     SDL_RenderPresent(app->renderer);
 }
 
+float sdlffcd_app_get_display_scale(const sdlffcd_AppContext* app) {
+    if (!app || !app->window) return 1.0f;
+    float scale = SDL_GetWindowDisplayScale(app->window);
+    return (scale > 0.0f) ? scale : 1.0f;
+}
+
 sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize) {
     if (!filepath || ptsize <= 0.0f) return NULL;
     TTF_Font* ttf_font = TTF_OpenFont(filepath, ptsize);
@@ -719,6 +725,22 @@ sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize) {
     }
     font->ttf_font = ttf_font;
     return font;
+}
+
+bool sdlffcd_font_set_hinting(sdlffcd_Font* font, sdlffcd_FontHinting hinting) {
+    if (!font || !font->ttf_font) return false;
+    TTF_SetFontHinting(font->ttf_font, (TTF_HintingFlags)hinting);
+    return true;
+}
+
+sdlffcd_FontHinting sdlffcd_font_get_hinting(const sdlffcd_Font* font) {
+    if (!font || !font->ttf_font) return SDLFFCD_FONT_HINTING_NORMAL;
+    return (sdlffcd_FontHinting)TTF_GetFontHinting(font->ttf_font);
+}
+
+bool sdlffcd_font_set_size_dpi(sdlffcd_Font* font, float ptsize, int hdpi, int vdpi) {
+    if (!font || !font->ttf_font || ptsize <= 0.0f) return false;
+    return TTF_SetFontSizeDPI(font->ttf_font, ptsize, hdpi, vdpi);
 }
 
 void sdlffcd_font_close(sdlffcd_Font* font) {
