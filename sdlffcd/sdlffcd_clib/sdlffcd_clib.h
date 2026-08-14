@@ -157,8 +157,28 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
 /// Redraw the last rendered video frame texture to the current renderer viewport.
 bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx);
 
-/// Close video context and free all allocated FFmpeg resources.
+/// Close video context and free all allocated FFmpeg and audio resources.
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
+
+/* --- Audio API --- */
+
+/// Check if video context has an active audio stream and decoder.
+bool sdlffcd_video_has_audio(const sdlffcd_VideoContext* vctx);
+
+/// Pause or resume audio playback stream. Returns true on success.
+bool sdlffcd_video_set_audio_paused(sdlffcd_VideoContext* vctx, bool paused);
+
+/// Check if audio playback stream is paused. Returns true if paused or invalid.
+bool sdlffcd_video_is_audio_paused(const sdlffcd_VideoContext* vctx);
+
+/// Clear all queued audio data in playback stream. Returns true on success.
+bool sdlffcd_video_clear_audio(sdlffcd_VideoContext* vctx);
+
+/// Set playback audio volume gain (1.0 = normal volume, 0.0 = muted). Returns true on success.
+bool sdlffcd_video_set_audio_volume(sdlffcd_VideoContext* vctx, float volume);
+
+/// Query current audio volume gain. Returns true on success.
+bool sdlffcd_video_get_audio_volume(const sdlffcd_VideoContext* vctx, float* out_volume);
 
 /* --- Text API --- */
 

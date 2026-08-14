@@ -16,7 +16,7 @@ static bool SDLCALL window_event_watch(void* userdata, SDL_Event* event) {
 }
 
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize SDL: %s", SDL_GetError());
         return NULL;
     }
@@ -219,6 +219,8 @@ sdlffcd_VideoContext* sdlffcd_video_open(const char* filename) {
 
     vctx->video_stream_idx = -1;
     vctx->audio_stream_idx = -1;
+    vctx->seek_min_audio_pts = -1.0;
+    vctx->audio_volume = 1.0f;
 
     if (avformat_open_input(&vctx->fmt_ctx, filename, NULL, NULL) < 0) {
         free(vctx);
@@ -282,14 +284,66 @@ sdlffcd_VideoContext* sdlffcd_video_open(const char* filename) {
     vctx->info.audio_stream_index = (vctx->audio_stream_idx >= 0) ? vctx->audio_stream_idx : -1;
 
     if (vctx->audio_stream_idx >= 0 && audio_codec) {
+        AVStream* ast = vctx->fmt_ctx->streams[vctx->audio_stream_idx];
+        vctx->audio_codec_ctx = avcodec_alloc_context3(audio_codec);
+        if (vctx->audio_codec_ctx) {
+            avcodec_parameters_to_context(vctx->audio_codec_ctx, ast->codecpar);
+            vctx->audio_codec_ctx->pkt_timebase = ast->time_base;
+            if (avcodec_open2(vctx->audio_codec_ctx, audio_codec, NULL) < 0) {
+                avcodec_free_context(&vctx->audio_codec_ctx);
+            }
+        }
+
         snprintf(vctx->info.audio_codec_name, sizeof(vctx->info.audio_codec_name), "%s", audio_codec->name ? audio_codec->name : "unknown");
+
+        if (vctx->audio_codec_ctx) {
+            vctx->audio_target_channels = 2;
+            vctx->audio_target_sample_rate = (vctx->audio_codec_ctx->sample_rate > 0) ? vctx->audio_codec_ctx->sample_rate : 44100;
+
+            AVChannelLayout out_ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+            AVChannelLayout in_ch_layout;
+            if (vctx->audio_codec_ctx->ch_layout.nb_channels > 0) {
+                av_channel_layout_copy(&in_ch_layout, &vctx->audio_codec_ctx->ch_layout);
+            } else {
+                av_channel_layout_default(&in_ch_layout, 2);
+            }
+
+            int swr_res = swr_alloc_set_opts2(
+                &vctx->swr_ctx,
+                &out_ch_layout,
+                AV_SAMPLE_FMT_S16,
+                vctx->audio_target_sample_rate,
+                &in_ch_layout,
+                vctx->audio_codec_ctx->sample_fmt,
+                vctx->audio_codec_ctx->sample_rate,
+                0, NULL
+            );
+            av_channel_layout_uninit(&in_ch_layout);
+
+            if (swr_res >= 0 && vctx->swr_ctx) {
+                if (swr_init(vctx->swr_ctx) < 0) {
+                    swr_free(&vctx->swr_ctx);
+                    vctx->swr_ctx = NULL;
+                }
+            }
+
+            SDL_AudioSpec spec;
+            spec.format = SDL_AUDIO_S16;
+            spec.channels = vctx->audio_target_channels;
+            spec.freq = vctx->audio_target_sample_rate;
+            vctx->audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+            if (vctx->audio_stream) {
+                SDL_SetAudioStreamGain(vctx->audio_stream, vctx->audio_volume);
+            }
+        }
     } else {
         snprintf(vctx->info.audio_codec_name, sizeof(vctx->info.audio_codec_name), "none");
     }
 
     vctx->frame = av_frame_alloc();
+    vctx->audio_frame = av_frame_alloc();
     vctx->pkt = av_packet_alloc();
-    if (!vctx->frame || !vctx->pkt) {
+    if (!vctx->frame || !vctx->audio_frame || !vctx->pkt) {
         sdlffcd_video_close(vctx);
         return NULL;
     }
@@ -304,6 +358,56 @@ bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_Medi
 }
 
 #include <libavutil/imgutils.h>
+
+static void process_audio_packet(sdlffcd_VideoContext* vctx, AVPacket* pkt) {
+    if (!vctx || !vctx->audio_codec_ctx || !vctx->audio_stream || !vctx->swr_ctx || !vctx->audio_frame) return;
+
+    int ret = avcodec_send_packet(vctx->audio_codec_ctx, pkt);
+    if (ret < 0) return;
+
+    while (avcodec_receive_frame(vctx->audio_codec_ctx, vctx->audio_frame) == 0) {
+        if (vctx->seek_min_audio_pts >= 0.0 && vctx->audio_stream_idx >= 0) {
+            AVStream* ast = vctx->fmt_ctx->streams[vctx->audio_stream_idx];
+            double frame_pts = 0.0;
+            if (vctx->audio_frame->pts != AV_NOPTS_VALUE) {
+                frame_pts = (double)vctx->audio_frame->pts * av_q2d(ast->time_base);
+            }
+            if (frame_pts < vctx->seek_min_audio_pts) {
+                continue;
+            }
+        }
+
+        int out_samples = (int)av_rescale_rnd(
+            swr_get_delay(vctx->swr_ctx, vctx->audio_codec_ctx->sample_rate) + vctx->audio_frame->nb_samples,
+            vctx->audio_target_sample_rate,
+            vctx->audio_codec_ctx->sample_rate,
+            AV_ROUND_UP
+        );
+
+        int bytes_needed = out_samples * vctx->audio_target_channels * (int)sizeof(int16_t);
+        if (vctx->audio_resample_buf_size < bytes_needed) {
+            uint8_t* new_buf = (uint8_t*)realloc(vctx->audio_resample_buf, (size_t)bytes_needed + 1024);
+            if (!new_buf) continue;
+            vctx->audio_resample_buf = new_buf;
+            vctx->audio_resample_buf_size = bytes_needed + 1024;
+        }
+
+        uint8_t* out_ptr = vctx->audio_resample_buf;
+        const uint8_t** in_ptr = (const uint8_t**)(void*)vctx->audio_frame->data;
+        int converted_samples = swr_convert(
+            vctx->swr_ctx,
+            &out_ptr,
+            out_samples,
+            in_ptr,
+            vctx->audio_frame->nb_samples
+        );
+
+        if (converted_samples > 0) {
+            int converted_bytes = converted_samples * vctx->audio_target_channels * (int)sizeof(int16_t);
+            SDL_PutAudioStreamData(vctx->audio_stream, vctx->audio_resample_buf, converted_bytes);
+        }
+    }
+}
 
 sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame) {
     if (!vctx || !out_frame || !vctx->video_codec_ctx || vctx->video_stream_idx < 0) {
@@ -352,6 +456,9 @@ sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlf
         if (ret < 0) {
             if (ret == AVERROR_EOF) {
                 avcodec_send_packet(vctx->video_codec_ctx, NULL);
+                if (vctx->audio_codec_ctx) {
+                    process_audio_packet(vctx, NULL);
+                }
             } else {
                 return SDLFFCD_DECODE_ERROR;
             }
@@ -362,6 +469,9 @@ sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlf
                 if (send_ret < 0 && send_ret != AVERROR(EAGAIN) && send_ret != AVERROR_EOF) {
                     return SDLFFCD_DECODE_ERROR;
                 }
+            } else if (vctx->audio_stream_idx >= 0 && vctx->pkt->stream_index == vctx->audio_stream_idx) {
+                process_audio_packet(vctx, vctx->pkt);
+                av_packet_unref(vctx->pkt);
             } else {
                 av_packet_unref(vctx->pkt);
             }
@@ -382,9 +492,19 @@ bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds) {
     if (vctx->video_codec_ctx) {
         avcodec_flush_buffers(vctx->video_codec_ctx);
     }
+    if (vctx->audio_codec_ctx) {
+        avcodec_flush_buffers(vctx->audio_codec_ctx);
+    }
+    if (vctx->swr_ctx) {
+        swr_init(vctx->swr_ctx);
+    }
+    if (vctx->audio_stream) {
+        SDL_ClearAudioStream(vctx->audio_stream);
+    }
     vctx->has_cached_frame = false;
 
     if (target_pts_seconds > 0.0) {
+        vctx->seek_min_audio_pts = target_pts_seconds;
         double frame_dur = (vctx->info.fps > 0.0) ? (1.0 / vctx->info.fps) : 0.033;
         double threshold = target_pts_seconds - (frame_dur * 0.5);
         while (1) {
@@ -397,6 +517,7 @@ bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds) {
                 break;
             }
         }
+        vctx->seek_min_audio_pts = -1.0;
     }
 
     return true;
@@ -464,6 +585,19 @@ bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx) {
 
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx) {
     if (!vctx) return;
+    if (vctx->audio_stream) {
+        SDL_DestroyAudioStream(vctx->audio_stream);
+        vctx->audio_stream = NULL;
+    }
+    if (vctx->swr_ctx) {
+        swr_free(&vctx->swr_ctx);
+        vctx->swr_ctx = NULL;
+    }
+    if (vctx->audio_resample_buf) {
+        free(vctx->audio_resample_buf);
+        vctx->audio_resample_buf = NULL;
+        vctx->audio_resample_buf_size = 0;
+    }
     if (vctx->texture) {
         SDL_DestroyTexture(vctx->texture);
         vctx->texture = NULL;
@@ -476,11 +610,54 @@ void sdlffcd_video_close(sdlffcd_VideoContext* vctx) {
         av_freep(&vctx->sws_data[0]);
     }
     if (vctx->frame) av_frame_free(&vctx->frame);
+    if (vctx->audio_frame) av_frame_free(&vctx->audio_frame);
     if (vctx->pkt) av_packet_free(&vctx->pkt);
     if (vctx->video_codec_ctx) avcodec_free_context(&vctx->video_codec_ctx);
     if (vctx->audio_codec_ctx) avcodec_free_context(&vctx->audio_codec_ctx);
     if (vctx->fmt_ctx) avformat_close_input(&vctx->fmt_ctx);
     free(vctx);
+}
+
+/* --- Audio API Implementation --- */
+
+bool sdlffcd_video_has_audio(const sdlffcd_VideoContext* vctx) {
+    return vctx && vctx->audio_stream && vctx->audio_codec_ctx;
+}
+
+bool sdlffcd_video_set_audio_paused(sdlffcd_VideoContext* vctx, bool paused) {
+    if (!vctx || !vctx->audio_stream) return false;
+    if (paused) {
+        return SDL_PauseAudioStreamDevice(vctx->audio_stream);
+    } else {
+        return SDL_ResumeAudioStreamDevice(vctx->audio_stream);
+    }
+}
+
+bool sdlffcd_video_is_audio_paused(const sdlffcd_VideoContext* vctx) {
+    if (!vctx || !vctx->audio_stream) return true;
+    return SDL_AudioStreamDevicePaused(vctx->audio_stream);
+}
+
+bool sdlffcd_video_clear_audio(sdlffcd_VideoContext* vctx) {
+    if (!vctx || !vctx->audio_stream) return false;
+    return SDL_ClearAudioStream(vctx->audio_stream);
+}
+
+bool sdlffcd_video_set_audio_volume(sdlffcd_VideoContext* vctx, float volume) {
+    if (!vctx) return false;
+    if (volume < 0.0f) volume = 0.0f;
+    if (volume > 1.0f) volume = 1.0f;
+    vctx->audio_volume = volume;
+    if (vctx->audio_stream) {
+        return SDL_SetAudioStreamGain(vctx->audio_stream, volume);
+    }
+    return true;
+}
+
+bool sdlffcd_video_get_audio_volume(const sdlffcd_VideoContext* vctx, float* out_volume) {
+    if (!vctx || !out_volume) return false;
+    *out_volume = vctx->audio_volume;
+    return true;
 }
 
 /* --- Text API Implementation --- */

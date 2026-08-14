@@ -93,6 +93,15 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
 bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx);
 void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
 
+/* --- Audio API --- */
+
+bool sdlffcd_video_has_audio(const(sdlffcd_VideoContext)* vctx);
+bool sdlffcd_video_set_audio_paused(sdlffcd_VideoContext* vctx, bool paused);
+bool sdlffcd_video_is_audio_paused(const(sdlffcd_VideoContext)* vctx);
+bool sdlffcd_video_clear_audio(sdlffcd_VideoContext* vctx);
+bool sdlffcd_video_set_audio_volume(sdlffcd_VideoContext* vctx, float volume);
+bool sdlffcd_video_get_audio_volume(const(sdlffcd_VideoContext)* vctx, float* out_volume);
+
 /* --- Text API --- */
 
 struct sdlffcd_Font;
@@ -166,6 +175,14 @@ extern(D) unittest
     assert(!sdlffcd_app_toggle_fullscreen(null));
     assert(!sdlffcd_app_is_fullscreen(null));
     assert(!sdlffcd_video_redraw(null, null));
+
+    // Verify null handling for audio API functions
+    assert(!sdlffcd_video_has_audio(null));
+    assert(!sdlffcd_video_set_audio_paused(null, true));
+    assert(sdlffcd_video_is_audio_paused(null));
+    assert(!sdlffcd_video_clear_audio(null));
+    assert(!sdlffcd_video_set_audio_volume(null, 0.5f));
+    assert(!sdlffcd_video_get_audio_volume(null, null));
 
     // Verify null handling for text API functions
     assert(sdlffcd_font_open(null, 12.0f) is null);

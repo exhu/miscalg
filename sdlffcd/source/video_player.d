@@ -232,6 +232,9 @@ final class VideoPlayer {
         if (!playbackStarted) {
             playbackStartTime = MonoTime.currTime;
             playbackStarted = true;
+            if (vctx !is null) {
+                sdlffcd_video_set_audio_paused(vctx, false);
+            }
         }
 
         double framePts = resolvePts(renderSlot.frame.pts);
@@ -281,6 +284,9 @@ final class VideoPlayer {
             paused = true;
             pausedSeekPending = false;
             pauseStartTime = MonoTime.currTime;
+            if (vctx !is null) {
+                sdlffcd_video_set_audio_paused(vctx, true);
+            }
             infof("VideoPlayer: Paused at %.2f s", currentPts);
         }
     }
@@ -291,6 +297,9 @@ final class VideoPlayer {
             pausedSeekPending = false;
             if (playbackStarted) {
                 playbackStartTime += (MonoTime.currTime - pauseStartTime);
+            }
+            if (vctx !is null) {
+                sdlffcd_video_set_audio_paused(vctx, false);
             }
             infof("VideoPlayer: Resumed at %.2f s", currentPts);
         }
@@ -336,6 +345,10 @@ final class VideoPlayer {
         }
 
         infof("VideoPlayer: Seeking to %.2f seconds", targetPts);
+        currentPts = targetPts;
+        if (vctx !is null) {
+            sdlffcd_video_clear_audio(vctx);
+        }
         ringBuffer.requestSeek(targetPts);
         slotReady = false;
 
@@ -372,6 +385,22 @@ final class VideoPlayer {
         if (!loaded || app is null || vctx is null) return false;
         return sdlffcd_video_redraw(app, vctx);
     }
+
+    @property bool hasAudio() const {
+        return loaded && (vctx !is null) && sdlffcd_video_has_audio(vctx);
+    }
+
+    bool setVolume(float volume) {
+        if (!loaded || vctx is null) return false;
+        return sdlffcd_video_set_audio_volume(vctx, volume);
+    }
+
+    float getVolume() const {
+        if (!loaded || vctx is null) return 0.0f;
+        float vol = 1.0f;
+        if (sdlffcd_video_get_audio_volume(vctx, &vol)) return vol;
+        return 0.0f;
+    }
 }
 
 unittest {
@@ -392,4 +421,7 @@ unittest {
     assert(player.getEndFrameTime() == 0.0);
     assert(player.getFps() == 0.0);
     assert(!player.redraw(null));
+    assert(!player.hasAudio);
+    assert(!player.setVolume(0.5f));
+    assert(player.getVolume() == 0.0f);
 }

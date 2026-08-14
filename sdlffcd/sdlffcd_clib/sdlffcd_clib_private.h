@@ -18,7 +18,9 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
+#include <libavutil/channel_layout.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 
 struct sdlffcd_AppContext {
     SDL_Window* window;
@@ -47,6 +49,7 @@ struct sdlffcd_VideoContext {
     int video_stream_idx;
     int audio_stream_idx;
     AVFrame* frame;
+    AVFrame* audio_frame;
     AVPacket* pkt;
     sdlffcd_MediaInfo info;
 
@@ -59,6 +62,16 @@ struct sdlffcd_VideoContext {
     struct SwsContext* sws_ctx;  /* Owned by vctx; allocated when pixel format conversion is required */
     uint8_t* sws_data[4];        /* Pointers to sws conversion output plane buffers owned by vctx */
     int sws_linesize[4];         /* Pitches/strides for sws conversion plane buffers */
+
+    /* Audio playback & resampling resources (lifetime managed by vctx until sdlffcd_video_close) */
+    SDL_AudioStream* audio_stream; /* Owned by vctx; created when audio stream is present */
+    struct SwrContext* swr_ctx;    /* Owned by vctx; resamples audio to standard stereo PCM */
+    uint8_t* audio_resample_buf;   /* Buffer for resampled audio samples */
+    int audio_resample_buf_size;   /* Current capacity of audio_resample_buf in bytes */
+    int audio_target_sample_rate;  /* Target audio sample rate in Hz */
+    int audio_target_channels;     /* Target audio channels (always 2 for stereo) */
+    float audio_volume;            /* Playback volume (1.0 = 100%) */
+    double seek_min_audio_pts;     /* Minimum audio PTS allowed during seek */
 
     /* Frame-accurate seek cache */
     bool has_cached_frame;
