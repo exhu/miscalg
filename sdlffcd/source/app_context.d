@@ -10,7 +10,7 @@ struct AppContext
     sdlffcd_AppContext* app;
     VideoPlayer player;
 
-    bool initialize(string title = "sdlffcd - Video Player", int width = 800, int height = 600)
+    bool initialize(string title = "sdlffcd video trimming tool", int width = 800, int height = 600)
     {
         writeln("Initializing SDL application...");
         app = sdlffcd_app_init(toStringz(title), width, height);

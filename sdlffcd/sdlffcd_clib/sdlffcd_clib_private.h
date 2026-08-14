@@ -59,5 +59,10 @@ struct sdlffcd_VideoContext {
     struct SwsContext* sws_ctx;  /* Owned by vctx; allocated when pixel format conversion is required */
     uint8_t* sws_data[4];        /* Pointers to sws conversion output plane buffers owned by vctx */
     int sws_linesize[4];         /* Pitches/strides for sws conversion plane buffers */
+
+    /* Frame-accurate seek cache */
+    bool has_cached_frame;
+    uint8_t _pad_seek[7];
+    sdlffcd_VideoFrame cached_frame;
 };
 

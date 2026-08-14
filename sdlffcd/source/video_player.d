@@ -59,6 +59,7 @@ final class VideoPlayer {
 
     private DecodedSlot renderSlot;
     private bool slotReady = false;
+    private bool pausedSeekPending = false;
 
     this() {}
 
@@ -95,6 +96,7 @@ final class VideoPlayer {
         frameCount = 0;
         currentPts = 0.0;
         slotReady = false;
+        pausedSeekPending = false;
 
         return true;
     }
@@ -176,6 +178,29 @@ final class VideoPlayer {
     }
 
     private PlayerUpdateState handlePaused(sdlffcd_AppContext* app) {
+        if (pausedSeekPending) {
+            if (!slotReady) {
+                if (ringBuffer.pop(renderSlot)) {
+                    slotReady = true;
+                }
+            }
+
+            if (slotReady) {
+                if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
+                    frameCount = mediaInfo.fps > 0 ? cast(long)(renderSlot.frame.pts * mediaInfo.fps) : frameCount;
+                    currentPts = resolvePts(renderSlot.frame.pts);
+                    sdlffcd_video_render_frame(app, vctx, &renderSlot.frame);
+                    slotReady = false;
+                    pausedSeekPending = false;
+                    return PlayerUpdateState.updateAgain(-1, true);
+                } else {
+                    slotReady = false;
+                    pausedSeekPending = false;
+                }
+            }
+            return PlayerUpdateState.updateAgain(1, checkRedraw(app));
+        }
+
         bool reqRedraw = checkRedraw(app);
         return PlayerUpdateState.updateAgain(-1, reqRedraw);
     }
@@ -254,6 +279,7 @@ final class VideoPlayer {
     void pause() {
         if (loaded && !paused) {
             paused = true;
+            pausedSeekPending = false;
             pauseStartTime = MonoTime.currTime;
             writefln("VideoPlayer: Paused at %.2f s", currentPts);
         }
@@ -262,6 +288,7 @@ final class VideoPlayer {
     void resume() {
         if (loaded && paused) {
             paused = false;
+            pausedSeekPending = false;
             if (playbackStarted) {
                 playbackStartTime += (MonoTime.currTime - pauseStartTime);
             }
@@ -283,7 +310,18 @@ final class VideoPlayer {
     }
 
     double getDuration() const {
-        return mediaInfo.duration_seconds;
+        return (loaded && mediaInfo.duration_seconds > 0.0) ? mediaInfo.duration_seconds : 0.0;
+    }
+
+    double getFps() const {
+        return (loaded && mediaInfo.fps > 0.0) ? mediaInfo.fps : 0.0;
+    }
+
+    double getEndFrameTime() const {
+        if (!loaded) return 0.0;
+        double frameDuration = (mediaInfo.fps > 0.0) ? (1.0 / mediaInfo.fps) : 0.0;
+        double endFrame = mediaInfo.duration_seconds - frameDuration;
+        return (endFrame > 0.0) ? endFrame : 0.0;
     }
 
     double getCurrentPts() const {
@@ -306,6 +344,7 @@ final class VideoPlayer {
         // Reset clock baseline so frame rendering syncs immediately
         playbackStartTime = MonoTime.currTime - dur!"msecs"(cast(long)(targetPts * 1000.0));
         if (paused) {
+            pausedSeekPending = true;
             pauseStartTime = MonoTime.currTime;
         }
     }
@@ -316,6 +355,19 @@ final class VideoPlayer {
 
     void fastForward(double seconds = 5.0) {
         seekTo(currentPts + seconds);
+    }
+
+    void stepFrame(int direction) {
+        if (!loaded) return;
+        if (!paused) {
+            pause();
+        }
+        double frameDuration = (mediaInfo.fps > 0.0) ? (1.0 / mediaInfo.fps) : (1.0 / 30.0);
+        double target = currentPts + (direction * frameDuration);
+        double endFrame = getEndFrameTime();
+        if (target < 0.0) target = 0.0;
+        if (target > endFrame) target = endFrame;
+        seekTo(target);
     }
 
     bool redraw(sdlffcd_AppContext* app) {
@@ -339,5 +391,7 @@ unittest {
     auto player = new VideoPlayer();
     assert(!player.isLoaded);
     assert(!player.isPaused);
+    assert(player.getEndFrameTime() == 0.0);
+    assert(player.getFps() == 0.0);
     assert(!player.redraw(null));
 }

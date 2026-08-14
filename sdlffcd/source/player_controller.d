@@ -15,9 +15,14 @@ struct PlayerController
   Tracked!ViewModel viewModel;
   Tracked!PlayerModel playerModel;
   Tracked!EditModel editModel;
+  string videoFilename;
+  bool quitOnEnd = false;
+  bool markersInitialized = false;
 
-  bool initialize(ref AppContext appContext)
+  bool initialize(ref AppContext appContext, string filename = "samplevideo.mp4", bool quitOnEnd = false)
   {
+    this.videoFilename = filename;
+    this.quitOnEnd = quitOnEnd;
     updateWindowSize(appContext);
     return view.initialize(appContext.app);
   }
@@ -40,44 +45,156 @@ struct PlayerController
     }
   }
 
-  void handleKeyPress(ref AppContext app, uint key)
+  void printFfmpegCutCommand(ref AppContext app)
   {
+    double fps = (app.player !is null) ? app.player.getFps() : 0.0;
+    string cmd = generateFfmpegCutCommand(videoFilename, editModel.timeIn, editModel.timeOut, fps);
+    writeln("\nFFmpeg cut command:");
+    writeln(cmd);
+    writeln();
+  }
+
+  void handleKeyPress(ref AppContext app, uint key, ushort mod = 0)
+  {
+    bool isShift = (mod & sdlffcd_KeyMod.SDLFFCD_KMOD_SHIFT) != 0;
+
     if (key == sdlffcd_Key.SDLFFCD_KEY_ESCAPE ||
         key == sdlffcd_Key.SDLFFCD_KEY_Q)
     {
+        if (editModel.markersModified)
+        {
+            printFfmpegCutCommand(app);
+        }
         writeln("Key press received in D (Q / ESCAPE). Requesting app stop...");
         if (app.app !is null)
         {
             sdlffcd_app_stop(app.app);
         }
     }
-    else if (key == sdlffcd_Key.SDLFFCD_KEY_SPACE ||
-             key == sdlffcd_Key.SDLFFCD_KEY_P)
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_SPACE)
     {
         if (app.player !is null)
         {
             app.player.togglePause();
         }
     }
-    else if (key == sdlffcd_Key.SDLFFCD_KEY_R ||
-             key == sdlffcd_Key.SDLFFCD_KEY_LEFT) // Left arrow or 'R'
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_LEFT)
     {
         if (app.player !is null)
         {
             app.player.rewind(5.0);
         }
     }
-    else if (key == sdlffcd_Key.SDLFFCD_KEY_F ||
-             key == sdlffcd_Key.SDLFFCD_KEY_RIGHT) // Right arrow or 'F'
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_RIGHT)
     {
         if (app.player !is null)
         {
             app.player.fastForward(5.0);
         }
     }
-    else if (key == sdlffcd_Key.SDLFFCD_KEY_T)
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_LEFTBRACKET)
+    {
+        if (app.player !is null)
+        {
+            app.player.stepFrame(-1);
+        }
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_RIGHTBRACKET)
+    {
+        if (app.player !is null)
+        {
+            app.player.stepFrame(1);
+        }
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_B)
+    {
+        if (app.player !is null)
+        {
+            app.player.seekTo(0.0);
+        }
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_E)
+    {
+        if (app.player !is null)
+        {
+            app.player.seekTo(app.player.getEndFrameTime());
+        }
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_I)
+    {
+        if (isShift)
+        {
+            if (app.player !is null)
+            {
+                if (!app.player.isPaused)
+                {
+                    app.player.pause();
+                }
+                app.player.seekTo(editModel.timeIn);
+            }
+        }
+        else
+        {
+            if (app.player !is null)
+            {
+                double cur = app.player.getCurrentPts();
+                if (cur > editModel.timeOut)
+                {
+                    editModel.timeOut = cur;
+                }
+                editModel.timeIn = cur;
+                editModel.markersModified = true;
+                writefln("IN-marker set to %.3f s", cur);
+            }
+        }
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_O)
+    {
+        if (isShift)
+        {
+            if (app.player !is null)
+            {
+                if (!app.player.isPaused)
+                {
+                    app.player.pause();
+                }
+                app.player.seekTo(editModel.timeOut);
+            }
+        }
+        else
+        {
+            if (app.player !is null)
+            {
+                double cur = app.player.getCurrentPts();
+                if (cur < editModel.timeIn)
+                {
+                    editModel.timeIn = cur;
+                }
+                editModel.timeOut = cur;
+                editModel.markersModified = true;
+                writefln("OUT-marker set to %.3f s", cur);
+            }
+        }
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_L)
+    {
+        playerModel.isLooping = !playerModel.isLooping;
+        writefln("Loop mode: %s", playerModel.isLooping ? "ON" : "OFF");
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_F)
+    {
+        if (app.app !is null)
+        {
+            sdlffcd_app_toggle_fullscreen(app.app);
+        }
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_V)
     {
         cycleTimePosition();
+    }
+    else if (key == sdlffcd_Key.SDLFFCD_KEY_RETURN)
+    {
+        printFfmpegCutCommand(app);
     }
   }
 
@@ -96,11 +213,33 @@ struct PlayerController
   {
     updateWindowSize(appContext);
 
+    if (appContext.player !is null && appContext.player.isLoaded && !markersInitialized)
+    {
+      editModel.timeIn = 0.0;
+      editModel.timeOut = appContext.player.getEndFrameTime();
+      editModel.markersModified = false;
+      markersInitialized = true;
+    }
+
     auto state = appContext.player.update(appContext.app);
     if (state.isVideoEnd)
     {
-      writeln("Playback finished (end of video stream).");
-      return UpdateResult(UpdateResult.Status.quit);
+      if (playerModel.isLooping)
+      {
+        appContext.player.seekTo(editModel.timeIn);
+      }
+      else if (quitOnEnd)
+      {
+        writeln("Playback finished (end of video stream). Quitting...");
+        return UpdateResult(UpdateResult.Status.quit);
+      }
+      else
+      {
+        if (!appContext.player.isPaused)
+        {
+          appContext.player.pause();
+        }
+      }
     }
     if (state.isError)
     {
@@ -113,13 +252,28 @@ struct PlayerController
       playerModel.timePosition = appContext.player.getCurrentPts();
       playerModel.timeDuration = appContext.player.getDuration();
       playerModel.isPaused = appContext.player.isPaused;
+
+      // Check looping boundary during normal playback
+      if (playerModel.isLooping && !playerModel.isPaused)
+      {
+        if (playerModel.timePosition >= editModel.timeOut && editModel.timeOut > editModel.timeIn)
+        {
+          appContext.player.seekTo(editModel.timeIn);
+          playerModel.timePosition = editModel.timeIn;
+        }
+      }
     }
 
     bool dirty = false;
-    if (playerModel.pollUpdate())
+    if (playerModel.pollUpdate() || editModel.pollUpdate())
     {
       dirty = true;
-      viewModel.formattedCurrentTotalTime = formatTimestamp(playerModel.timePosition, playerModel.timeDuration);
+      viewModel.formattedCurrentTotalTime = formatTimestamp(
+        playerModel.timePosition,
+        playerModel.timeDuration,
+        playerModel.isLooping,
+        playerModel.isPaused);
+      viewModel.formattedInOutTime = formatInOut(editModel.timeIn, editModel.timeOut);
     }
     if (viewModel.pollUpdate())
     {
@@ -159,5 +313,28 @@ unittest
   assert(controller.viewModel.windowWidth == 1280);
   assert(controller.viewModel.windowHeight == 720);
   assert(!controller.viewModel.pollUpdate());
+
+  assert(!controller.playerModel.isLooping);
+  controller.playerModel.isLooping = true;
+  assert(controller.playerModel.pollUpdate());
+  assert(controller.playerModel.isLooping);
+
+  controller.editModel.timeIn = 5.0;
+  controller.editModel.timeOut = 15.0;
+  controller.editModel.markersModified = true;
+  assert(controller.editModel.pollUpdate());
+  assert(controller.editModel.markersModified);
+
+  controller.viewModel.timePosition = TimePosition.topLeft;
+  controller.cycleTimePosition();
+  assert(controller.viewModel.timePosition == TimePosition.topRight);
+  controller.cycleTimePosition();
+  assert(controller.viewModel.timePosition == TimePosition.bottomRight);
+  controller.cycleTimePosition();
+  assert(controller.viewModel.timePosition == TimePosition.bottomLeft);
+  controller.cycleTimePosition();
+  assert(controller.viewModel.timePosition == TimePosition.invisible);
+  controller.cycleTimePosition();
+  assert(controller.viewModel.timePosition == TimePosition.topLeft);
 }
 

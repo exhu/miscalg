@@ -6,18 +6,34 @@ typedef struct sdlffcd_AppContext sdlffcd_AppContext;
 
 typedef enum sdlffcd_Key {
     SDLFFCD_KEY_UNKNOWN = 0,
+    SDLFFCD_KEY_RETURN = 13,
     SDLFFCD_KEY_ESCAPE = 27,
     SDLFFCD_KEY_SPACE = ' ',
-    SDLFFCD_KEY_Q = 'q',
-    SDLFFCD_KEY_P = 'p',
-    SDLFFCD_KEY_R = 'r',
+    SDLFFCD_KEY_LEFTBRACKET = '[',
+    SDLFFCD_KEY_RIGHTBRACKET = ']',
+    SDLFFCD_KEY_B = 'b',
+    SDLFFCD_KEY_E = 'e',
     SDLFFCD_KEY_F = 'f',
+    SDLFFCD_KEY_I = 'i',
+    SDLFFCD_KEY_L = 'l',
+    SDLFFCD_KEY_O = 'o',
+    SDLFFCD_KEY_P = 'p',
+    SDLFFCD_KEY_Q = 'q',
+    SDLFFCD_KEY_R = 'r',
     SDLFFCD_KEY_T = 't',
+    SDLFFCD_KEY_V = 'v',
     SDLFFCD_KEY_LEFT = 1073741904,
     SDLFFCD_KEY_RIGHT = 1073741903
 } sdlffcd_Key;
 
-typedef void (*sdlffcd_KeyCallback)(void* userdata, uint32_t key);
+typedef enum sdlffcd_KeyMod {
+    SDLFFCD_KMOD_NONE = 0,
+    SDLFFCD_KMOD_SHIFT = (1 << 0),
+    SDLFFCD_KMOD_CTRL = (1 << 1),
+    SDLFFCD_KMOD_ALT = (1 << 2)
+} sdlffcd_KeyMod;
+
+typedef void (*sdlffcd_KeyCallback)(void* userdata, uint32_t key, uint16_t mod);
 
 /// Initialize SDL3, create window and renderer. Returns NULL on failure.
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height);
@@ -57,6 +73,12 @@ void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw);
 
 /// Get current window size in pixels/logical units. Returns false on invalid context or error.
 bool sdlffcd_app_get_window_size(const sdlffcd_AppContext* app, int* out_w, int* out_h);
+
+/// Toggle window fullscreen mode. Returns true on success.
+bool sdlffcd_app_toggle_fullscreen(sdlffcd_AppContext* app);
+
+/// Check if window is currently fullscreen.
+bool sdlffcd_app_is_fullscreen(const sdlffcd_AppContext* app);
 
 /* --- Video API --- */
 

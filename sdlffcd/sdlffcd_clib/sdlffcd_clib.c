@@ -105,7 +105,17 @@ static void process_single_event(sdlffcd_AppContext* app, const SDL_Event* event
             if (key >= 'A' && key <= 'Z') {
                 key += ('a' - 'A');
             }
-            app->key_callback(app->key_callback_userdata, key);
+            uint16_t mod = SDLFFCD_KMOD_NONE;
+            if (event->key.mod & SDL_KMOD_SHIFT) {
+                mod |= SDLFFCD_KMOD_SHIFT;
+            }
+            if (event->key.mod & SDL_KMOD_CTRL) {
+                mod |= SDLFFCD_KMOD_CTRL;
+            }
+            if (event->key.mod & SDL_KMOD_ALT) {
+                mod |= SDLFFCD_KMOD_ALT;
+            }
+            app->key_callback(app->key_callback_userdata, key, mod);
         }
     }
 }
@@ -185,6 +195,18 @@ void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw) {
 bool sdlffcd_app_get_window_size(const sdlffcd_AppContext* app, int* out_w, int* out_h) {
     if (!app || !app->window || !out_w || !out_h) return false;
     return SDL_GetWindowSize(app->window, out_w, out_h);
+}
+
+bool sdlffcd_app_toggle_fullscreen(sdlffcd_AppContext* app) {
+    if (!app || !app->window) return false;
+    SDL_WindowFlags flags = SDL_GetWindowFlags(app->window);
+    bool is_fullscreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+    return SDL_SetWindowFullscreen(app->window, !is_fullscreen);
+}
+
+bool sdlffcd_app_is_fullscreen(const sdlffcd_AppContext* app) {
+    if (!app || !app->window) return false;
+    return (SDL_GetWindowFlags(app->window) & SDL_WINDOW_FULLSCREEN) != 0;
 }
 
 /* --- Video API Implementation --- */
@@ -288,6 +310,12 @@ sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlf
         return SDLFFCD_DECODE_ERROR;
     }
 
+    if (vctx->has_cached_frame) {
+        *out_frame = vctx->cached_frame;
+        vctx->has_cached_frame = false;
+        return SDLFFCD_DECODE_OK;
+    }
+
     while (1) {
         int ret = avcodec_receive_frame(vctx->video_codec_ctx, vctx->frame);
         if (ret == 0) {
@@ -353,6 +381,22 @@ bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds) {
 
     if (vctx->video_codec_ctx) {
         avcodec_flush_buffers(vctx->video_codec_ctx);
+    }
+    vctx->has_cached_frame = false;
+
+    if (target_pts_seconds > 0.0) {
+        double frame_dur = (vctx->info.fps > 0.0) ? (1.0 / vctx->info.fps) : 0.033;
+        double threshold = target_pts_seconds - (frame_dur * 0.5);
+        while (1) {
+            sdlffcd_DecodeStatus st = sdlffcd_video_decode_frame(vctx, &vctx->cached_frame);
+            if (st != SDLFFCD_DECODE_OK) {
+                break;
+            }
+            if (vctx->cached_frame.pts >= threshold) {
+                vctx->has_cached_frame = true;
+                break;
+            }
+        }
     }
 
     return true;

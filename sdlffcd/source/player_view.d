@@ -9,6 +9,7 @@ struct View
 {
   sdlffcd_Font* timestampFont;
   sdlffcd_Text* timestampText;
+  sdlffcd_Text* inOutText;
 
   bool initialize(sdlffcd_AppContext* app)
   {
@@ -17,6 +18,8 @@ struct View
     if (timestampFont !is null)
     {
       timestampText = sdlffcd_text_create(app, timestampFont, "00:00:00.000 / 00:00:00.000");
+      inOutText = sdlffcd_text_create(app, timestampFont, "IN: 00:00:00.000  OUT: 00:00:00.000");
+
       if (timestampText !is null)
       {
         sdlffcd_text_set_color(timestampText, 255, 255, 255, 255);
@@ -25,16 +28,31 @@ struct View
       {
         stderr.writeln("Failed to create timestamp text object.");
       }
+
+      if (inOutText !is null)
+      {
+        sdlffcd_text_set_color(inOutText, 255, 255, 255, 255);
+      }
+      else
+      {
+        stderr.writeln("Failed to create in-out text object.");
+      }
     }
     else
     {
       stderr.writefln("Failed to open font %s", fontPath);
     }
-    return timestampFont !is null && timestampText !is null;
+    return timestampFont !is null && timestampText !is null && inOutText !is null;
   }
 
   void destroy()
   {
+    if (inOutText !is null)
+    {
+      sdlffcd_text_destroy(inOutText);
+      inOutText = null;
+    }
+
     if (timestampText !is null)
     {
       sdlffcd_text_destroy(timestampText);
@@ -63,37 +81,65 @@ struct View
       sdlffcd_text_set_string(timestampText, toStringz(viewModel.formattedCurrentTotalTime));
     }
 
-    int textW = 0, textH = 0;
-    sdlffcd_text_get_size(timestampText, &textW, &textH);
+    if (inOutText !is null && viewModel.formattedInOutTime.length > 0)
+    {
+      sdlffcd_text_set_string(inOutText, toStringz(viewModel.formattedInOutTime));
+    }
 
-    float posX = 10.0f;
-    float posY = 10.0f;
+    int tsW = 0, tsH = 0;
+    sdlffcd_text_get_size(timestampText, &tsW, &tsH);
+
+    int ioW = 0, ioH = 0;
+    if (inOutText !is null)
+    {
+      sdlffcd_text_get_size(inOutText, &ioW, &ioH);
+    }
+
+    float margin = 10.0f;
+    float gap = 10.0f;
     float windowW = cast(float) viewModel.windowWidth;
     float windowH = cast(float) viewModel.windowHeight;
+
+    float tsX = margin;
+    float tsY = margin;
+    float ioX = margin;
+    float ioY = margin + tsH + gap;
 
     final switch (viewModel.timePosition)
     {
     case TimePosition.topLeft:
-      posX = 10.0f;
-      posY = 10.0f;
+      tsX = margin;
+      tsY = margin;
+      ioX = margin;
+      ioY = tsY + tsH + gap;
       break;
     case TimePosition.topRight:
-      posX = windowW - textW - 10.0f;
-      posY = 10.0f;
+      tsX = windowW - tsW - margin;
+      tsY = margin;
+      ioX = windowW - ioW - margin;
+      ioY = tsY + tsH + gap;
       break;
     case TimePosition.bottomRight:
-      posX = windowW - textW - 10.0f;
-      posY = windowH - textH - 10.0f;
+      ioX = windowW - ioW - margin;
+      ioY = windowH - ioH - margin;
+      tsX = windowW - tsW - margin;
+      tsY = ioY - tsH - gap;
       break;
     case TimePosition.bottomLeft:
-      posX = 10.0f;
-      posY = windowH - textH - 10.0f;
+      ioX = margin;
+      ioY = windowH - ioH - margin;
+      tsX = margin;
+      tsY = ioY - tsH - gap;
       break;
     case TimePosition.invisible:
       return;
     }
 
-    sdlffcd_text_draw_with_bg(app, timestampText, posX, posY, 0, 0, 0, 255, 4.0f);
+    sdlffcd_text_draw_with_bg(app, timestampText, tsX, tsY, 0, 0, 0, 255, 4.0f);
+    if (inOutText !is null && viewModel.formattedInOutTime.length > 0)
+    {
+      sdlffcd_text_draw_with_bg(app, inOutText, ioX, ioY, 0, 0, 0, 255, 4.0f);
+    }
   }
 
   void render(sdlffcd_AppContext* app, ref const(ViewModel) viewModel)

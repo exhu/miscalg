@@ -5,18 +5,34 @@ struct sdlffcd_AppContext;
 
 enum sdlffcd_Key : uint {
     SDLFFCD_KEY_UNKNOWN = 0,
+    SDLFFCD_KEY_RETURN = 13,
     SDLFFCD_KEY_ESCAPE = 27,
     SDLFFCD_KEY_SPACE = ' ',
-    SDLFFCD_KEY_Q = 'q',
-    SDLFFCD_KEY_P = 'p',
-    SDLFFCD_KEY_R = 'r',
+    SDLFFCD_KEY_LEFTBRACKET = '[',
+    SDLFFCD_KEY_RIGHTBRACKET = ']',
+    SDLFFCD_KEY_B = 'b',
+    SDLFFCD_KEY_E = 'e',
     SDLFFCD_KEY_F = 'f',
+    SDLFFCD_KEY_I = 'i',
+    SDLFFCD_KEY_L = 'l',
+    SDLFFCD_KEY_O = 'o',
+    SDLFFCD_KEY_P = 'p',
+    SDLFFCD_KEY_Q = 'q',
+    SDLFFCD_KEY_R = 'r',
     SDLFFCD_KEY_T = 't',
+    SDLFFCD_KEY_V = 'v',
     SDLFFCD_KEY_LEFT = 1073741904,
     SDLFFCD_KEY_RIGHT = 1073741903
 }
 
-alias sdlffcd_KeyCallback = void function(void* userdata, uint key);
+enum sdlffcd_KeyMod : ushort {
+    SDLFFCD_KMOD_NONE = 0,
+    SDLFFCD_KMOD_SHIFT = (1 << 0),
+    SDLFFCD_KMOD_CTRL = (1 << 1),
+    SDLFFCD_KMOD_ALT = (1 << 2)
+}
+
+alias sdlffcd_KeyCallback = void function(void* userdata, uint key, ushort mod);
 
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height);
 bool sdlffcd_app_is_running(const sdlffcd_AppContext* app);
@@ -31,6 +47,8 @@ bool sdlffcd_app_need_redraw(const sdlffcd_AppContext* app);
 bool sdlffcd_app_check_and_clear_redraw(sdlffcd_AppContext* app);
 void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw);
 bool sdlffcd_app_get_window_size(const sdlffcd_AppContext* app, int* out_w, int* out_h);
+bool sdlffcd_app_toggle_fullscreen(sdlffcd_AppContext* app);
+bool sdlffcd_app_is_fullscreen(const sdlffcd_AppContext* app);
 
 /* --- Video API --- */
 
@@ -94,19 +112,36 @@ void sdlffcd_text_destroy(sdlffcd_Text* text_obj);
 extern(D) unittest
 {
     assert(sdlffcd_Key.SDLFFCD_KEY_UNKNOWN == 0);
+    assert(sdlffcd_Key.SDLFFCD_KEY_RETURN == 13);
     assert(sdlffcd_Key.SDLFFCD_KEY_ESCAPE == 27);
     assert(sdlffcd_Key.SDLFFCD_KEY_SPACE == ' ');
-    assert(sdlffcd_Key.SDLFFCD_KEY_Q == 'q');
-    assert(sdlffcd_Key.SDLFFCD_KEY_P == 'p');
-    assert(sdlffcd_Key.SDLFFCD_KEY_R == 'r');
+    assert(sdlffcd_Key.SDLFFCD_KEY_LEFTBRACKET == '[');
+    assert(sdlffcd_Key.SDLFFCD_KEY_RIGHTBRACKET == ']');
+    assert(sdlffcd_Key.SDLFFCD_KEY_B == 'b');
+    assert(sdlffcd_Key.SDLFFCD_KEY_E == 'e');
     assert(sdlffcd_Key.SDLFFCD_KEY_F == 'f');
+    assert(sdlffcd_Key.SDLFFCD_KEY_I == 'i');
+    assert(sdlffcd_Key.SDLFFCD_KEY_L == 'l');
+    assert(sdlffcd_Key.SDLFFCD_KEY_O == 'o');
+    assert(sdlffcd_Key.SDLFFCD_KEY_P == 'p');
+    assert(sdlffcd_Key.SDLFFCD_KEY_Q == 'q');
+    assert(sdlffcd_Key.SDLFFCD_KEY_R == 'r');
+    assert(sdlffcd_Key.SDLFFCD_KEY_T == 't');
+    assert(sdlffcd_Key.SDLFFCD_KEY_V == 'v');
     assert(sdlffcd_Key.SDLFFCD_KEY_LEFT == 1073741904);
     assert(sdlffcd_Key.SDLFFCD_KEY_RIGHT == 1073741903);
+
+    assert(sdlffcd_KeyMod.SDLFFCD_KMOD_NONE == 0);
+    assert(sdlffcd_KeyMod.SDLFFCD_KMOD_SHIFT == 1);
+    assert(sdlffcd_KeyMod.SDLFFCD_KMOD_CTRL == 2);
+    assert(sdlffcd_KeyMod.SDLFFCD_KMOD_ALT == 4);
 
     assert(!sdlffcd_app_need_redraw(null));
     assert(!sdlffcd_app_check_and_clear_redraw(null));
     sdlffcd_app_set_need_redraw(null, true);
     assert(!sdlffcd_app_get_window_size(null, null, null));
+    assert(!sdlffcd_app_toggle_fullscreen(null));
+    assert(!sdlffcd_app_is_fullscreen(null));
     assert(!sdlffcd_video_redraw(null, null));
 
     // Verify null handling for text API functions
