@@ -214,4 +214,3 @@ unittest
   string cmdPath = generateFfmpegCutCommand("/path/to/my_video.mkv", 0.0, 10.5, 30.0);
   assert(cmdPath == `ffmpeg -ss 00:00:00.000 -i "/path/to/my_video.mkv" -t 00:00:10.533 -c:v copy -c:a copy "/path/to/my_video_000000_000_000010_500_cut.mkv"`);
 }
-

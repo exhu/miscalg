@@ -18,6 +18,7 @@ struct PlayerController
   string videoFilename;
   bool quitOnEnd = false;
   bool markersInitialized = false;
+  ModelVersion lastPrintedModelVersion;
 
   bool initialize(ref AppContext appContext, string filename = "samplevideo.mp4", bool quitOnEnd = false)
   {
@@ -48,11 +49,16 @@ struct PlayerController
 
   void printFfmpegCutCommand(ref AppContext app)
   {
+    if (editModel.version_ == lastPrintedModelVersion)
+      return;
+
     double fps = (app.player !is null) ? app.player.getFps() : 0.0;
     string cmd = generateFfmpegCutCommand(videoFilename, editModel.timeIn, editModel.timeOut, fps);
-    writeln("\nFFmpeg cut command:");
+    info("FFmpeg cut command:");
+    info(cmd);
+
     writeln(cmd);
-    writeln();
+    lastPrintedModelVersion = editModel.version_;
   }
 
   void handleKeyPress(ref AppContext app, uint key, ushort mod = 0)
@@ -409,4 +415,3 @@ unittest
   controller.cycleTimePosition();
   assert(controller.viewModel.timePosition == TimePosition.topLeft);
 }
-
