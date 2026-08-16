@@ -16,6 +16,7 @@ struct Binding
 struct BoundModel
 {
   bool delegate() isUpdated;
+  /// this dynarray changes much when new ui elements are loaded/screens change...
   Binding[] bindings;
   void update()
   {
@@ -26,10 +27,12 @@ struct BoundModel
   }
 }
 
+/// single system for all active models (i.e. not per screen, because pollUpdate cleans version)
 struct BindingSystem
 {
   BoundModel[] models;
 
+  /// this must be called everytime there's possibility that any model has updated
   void update()
   {
     foreach(ref m; models)
