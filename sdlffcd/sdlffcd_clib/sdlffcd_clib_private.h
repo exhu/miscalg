@@ -33,6 +33,8 @@ struct sdlffcd_AppContext {
     uint8_t _pad[2];
     sdlffcd_KeyCallback key_callback;
     void* key_callback_userdata;
+    sdlffcd_WindowEventCallback window_event_callback;
+    void* window_event_callback_userdata;
 };
 
 struct sdlffcd_Font {

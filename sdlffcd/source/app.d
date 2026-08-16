@@ -8,7 +8,7 @@ import sdlffcd.sdl_logger;
 import sdlffcd.app_context;
 import sdlffcd.player_controller;
 
-extern (C) struct KeyPressCbUserData
+extern (C) struct AppEventCbUserData
 {
   AppContext* appContext;
   PlayerController* playerController;
@@ -16,9 +16,16 @@ extern (C) struct KeyPressCbUserData
 
 extern (C) void handleKeyPress(void* userDataPtr, uint key, ushort mod)
 {
-  KeyPressCbUserData* userData = cast(KeyPressCbUserData*) userDataPtr;
+  AppEventCbUserData* userData = cast(AppEventCbUserData*) userDataPtr;
   AppContext* app = userData.appContext;
   userData.playerController.handleKeyPress(*app, key, mod);
+}
+
+extern (C) void handleWindowEvent(void* userDataPtr, sdlffcd_WindowEvent event)
+{
+  AppEventCbUserData* userData = cast(AppEventCbUserData*) userDataPtr;
+  AppContext* app = userData.appContext;
+  userData.playerController.handleWindowEvent(*app, event);
 }
 
 void printHelp()
@@ -107,11 +114,12 @@ int main(string[] args)
   scope (exit)
     playerController.destroy();
 
-  KeyPressCbUserData userData;
+  AppEventCbUserData userData;
   userData.appContext = &appContext;
   userData.playerController = &playerController;
 
   sdlffcd_app_set_key_callback(appContext.app, &handleKeyPress, &userData);
+  sdlffcd_app_set_window_event_callback(appContext.app, &handleWindowEvent, &userData);
 
   if (!appContext.player.open(filename))
   {

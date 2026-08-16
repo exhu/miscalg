@@ -202,6 +202,15 @@ struct PlayerController
     }
   }
 
+  void handleWindowEvent(ref AppContext appContext, sdlffcd_WindowEvent event)
+  {
+    if (event == sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_PIXEL_SIZE_CHANGED ||
+        event == sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_DISPLAY_SCALE_CHANGED)
+    {
+      updateWindowSize(appContext);
+    }
+  }
+
   struct UpdateResult
   {
   enum Status
@@ -215,8 +224,6 @@ struct PlayerController
 
   UpdateResult update(ref AppContext appContext)
   {
-    updateWindowSize(appContext);
-
     if (appContext.player !is null && appContext.player.isLoaded && !markersInitialized)
     {
       editModel.timeIn = 0.0;
@@ -414,4 +421,9 @@ unittest
   assert(controller.viewModel.timePosition == TimePosition.invisible);
   controller.cycleTimePosition();
   assert(controller.viewModel.timePosition == TimePosition.topLeft);
+
+  AppContext nullApp;
+  controller.handleWindowEvent(nullApp, sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_PIXEL_SIZE_CHANGED);
+  controller.handleWindowEvent(nullApp, sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_DISPLAY_SCALE_CHANGED);
+  controller.handleWindowEvent(nullApp, sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_NONE);
 }

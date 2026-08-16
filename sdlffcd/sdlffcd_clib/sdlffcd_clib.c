@@ -9,7 +9,8 @@ static bool SDLCALL window_event_watch(void* userdata, SDL_Event* event) {
     if (!app || !event) return true;
     if (event->type == SDL_EVENT_WINDOW_RESIZED ||
         event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
-        event->type == SDL_EVENT_WINDOW_EXPOSED) {
+        event->type == SDL_EVENT_WINDOW_EXPOSED ||
+        event->type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED) {
         app->need_redraw = true;
     }
     return true;
@@ -90,14 +91,28 @@ void sdlffcd_app_set_key_callback(sdlffcd_AppContext* app, sdlffcd_KeyCallback c
     app->key_callback_userdata = userdata;
 }
 
+void sdlffcd_app_set_window_event_callback(sdlffcd_AppContext* app, sdlffcd_WindowEventCallback cb, void* userdata) {
+    if (!app) return;
+    app->window_event_callback = cb;
+    app->window_event_callback_userdata = userdata;
+}
+
 static void process_single_event(sdlffcd_AppContext* app, const SDL_Event* event) {
     if (!app || !event) return;
     if (event->type == SDL_EVENT_QUIT) {
         app->running = false;
     } else if (event->type == SDL_EVENT_WINDOW_RESIZED ||
                event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
-               event->type == SDL_EVENT_WINDOW_EXPOSED) {
+               event->type == SDL_EVENT_WINDOW_EXPOSED ||
+               event->type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED) {
         app->need_redraw = true;
+        if (app->window_event_callback) {
+            if (event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+                app->window_event_callback(app->window_event_callback_userdata, SDLFFCD_WINDOW_EVENT_PIXEL_SIZE_CHANGED);
+            } else if (event->type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED) {
+                app->window_event_callback(app->window_event_callback_userdata, SDLFFCD_WINDOW_EVENT_DISPLAY_SCALE_CHANGED);
+            }
+        }
     } else if (event->type == SDL_EVENT_KEY_DOWN) {
         if (app->key_callback) {
             uint32_t key = (uint32_t)event->key.key;

@@ -36,6 +36,14 @@ typedef enum sdlffcd_KeyMod {
 
 typedef void (*sdlffcd_KeyCallback)(void* userdata, uint32_t key, uint16_t mod);
 
+typedef enum sdlffcd_WindowEvent {
+    SDLFFCD_WINDOW_EVENT_NONE = 0,
+    SDLFFCD_WINDOW_EVENT_PIXEL_SIZE_CHANGED = 1,
+    SDLFFCD_WINDOW_EVENT_DISPLAY_SCALE_CHANGED = 2
+} sdlffcd_WindowEvent;
+
+typedef void (*sdlffcd_WindowEventCallback)(void* userdata, sdlffcd_WindowEvent event);
+
 /// Initialize SDL3, create window and renderer. Returns NULL on failure.
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height);
 
@@ -47,6 +55,9 @@ void sdlffcd_app_stop(sdlffcd_AppContext* app);
 
 /// Register callback for key press events.
 void sdlffcd_app_set_key_callback(sdlffcd_AppContext* app, sdlffcd_KeyCallback cb, void* userdata);
+
+/// Register callback for window events (pixel size changed, display scale changed).
+void sdlffcd_app_set_window_event_callback(sdlffcd_AppContext* app, sdlffcd_WindowEventCallback cb, void* userdata);
 
 /// Poll and process all pending SDL events non-blocking.
 void sdlffcd_app_poll_events(sdlffcd_AppContext* app);

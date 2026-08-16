@@ -35,10 +35,19 @@ enum sdlffcd_KeyMod : ushort {
 
 alias sdlffcd_KeyCallback = void function(void* userdata, uint key, ushort mod);
 
+enum sdlffcd_WindowEvent : int {
+    SDLFFCD_WINDOW_EVENT_NONE = 0,
+    SDLFFCD_WINDOW_EVENT_PIXEL_SIZE_CHANGED = 1,
+    SDLFFCD_WINDOW_EVENT_DISPLAY_SCALE_CHANGED = 2
+}
+
+alias sdlffcd_WindowEventCallback = void function(void* userdata, sdlffcd_WindowEvent event);
+
 sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height);
 bool sdlffcd_app_is_running(const sdlffcd_AppContext* app);
 void sdlffcd_app_stop(sdlffcd_AppContext* app);
 void sdlffcd_app_set_key_callback(sdlffcd_AppContext* app, sdlffcd_KeyCallback cb, void* userdata);
+void sdlffcd_app_set_window_event_callback(sdlffcd_AppContext* app, sdlffcd_WindowEventCallback cb, void* userdata);
 void sdlffcd_app_poll_events(sdlffcd_AppContext* app);
 void sdlffcd_app_wait_events(sdlffcd_AppContext* app, int timeout_ms);
 bool sdlffcd_app_wake(sdlffcd_AppContext* app);
@@ -174,6 +183,10 @@ extern(D) unittest
     assert(sdlffcd_KeyMod.SDLFFCD_KMOD_CTRL == 2);
     assert(sdlffcd_KeyMod.SDLFFCD_KMOD_ALT == 4);
 
+    assert(sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_NONE == 0);
+    assert(sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_PIXEL_SIZE_CHANGED == 1);
+    assert(sdlffcd_WindowEvent.SDLFFCD_WINDOW_EVENT_DISPLAY_SCALE_CHANGED == 2);
+
     assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL == 0);
     assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_LIGHT == 1);
     assert(sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_MONO == 2);
@@ -191,6 +204,8 @@ extern(D) unittest
     assert(!sdlffcd_app_need_redraw(null));
     assert(!sdlffcd_app_check_and_clear_redraw(null));
     sdlffcd_app_set_need_redraw(null, true);
+    sdlffcd_app_set_key_callback(null, null, null);
+    sdlffcd_app_set_window_event_callback(null, null, null);
     assert(!sdlffcd_app_get_window_size(null, null, null));
     assert(sdlffcd_app_get_display_scale(null) == 1.0f);
     assert(!sdlffcd_app_toggle_fullscreen(null));
