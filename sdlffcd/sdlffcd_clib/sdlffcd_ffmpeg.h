@@ -54,6 +54,7 @@ sdlffcd_VideoContext* sdlffcd_video_open(const char* filename);
 bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_MediaInfo* out_info);
 
 /// Set callback for receiving resampled PCM audio data packets during decoding.
+/// NOTE! the callback is called from the thread where sdlffcd_video_decode_frame is called.
 void sdlffcd_video_set_audio_callback(sdlffcd_VideoContext* vctx, sdlffcd_AudioDataCallback cb, void* userdata);
 
 /**
