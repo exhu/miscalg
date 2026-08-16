@@ -1,12 +1,14 @@
-* TODO how to link sdl, ffmpeg libs in dub
-* TODO design c core that interfaces SDL and ffmpeg libs
+* TODO make video decoding work with multiple videos
+
+* DONE how to link sdl, ffmpeg libs in dub
+* DONE design c core that interfaces SDL and ffmpeg libs
 ** sdl interaction
 init, main loop, done, wake main loop -- implemented in C, main loop calls global D functions to
 notify of key events, or window resize etc via custom event types (i.e. we don't
 need to generate bindings for sdl types, use custom types, or generate bindings
 to constants like keycodes )
 
-** TODO study video decoding in sdlffc
+** DONE study video decoding in sdlffc
 av decoder decodes to ringbuffer in a separate thread
 texture management in C, but need to split av part from sdl part
 
@@ -15,9 +17,8 @@ texture management in C, but need to split av part from sdl part
 
 ** audio decoding
 
-** TODO make video decoding work with multiple videos
-** TODO use dstep to translate keycodes?
-** TODO when to rerender scene?
+** DONE use dstep to translate keycodes?
+** DONE when to rerender scene?
 
 
 
