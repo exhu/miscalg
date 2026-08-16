@@ -3,7 +3,6 @@ module sdlffcd.observable;
 import std.traits : FieldNameTuple;
 
 alias ModelVersion = size_t;
-enum ModelVersion uninitializedVersion = 0;
 
 template ObservableModel(T) if (is(T == struct))
 {

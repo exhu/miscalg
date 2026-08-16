@@ -357,8 +357,6 @@ bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_Medi
     return true;
 }
 
-#include <libavutil/imgutils.h>
-
 static void process_audio_packet(sdlffcd_VideoContext* vctx, AVPacket* pkt) {
     if (!vctx || !vctx->audio_codec_ctx || !vctx->audio_stream || !vctx->swr_ctx || !vctx->audio_frame) return;
 
@@ -483,7 +481,7 @@ bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds) {
     if (!vctx || !vctx->fmt_ctx || vctx->video_stream_idx < 0) return false;
 
     AVStream* vst = vctx->fmt_ctx->streams[vctx->video_stream_idx];
-    int64_t target_ts = (int64_t)(target_pts_seconds / av_q2d(vst->time_base));
+    int64_t target_ts = av_rescale_q((int64_t)(target_pts_seconds * AV_TIME_BASE), AV_TIME_BASE_Q, vst->time_base);
 
     if (av_seek_frame(vctx->fmt_ctx, vctx->video_stream_idx, target_ts, AVSEEK_FLAG_BACKWARD) < 0) {
         return false;
@@ -543,13 +541,13 @@ static void sdlffcd_update_letterbox_rect(SDL_Renderer* renderer, sdlffcd_VideoC
         float dst_aspect = (float)out_w / (float)out_h;
 
         if (src_aspect > dst_aspect) {
-            /* Video is wider than window → pillarbox (bars top & bottom) */
+            /* Video is wider than window → letterbox (bars top & bottom) */
             dst.w = (float)out_w;
             dst.h = (float)out_w / src_aspect;
             dst.x = 0.0f;
             dst.y = ((float)out_h - dst.h) * 0.5f;
         } else {
-            /* Video is taller than window → letterbox (bars left & right) */
+            /* Video is taller than window → pillarbox (bars left & right) */
             dst.h = (float)out_h;
             dst.w = (float)out_h * src_aspect;
             dst.x = ((float)out_w - dst.w) * 0.5f;
@@ -566,6 +564,13 @@ bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* v
         if (vctx->texture) {
             SDL_DestroyTexture(vctx->texture);
             vctx->texture = NULL;
+        }
+        if (vctx->sws_ctx) {
+            sws_freeContext(vctx->sws_ctx);
+            vctx->sws_ctx = NULL;
+        }
+        if (vctx->sws_data[0]) {
+            av_freep(&vctx->sws_data[0]);
         }
         vctx->texture = SDL_CreateTexture(app->renderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, frame->width, frame->height);
         if (!vctx->texture) {

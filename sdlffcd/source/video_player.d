@@ -41,8 +41,6 @@ struct PlayerUpdateState {
  * Does NOT call sdlffcd_app_poll_events or sdlffcd_app_wait_events.
  */
 final class VideoPlayer {
-    private enum defaultRingBufferCapacity = 8;
-
     private sdlffcd_VideoContext* vctx;
     private sdlffcd_MediaInfo mediaInfo;
     private FrameRingBuffer ringBuffer;

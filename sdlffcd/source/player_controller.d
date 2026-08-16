@@ -1,6 +1,5 @@
 module sdlffcd.player_controller;
 
-import std.format;
 import std.logger : info, infof, error;
 import std.stdio : writeln;
 

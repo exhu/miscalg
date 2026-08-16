@@ -2,8 +2,6 @@ module sdlffcd.app;
 
 import std.logger;
 import std.stdio;
-import std.string;
-import std.datetime;
 
 import sdlffcd.sdlffcd_clib;
 import sdlffcd.sdl_logger;

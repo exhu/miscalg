@@ -37,6 +37,7 @@
 | `Shift + I` | Seek to IN-marker position (pauses if playing) |
 | `Shift + O` | Seek to OUT-marker position (pauses if playing) |
 | `L` | Toggle looping between IN and OUT markers |
+| `M` | Toggle audio mute / unmute |
 | `F` | Toggle fullscreen window mode |
 | `V` | Cycle current time overlay position (Top-Left -> Top-Right -> Bottom-Right -> Bottom-Left -> Hidden) |
 | `Enter` | Print lossless FFmpeg cut command to stdout |

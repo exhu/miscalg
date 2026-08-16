@@ -11,6 +11,11 @@ struct View
   sdlffcd_Font* timestampFont;
   sdlffcd_Text* timestampText;
   sdlffcd_Text* inOutText;
+  int lastDpi = 0;
+  string lastCurrentTotalTime;
+  string lastInOutTime;
+  int tsW = 0, tsH = 0;
+  int ioW = 0, ioH = 0;
 
   void updateDisplayScale(sdlffcd_AppContext* app)
   {
@@ -19,8 +24,13 @@ struct View
     float displayScale = sdlffcd_app_get_display_scale(app);
     if (displayScale < 1.0f)
       displayScale = 1.0f;
-    int dpi = cast(int)(72.0f * displayScale + 0.5f);
+    int dpi = cast(int)(96.0f * displayScale + 0.5f);
+    if (dpi == lastDpi)
+      return;
+    lastDpi = dpi;
     sdlffcd_font_set_size_dpi(timestampFont, 19.0f, dpi, dpi);
+    lastCurrentTotalTime = null;
+    lastInOutTime = null;
   }
 
   bool initialize(sdlffcd_AppContext* app)
@@ -78,6 +88,14 @@ struct View
       sdlffcd_font_close(timestampFont);
       timestampFont = null;
     }
+
+    lastDpi = 0;
+    lastCurrentTotalTime = null;
+    lastInOutTime = null;
+    tsW = 0;
+    tsH = 0;
+    ioW = 0;
+    ioH = 0;
   }
 
   void renderTimeStamp(sdlffcd_AppContext* app, ref const(ViewModel) viewModel)
@@ -90,22 +108,17 @@ struct View
       return;
     }
 
-    if (viewModel.formattedCurrentTotalTime.length > 0)
+    if (viewModel.formattedCurrentTotalTime.length > 0 && viewModel.formattedCurrentTotalTime != lastCurrentTotalTime)
     {
-      sdlffcd_text_set_string(timestampText, toStringz(viewModel.formattedCurrentTotalTime));
+      lastCurrentTotalTime = viewModel.formattedCurrentTotalTime;
+      sdlffcd_text_set_string(timestampText, toStringz(lastCurrentTotalTime));
+      sdlffcd_text_get_size(timestampText, &tsW, &tsH);
     }
 
-    if (inOutText !is null && viewModel.formattedInOutTime.length > 0)
+    if (inOutText !is null && viewModel.formattedInOutTime.length > 0 && viewModel.formattedInOutTime != lastInOutTime)
     {
-      sdlffcd_text_set_string(inOutText, toStringz(viewModel.formattedInOutTime));
-    }
-
-    int tsW = 0, tsH = 0;
-    sdlffcd_text_get_size(timestampText, &tsW, &tsH);
-
-    int ioW = 0, ioH = 0;
-    if (inOutText !is null)
-    {
+      lastInOutTime = viewModel.formattedInOutTime;
+      sdlffcd_text_set_string(inOutText, toStringz(lastInOutTime));
       sdlffcd_text_get_size(inOutText, &ioW, &ioH);
     }
 
