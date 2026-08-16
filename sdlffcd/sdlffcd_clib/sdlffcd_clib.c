@@ -27,7 +27,7 @@ sdlffcd_AppContext* sdlffcd_app_init(const char* title, int width, int height) {
         return NULL;
     }
 
-    app->window = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE);
+    app->window = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!app->window) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create SDL window: %s", SDL_GetError());
         free(app);

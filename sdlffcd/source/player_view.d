@@ -1,6 +1,6 @@
 module sdlffcd.player_view;
 
-import std.logger : error, errorf;
+import std.logger : error, errorf, infof;
 import std.string;
 import std.math : floor;
 import sdlffcd.sdlffcd_clib;
@@ -22,6 +22,9 @@ struct View
     if (app is null || timestampFont is null)
       return;
     float displayScale = sdlffcd_app_get_display_scale(app);
+
+    infof("displayScale %f", displayScale);
+
     if (displayScale < 1.0f)
       displayScale = 1.0f;
     int dpi = cast(int)(96.0f * displayScale + 0.5f);
