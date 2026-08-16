@@ -3,52 +3,34 @@
 # libavcodec-dev depends on libswresample-dev
 
 project('sdlffcd_clib', 'c',
-  version : '0.1',
+  version : '0.2',
   default_options : ['warning_level=everything', 'c_std=c99'],
   meson_version: '>=1.7.0')
 
-
 # DEPENDENCIES
-# sdl3 3.4.10, ffmpeg libs 6.1.1
-# SDL3_ttf-3.2.2
+# sdl3 3.4.10, SDL3_ttf-3.2.2, ffmpeg libs 6.1.1
 
-# libsdl.org
-# prepend ~/.local/lib/pkgconfig to PKG_CONFIG_PATH before setup.
+# SDL dependencies
 sdl_dep = dependency('sdl3')
 sdlttf_dep = dependency('sdl3-ttf')
 
-# ffmpeg dependencies
-# libavutil -- common library shared between other ffmpeg libs
-# pixel format info etc.
+# FFmpeg dependencies
 libavutil_dep = dependency('libavutil')
-# libavcodec
-# "The libavcodec library provides a generic encoding/decoding framework and contains multiple decoders and encoders for audio, video and subtitle streams, and several bitstream filters."
 libavcodec_dep = dependency('libavcodec')
-# libswscale
-# "Pixel format conversion: ...for example from planar YUV420P to RGB24 packed."
-libswscale_dep = dependency('libswscale')
-# libswresample -- audio resampling
-libswresample_dep = dependency('libswresample')
-# libavformat -- muxing, demuxing
 libavformat_dep = dependency('libavformat')
+libswscale_dep = dependency('libswscale')
+libswresample_dep = dependency('libswresample')
 
 # C compiler & math library
 cc = meson.get_compiler('c')
 m_dep = cc.find_library('m', required : true)
 
-# MAIN
-deps = [sdl_dep,
-        sdlttf_dep,
-        libavutil_dep,
-        libavcodec_dep,
-        libavformat_dep,
-        libswscale_dep,
-        libswresample_dep,
-        m_dep,
-       ]
+# SDL Bridge Library Target
+sdl_deps = [sdl_dep, sdlttf_dep, m_dep]
+lib_sdl = static_library('sdlffcd_sdl', ['sdlffcd_sdl.c'],
+                         dependencies: sdl_deps)
 
-lib_src = ['sdlffcd_clib.c',
-          ]
-
-lib_sdlffc = static_library('sdlffcd_clib', lib_src,
-                            dependencies: deps)
+# FFmpeg Bridge Library Target
+ffmpeg_deps = [libavutil_dep, libavcodec_dep, libavformat_dep, libswscale_dep, libswresample_dep, m_dep]
+lib_ffmpeg = static_library('sdlffcd_ffmpeg', ['sdlffcd_ffmpeg.c'],
+                            dependencies: ffmpeg_deps)

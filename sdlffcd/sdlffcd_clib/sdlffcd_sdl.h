@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* --- Window, Events & Application API --- */
+
 typedef struct sdlffcd_AppContext sdlffcd_AppContext;
 
 typedef enum sdlffcd_Key {
@@ -71,6 +73,9 @@ bool sdlffcd_app_wake(sdlffcd_AppContext* app);
 /// Clear screen and present frame
 void sdlffcd_app_render(sdlffcd_AppContext* app);
 
+/// Present current renderer frame.
+void sdlffcd_app_present(sdlffcd_AppContext* app);
+
 /// Destroy window/renderer and quit SDL3.
 void sdlffcd_app_shutdown(sdlffcd_AppContext* app);
 
@@ -86,113 +91,62 @@ void sdlffcd_app_set_need_redraw(sdlffcd_AppContext* app, bool need_redraw);
 /// Get current window size in pixels/logical units. Returns false on invalid context or error.
 bool sdlffcd_app_get_window_size(const sdlffcd_AppContext* app, int* out_w, int* out_h);
 
+/// Get window display content scale factor (e.g. 1.0, 1.5, 2.0 for HiDPI).
+float sdlffcd_app_get_display_scale(const sdlffcd_AppContext* app);
+
 /// Toggle window fullscreen mode. Returns true on success.
 bool sdlffcd_app_toggle_fullscreen(sdlffcd_AppContext* app);
 
 /// Check if window is currently fullscreen.
 bool sdlffcd_app_is_fullscreen(const sdlffcd_AppContext* app);
 
-/* --- Video API --- */
+/* --- Video Renderer API --- */
 
-typedef struct sdlffcd_VideoContext sdlffcd_VideoContext;
+typedef struct sdlffcd_VideoRenderer sdlffcd_VideoRenderer;
 
-typedef enum sdlffcd_DecodeStatus {
-    SDLFFCD_DECODE_ERROR = -1,
-    SDLFFCD_DECODE_OK = 0,
-    SDLFFCD_DECODE_EOF = 1
-} sdlffcd_DecodeStatus;
+/// Create video renderer texture cache associated with application renderer.
+sdlffcd_VideoRenderer* sdlffcd_video_renderer_create(sdlffcd_AppContext* app);
 
-typedef struct sdlffcd_MediaInfo {
-    char format_name[64];
-    char video_codec_name[64];
-    char audio_codec_name[64];
-    double duration_seconds;
-    double fps;
-    int64_t num_frames;
-    int num_streams;
-    int video_stream_index;  /* Selected video stream index in container, or -1 if none */
-    int audio_stream_index;  /* Selected audio stream index in container, or -1 if none */
-    int width;
-    int height;
-    int pixel_format;
-} sdlffcd_MediaInfo;
+/// Render YUV420P planes (plane 0: Y, plane 1: U, plane 2: V) with letterboxing to application renderer.
+bool sdlffcd_video_renderer_draw_yuv(sdlffcd_AppContext* app, sdlffcd_VideoRenderer* vr,
+                                    const uint8_t* const data[8], const int linesize[8],
+                                    int width, int height);
 
-/**
- * Decoded video frame plane pointers and metadata.
- * Note: plane data pointers shallowly reference internal FFmpeg frame buffers managed
- * by the video context. No memory is reallocated per call; data pointers remain valid
- * until the next call to sdlffcd_video_decode_frame or sdlffcd_video_close.
- */
-typedef struct sdlffcd_VideoFrame {
-    uint8_t* data[8];    /* Shallow pointers to decoded image planes in FFmpeg internal buffer */
-    double pts;          /* Presentation timestamp in seconds */
-    int linesize[8];     /* Pitch/stride for each plane in bytes */
-    int width;
-    int height;
-    int pixel_format;
-    uint8_t _pad[4];     /* Explicit padding to 8-byte alignment boundary */
-} sdlffcd_VideoFrame;
+/// Redraw the last rendered video frame texture to current renderer viewport.
+bool sdlffcd_video_renderer_redraw(sdlffcd_AppContext* app, sdlffcd_VideoRenderer* vr);
 
-/// Open a video file and initialize FFmpeg demuxer and decoder contexts. Returns NULL on failure.
-sdlffcd_VideoContext* sdlffcd_video_open(const char* filename);
+/// Destroy video renderer texture cache.
+void sdlffcd_video_renderer_destroy(sdlffcd_VideoRenderer* vr);
 
-/// Retrieve media info from an open video context into out_info. Returns false if context/out_info is NULL.
-bool sdlffcd_video_get_media_info(const sdlffcd_VideoContext* vctx, sdlffcd_MediaInfo* out_info);
+/* --- Audio Stream Playback API --- */
 
-/**
- * Decode next frame from video file context.
- *
- * @param vctx Pointer to opened video context.
- * @param out_frame Pointer to caller-allocated sdlffcd_VideoFrame structure to populate.
- * @return SDLFFCD_DECODE_OK (0) on success, SDLFFCD_DECODE_EOF (1) when end of file/stream is reached,
- *         or SDLFFCD_DECODE_ERROR (-1) on decoding failure.
- */
-sdlffcd_DecodeStatus sdlffcd_video_decode_frame(sdlffcd_VideoContext* vctx, sdlffcd_VideoFrame* out_frame);
-bool sdlffcd_video_seek(sdlffcd_VideoContext* vctx, double target_pts_seconds);
-/**
- * Render a decoded video frame to the SDL renderer using the cached texture stored in vctx.
- *
- * Pointer lifetime semantics:
- * - `app` and `vctx` must remain valid, initialized context pointers for the duration of the call.
- * - `frame` and its plane data pointers (`frame->data`) reference frame buffer memory managed by `vctx`.
- *   The `frame` struct and data pointers are only guaranteed valid until the next call to `sdlffcd_video_decode_frame`
- *   or `sdlffcd_video_close`. `sdlffcd_video_render_frame` does not retain `frame` pointer references after returning.
- * - The internal `SDL_Texture` pointer is owned and managed by `vctx` and freed during `sdlffcd_video_close`.
- *
- * @param app Pointer to initialized sdlffcd_AppContext.
- * @param vctx Pointer to opened sdlffcd_VideoContext.
- * @param frame Pointer to decoded sdlffcd_VideoFrame to render.
- * @return true on successful render, false on error.
- */
-bool sdlffcd_video_render_frame(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx, const sdlffcd_VideoFrame* frame);
+typedef struct sdlffcd_AudioStream sdlffcd_AudioStream;
 
-/// Redraw the last rendered video frame texture to the current renderer viewport.
-bool sdlffcd_video_redraw(sdlffcd_AppContext* app, sdlffcd_VideoContext* vctx);
+/// Open an SDL3 playback audio stream (standard 16-bit signed PCM). Returns NULL on failure.
+sdlffcd_AudioStream* sdlffcd_audio_stream_open(int sample_rate, int channels);
 
-/// Close video context and free all allocated FFmpeg and audio resources.
-void sdlffcd_video_close(sdlffcd_VideoContext* vctx);
-
-/* --- Audio API --- */
-
-/// Check if video context has an active audio stream and decoder.
-bool sdlffcd_video_has_audio(const sdlffcd_VideoContext* vctx);
+/// Enqueue PCM audio data to the playback audio stream. Returns true on success.
+bool sdlffcd_audio_stream_put_data(sdlffcd_AudioStream* stream, const void* data, int len);
 
 /// Pause or resume audio playback stream. Returns true on success.
-bool sdlffcd_video_set_audio_paused(sdlffcd_VideoContext* vctx, bool paused);
+bool sdlffcd_audio_stream_set_paused(sdlffcd_AudioStream* stream, bool paused);
 
 /// Check if audio playback stream is paused. Returns true if paused or invalid.
-bool sdlffcd_video_is_audio_paused(const sdlffcd_VideoContext* vctx);
+bool sdlffcd_audio_stream_is_paused(const sdlffcd_AudioStream* stream);
 
 /// Clear all queued audio data in playback stream. Returns true on success.
-bool sdlffcd_video_clear_audio(sdlffcd_VideoContext* vctx);
+bool sdlffcd_audio_stream_clear(sdlffcd_AudioStream* stream);
 
 /// Set playback audio volume gain (1.0 = normal volume, 0.0 = muted). Returns true on success.
-bool sdlffcd_video_set_audio_volume(sdlffcd_VideoContext* vctx, float volume);
+bool sdlffcd_audio_stream_set_volume(sdlffcd_AudioStream* stream, float volume);
 
 /// Query current audio volume gain. Returns true on success.
-bool sdlffcd_video_get_audio_volume(const sdlffcd_VideoContext* vctx, float* out_volume);
+bool sdlffcd_audio_stream_get_volume(const sdlffcd_AudioStream* stream, float* out_volume);
 
-/* --- Text API --- */
+/// Close and destroy audio playback stream.
+void sdlffcd_audio_stream_close(sdlffcd_AudioStream* stream);
+
+/* --- Text & Font API --- */
 
 typedef struct sdlffcd_Font sdlffcd_Font;
 typedef struct sdlffcd_Text sdlffcd_Text;
@@ -205,12 +159,6 @@ typedef enum sdlffcd_FontHinting {
     SDLFFCD_FONT_HINTING_NONE           = 3,
     SDLFFCD_FONT_HINTING_LIGHT_SUBPIXEL = 4
 } sdlffcd_FontHinting;
-
-/// Present current renderer frame.
-void sdlffcd_app_present(sdlffcd_AppContext* app);
-
-/// Get window display content scale factor (e.g. 1.0, 1.5, 2.0 for HiDPI).
-float sdlffcd_app_get_display_scale(const sdlffcd_AppContext* app);
 
 /// Open font from file path at size in points. Returns NULL on failure.
 sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize);
@@ -243,7 +191,8 @@ bool sdlffcd_text_get_size(const sdlffcd_Text* text_obj, int* out_w, int* out_h)
 bool sdlffcd_text_draw(sdlffcd_Text* text_obj, float x, float y);
 
 /// Render text object at (x, y) coordinates with a filled solid background rectangle.
-bool sdlffcd_text_draw_with_bg(sdlffcd_AppContext* app, sdlffcd_Text* text_obj, float x, float y, uint8_t bg_r, uint8_t bg_g, uint8_t bg_b, uint8_t bg_a, float padding);
+bool sdlffcd_text_draw_with_bg(sdlffcd_AppContext* app, sdlffcd_Text* text_obj, float x, float y,
+                               uint8_t bg_r, uint8_t bg_g, uint8_t bg_b, uint8_t bg_a, float padding);
 
 /// Destroy text object and free associated resources.
 void sdlffcd_text_destroy(sdlffcd_Text* text_obj);
@@ -267,4 +216,3 @@ void sdlffcd_log_message(int category, sdlffcd_LogPriority priority, const char*
 
 /// Set priority threshold for all log categories.
 void sdlffcd_log_set_all_priority(sdlffcd_LogPriority priority);
-

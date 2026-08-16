@@ -5,7 +5,8 @@ import std.string;
 import std.datetime;
 import core.thread;
 
-import sdlffcd.sdlffcd_clib;
+import sdlffcd.sdlffcd_sdl;
+import sdlffcd.sdlffcd_ffmpeg;
 import sdlffcd.frame_ring_buffer;
 
 enum PlayerStatus {
@@ -42,6 +43,8 @@ struct PlayerUpdateState {
  */
 final class VideoPlayer {
     private sdlffcd_VideoContext* vctx;
+    private sdlffcd_VideoRenderer* videoRenderer;
+    private sdlffcd_AudioStream* audioStream;
     private sdlffcd_MediaInfo mediaInfo;
     private FrameRingBuffer ringBuffer;
     private Thread decoderThread;
@@ -68,6 +71,13 @@ final class VideoPlayer {
         close();
     }
 
+    extern(C) private static void onAudioData(void* userdata, const(ubyte)* pcm_data, int byte_len) {
+        sdlffcd_AudioStream* stream = cast(sdlffcd_AudioStream*)userdata;
+        if (stream !is null && pcm_data !is null && byte_len > 0) {
+            sdlffcd_audio_stream_put_data(stream, pcm_data, byte_len);
+        }
+    }
+
     bool open(string filename) {
         close();
 
@@ -85,6 +95,16 @@ final class VideoPlayer {
             infof("Resolution: %dx%d", mediaInfo.width, mediaInfo.height);
             infof("Duration: %.2f sec, FPS: %.2f, Frames: %d",
                 mediaInfo.duration_seconds, mediaInfo.fps, mediaInfo.num_frames);
+        }
+
+        videoRenderer = sdlffcd_video_renderer_create(null);
+
+        if (mediaInfo.audio_stream_index >= 0 && mediaInfo.audio_sample_rate > 0) {
+            audioStream = sdlffcd_audio_stream_open(mediaInfo.audio_sample_rate, 2);
+            if (audioStream !is null) {
+                sdlffcd_audio_stream_set_volume(audioStream, unmutedVolume);
+                sdlffcd_video_set_audio_callback(vctx, &onAudioData, cast(void*)audioStream);
+            }
         }
 
         ringBuffer = new FrameRingBuffer(defaultRingBufferCapacity);
@@ -115,6 +135,14 @@ final class VideoPlayer {
             decoderThread.join();
             decoderThread = null;
         }
+        if (audioStream !is null) {
+            sdlffcd_audio_stream_close(audioStream);
+            audioStream = null;
+        }
+        if (videoRenderer !is null) {
+            sdlffcd_video_renderer_destroy(videoRenderer);
+            videoRenderer = null;
+        }
         if (vctx !is null) {
             sdlffcd_video_close(vctx);
             vctx = null;
@@ -143,12 +171,12 @@ final class VideoPlayer {
         }
     }
 
-    /// Check pending redraw flag and redraw current vctx surface if set.
+    /// Check pending redraw flag and redraw current video surface if set.
     /// Returns true if a redraw was issued.
     private bool checkRedraw(sdlffcd_AppContext* app) {
         if (sdlffcd_app_check_and_clear_redraw(app)) {
-            if (vctx !is null) {
-                sdlffcd_video_redraw(app, vctx);
+            if (videoRenderer !is null) {
+                sdlffcd_video_renderer_redraw(app, videoRenderer);
             }
             return true;
         }
@@ -192,7 +220,11 @@ final class VideoPlayer {
                 if (renderSlot.status == sdlffcd_DecodeStatus.SDLFFCD_DECODE_OK) {
                     frameCount = mediaInfo.fps > 0 ? cast(long)(renderSlot.frame.pts * mediaInfo.fps) : frameCount;
                     currentPts = resolvePts(renderSlot.frame.pts);
-                    sdlffcd_video_render_frame(app, vctx, &renderSlot.frame);
+                    if (videoRenderer !is null) {
+                        sdlffcd_video_renderer_draw_yuv(app, videoRenderer,
+                            renderSlot.frame.data.ptr, renderSlot.frame.linesize.ptr,
+                            renderSlot.frame.width, renderSlot.frame.height);
+                    }
                     slotReady = false;
                     pausedSeekPending = false;
                     return PlayerUpdateState.updateAgain(-1, true);
@@ -237,8 +269,8 @@ final class VideoPlayer {
         if (!playbackStarted) {
             playbackStartTime = MonoTime.currTime;
             playbackStarted = true;
-            if (vctx !is null) {
-                sdlffcd_video_set_audio_paused(vctx, false);
+            if (audioStream !is null) {
+                sdlffcd_audio_stream_set_paused(audioStream, false);
             }
         }
 
@@ -256,7 +288,11 @@ final class VideoPlayer {
         // Render ready frame
         frameCount++;
         currentPts = framePts;
-        sdlffcd_video_render_frame(app, vctx, &renderSlot.frame);
+        if (videoRenderer !is null) {
+            sdlffcd_video_renderer_draw_yuv(app, videoRenderer,
+                renderSlot.frame.data.ptr, renderSlot.frame.linesize.ptr,
+                renderSlot.frame.width, renderSlot.frame.height);
+        }
         slotReady = false;
 
         return preFetchNext(app);
@@ -289,8 +325,8 @@ final class VideoPlayer {
             paused = true;
             pausedSeekPending = false;
             pauseStartTime = MonoTime.currTime;
-            if (vctx !is null) {
-                sdlffcd_video_set_audio_paused(vctx, true);
+            if (audioStream !is null) {
+                sdlffcd_audio_stream_set_paused(audioStream, true);
             }
             infof("VideoPlayer: Paused at %.2f s", currentPts);
         }
@@ -306,8 +342,8 @@ final class VideoPlayer {
             if (playbackStarted) {
                 playbackStartTime += (MonoTime.currTime - pauseStartTime);
             }
-            if (vctx !is null) {
-                sdlffcd_video_set_audio_paused(vctx, false);
+            if (audioStream !is null) {
+                sdlffcd_audio_stream_set_paused(audioStream, false);
             }
             infof("VideoPlayer: Resumed at %.2f s", currentPts);
         }
@@ -381,8 +417,8 @@ final class VideoPlayer {
         infof("VideoPlayer: Seeking to %.2f seconds", targetPts);
         atEnd = false;
         currentPts = targetPts;
-        if (vctx !is null) {
-            sdlffcd_video_clear_audio(vctx);
+        if (audioStream !is null) {
+            sdlffcd_audio_stream_clear(audioStream);
         }
         ringBuffer.requestSeek(targetPts);
         slotReady = false;
@@ -417,28 +453,28 @@ final class VideoPlayer {
     }
 
     bool redraw(sdlffcd_AppContext* app) {
-        if (!loaded || app is null || vctx is null) return false;
-        return sdlffcd_video_redraw(app, vctx);
+        if (!loaded || app is null || videoRenderer is null) return false;
+        return sdlffcd_video_renderer_redraw(app, videoRenderer);
     }
 
     @property bool hasAudio() const {
-        return loaded && (vctx !is null) && sdlffcd_video_has_audio(vctx);
+        return loaded && (audioStream !is null);
     }
 
     bool setVolume(float volume) {
-        if (!loaded || vctx is null) return false;
+        if (!loaded || audioStream is null) return false;
         unmutedVolume = volume;
         if (!muted) {
-            return sdlffcd_video_set_audio_volume(vctx, volume);
+            return sdlffcd_audio_stream_set_volume(audioStream, volume);
         }
         return true;
     }
 
     float getVolume() const {
-        if (!loaded || vctx is null) return 0.0f;
+        if (!loaded || audioStream is null) return 0.0f;
         if (muted) return 0.0f;
         float vol = 1.0f;
-        if (sdlffcd_video_get_audio_volume(vctx, &vol)) return vol;
+        if (sdlffcd_audio_stream_get_volume(audioStream, &vol)) return vol;
         return 0.0f;
     }
 
@@ -448,11 +484,11 @@ final class VideoPlayer {
 
     void setMuted(bool mute) {
         muted = mute;
-        if (loaded && vctx !is null) {
+        if (loaded && audioStream !is null) {
             if (muted) {
-                sdlffcd_video_set_audio_volume(vctx, 0.0f);
+                sdlffcd_audio_stream_set_volume(audioStream, 0.0f);
             } else {
-                sdlffcd_video_set_audio_volume(vctx, unmutedVolume);
+                sdlffcd_audio_stream_set_volume(audioStream, unmutedVolume);
             }
         }
         infof("VideoPlayer: Audio %s", muted ? "muted" : "unmuted");
