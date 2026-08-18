@@ -27,7 +27,30 @@ struct BoundModel
   }
 }
 
+/// events that trigger BindingSystem update?
+/// mouse movement triggering models update could be too heavy?
+/// control can capture keyboard, or mouse, event overhead (can
+/// resolve string event to id, id to callback)?
+enum EventCategory
+  {
+    /// some custom event, like a message from a working thread
+    message,
+    /// kbd/mouse/joystick/touch...
+    input,
+    /// custom timer
+    timer,
+    /// window resize, dpi change etc.
+    window,
+  }
+
 /// single system for all active models (i.e. not per screen, because pollUpdate cleans version)
+/// shared logic+view, view only, and dynamic embedded view models?
+/// ViewModel = only for presentation
+/// Model = both for presentation and logic
+/// CustomizedViewModel = calculated model instance for a component of a view, e.g.
+/// calculated values to set on control based on the ViewModel passed:
+/// ViewModel: bool buttonEnabled, Customized: string buttonStyleName = ViewModel.buttonEnabled ? "normal : "disabled";
+/// Should model instances be owned by controllers, or some global storage?
 struct BindingSystem
 {
   BoundModel[] models;
