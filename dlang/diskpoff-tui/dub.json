@@ -1,0 +1,9 @@
+{
+	"description": "unmount and lock device before poweroff",
+	"license": "MIT",
+	"authors": [
+		"yur"
+	],
+	"copyright": "Copyright © 2026, yur",
+	"name": "diskpoff-tui"
+}

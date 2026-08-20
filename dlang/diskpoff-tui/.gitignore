@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/diskpoff-tui
+diskpoff-tui.so
+diskpoff-tui.dylib
+diskpoff-tui.dll
+libdiskpoff-tui.a
+diskpoff-tui.a
+diskpoff-tui.lib
+diskpoff-tui-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
