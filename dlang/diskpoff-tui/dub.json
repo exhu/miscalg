@@ -5,5 +5,8 @@
 		"yur"
 	],
 	"copyright": "Copyright © 2026, yur",
-	"name": "diskpoff-tui"
+	"name": "diskpoff-tui",
+	"dependencies": {
+		"arsd-official:terminal": "~>12.1.2"
+	}
 }
