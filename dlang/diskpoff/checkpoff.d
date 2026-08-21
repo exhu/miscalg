@@ -13,7 +13,8 @@ struct ActionPlan {
 }
 
 void collectActions(JSONValue node, ref ActionPlan plan) {
-    // Collect active mountpoints (handles both string and array formats across lsblk versions)
+    // Collect active mountpoints (handles both string and array
+    // formats across lsblk versions)
     if ("mountpoints" in node && node["mountpoints"].type == JSONType.array) {
         foreach (mp; node["mountpoints"].array) {
             if (mp.type == JSONType.string && mp.str.length > 0 && mp.str != "null") {

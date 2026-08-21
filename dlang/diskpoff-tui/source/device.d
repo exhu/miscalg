@@ -22,6 +22,29 @@ struct CommandResult {
     }
 }
 
+struct PartitionInfo {
+    string name;
+    string path;
+    string model;
+    string vendor;
+    string serial;
+    string size;
+    string type;
+    string fstype;
+    string label;
+    string[] mountpoints;
+    int mountedCount;
+    int cryptUnlockedCount;
+
+    int totalMountedOrUnlocked() const {
+        return mountedCount + cryptUnlockedCount;
+    }
+
+    string[] mountPaths;        // paths to unmount (depth-first: leaves first)
+    string[] cryptLockPaths;    // paths to lock
+    PartitionInfo[] children;
+}
+
 struct DiskInfo {
     string path;                // e.g. /dev/sdb
     string name;                // e.g. Samsung T7 or sdb
@@ -40,6 +63,7 @@ struct DiskInfo {
 
     string[] mountPaths;        // paths to unmount (depth-first: leaves first)
     string[] cryptLockPaths;    // paths to lock
+    PartitionInfo[] partitions; // tree of partitions
 }
 
 struct ParsedNode {
@@ -51,6 +75,7 @@ struct ParsedNode {
     string size;
     string type;
     string fstype;
+    string label;
     bool hotplug;
     bool rm;
     string[] mountpoints;
@@ -124,6 +149,7 @@ ParsedNode parseNodeFromJson(JSONValue obj) {
     node.size = getJsonString(obj, "size");
     node.type = getJsonString(obj, "type");
     node.fstype = getJsonString(obj, "fstype");
+    node.label = getJsonString(obj, "label");
     node.hotplug = getJsonBool(obj, "hotplug");
     node.rm = getJsonBool(obj, "rm");
     node.mountpoints = getJsonMountpoints(obj);
@@ -182,6 +208,28 @@ void collectNodeDetails(
     }
 }
 
+PartitionInfo partitionInfoFromParsedNode(const ParsedNode node) {
+    PartitionInfo part;
+    part.name = node.name;
+    part.path = node.path;
+    part.model = node.model;
+    part.vendor = node.vendor;
+    part.serial = node.serial.empty ? "-" : node.serial;
+    part.size = node.size;
+    part.type = node.type;
+    part.fstype = node.fstype;
+    part.label = node.label;
+    part.mountpoints = node.mountpoints.dup;
+
+    // Depth-first collection for this partition subtree
+    collectNodeDetails(node, false, part.mountedCount, part.cryptUnlockedCount, part.mountPaths, part.cryptLockPaths);
+
+    foreach (ref child; node.children) {
+        part.children ~= partitionInfoFromParsedNode(child);
+    }
+    return part;
+}
+
 DiskInfo diskInfoFromParsedNode(const ParsedNode rootNode) {
     DiskInfo disk;
     disk.path = rootNode.path;
@@ -209,6 +257,10 @@ DiskInfo diskInfoFromParsedNode(const ParsedNode rootNode) {
     disk.name = displayName;
 
     collectNodeDetails(rootNode, true, disk.mountedCount, disk.cryptUnlockedCount, disk.mountPaths, disk.cryptLockPaths);
+
+    foreach (ref child; rootNode.children) {
+        disk.partitions ~= partitionInfoFromParsedNode(child);
+    }
     return disk;
 }
 
@@ -322,6 +374,37 @@ struct OperationResult {
     string message;
 }
 
+OperationResult unmountAndLockPartition(
+    string devPath,
+    string[] mountPaths,
+    string[] cryptLockPaths,
+    void delegate(string desc) onBusy = null
+) {
+    if (mountPaths.empty && cryptLockPaths.empty) {
+        return OperationResult(true, "Partition " ~ devPath ~ " is not mounted or unlocked.");
+    }
+
+    // 1. Unmount all mounted filesystems under this partition (depth-first: leaves first)
+    foreach (mPath; mountPaths) {
+        auto res = unmountPartition(mPath, onBusy);
+        if (!res.isSuccess) {
+            string err = res.error.empty ? res.output : res.error;
+            return OperationResult(false, "Failed to unmount " ~ mPath ~ ": " ~ err);
+        }
+    }
+
+    // 2. Lock all crypt mappings under this partition
+    foreach (cPath; cryptLockPaths) {
+        auto res = lockCryptoDevice(cPath, onBusy);
+        if (!res.isSuccess) {
+            string err = res.error.empty ? res.output : res.error;
+            return OperationResult(false, "Failed to lock " ~ cPath ~ ": " ~ err);
+        }
+    }
+
+    return OperationResult(true, "Successfully unmounted " ~ devPath ~ ".");
+}
+
 OperationResult unmountAndLockDisk(DiskInfo disk, void delegate(string desc) onBusy = null) {
     // 1. Unmount all mounted partitions
     foreach (mPath; disk.mountPaths) {
@@ -384,7 +467,8 @@ unittest {
                    "type": "part",
                    "mountpoints": [ "/media/user/SANDISK" ],
                    "fstype": "vfat",
-                   "size": "28.8G"
+                   "size": "28.8G",
+                   "label": "SANDISK"
                 }
              ]
           },
@@ -406,13 +490,16 @@ unittest {
                    "type": "part",
                    "fstype": "crypto_LUKS",
                    "mountpoints": [ null ],
+                   "size": "500G",
                    "children": [
                       {
                          "name": "luks-backup",
                          "path": "/dev/mapper/luks-backup",
                          "type": "crypt",
                          "mountpoints": [ "/mnt/backup" ],
-                         "fstype": "ext4"
+                         "fstype": "ext4",
+                         "size": "500G",
+                         "label": "BACKUP"
                       }
                    ]
                 }
@@ -432,6 +519,14 @@ unittest {
     assert(disks[0].cryptUnlockedCount == 0);
     assert(disks[0].totalMountedOrUnlocked == 1);
     assert(disks[0].mountPaths == ["/dev/sdb1"]);
+    assert(disks[0].partitions.length == 1);
+    assert(disks[0].partitions[0].name == "sdb1");
+    assert(disks[0].partitions[0].path == "/dev/sdb1");
+    assert(disks[0].partitions[0].fstype == "vfat");
+    assert(disks[0].partitions[0].label == "SANDISK");
+    assert(disks[0].partitions[0].mountpoints == ["/media/user/SANDISK"]);
+    assert(disks[0].partitions[0].mountPaths == ["/dev/sdb1"]);
+    assert(disks[0].partitions[0].cryptLockPaths.length == 0);
 
     // Verify second disk (sdc with crypto_LUKS)
     assert(disks[1].path == "/dev/sdc");
@@ -442,6 +537,27 @@ unittest {
     assert(disks[1].totalMountedOrUnlocked == 2);
     assert(disks[1].mountPaths == ["/dev/mapper/luks-backup"]);
     assert(disks[1].cryptLockPaths == ["/dev/mapper/luks-backup", "/dev/sdc1"]);
+    assert(disks[1].partitions.length == 1);
+    
+    auto sdc1 = disks[1].partitions[0];
+    assert(sdc1.path == "/dev/sdc1");
+    assert(sdc1.fstype == "crypto_LUKS");
+    assert(sdc1.mountPaths == ["/dev/mapper/luks-backup"]);
+    assert(sdc1.cryptLockPaths == ["/dev/mapper/luks-backup", "/dev/sdc1"]);
+    assert(sdc1.children.length == 1);
+
+    auto luksBackup = sdc1.children[0];
+    assert(luksBackup.path == "/dev/mapper/luks-backup");
+    assert(luksBackup.fstype == "ext4");
+    assert(luksBackup.label == "BACKUP");
+    assert(luksBackup.mountpoints == ["/mnt/backup"]);
+    assert(luksBackup.mountPaths == ["/dev/mapper/luks-backup"]);
+    assert(luksBackup.cryptLockPaths == ["/dev/mapper/luks-backup"]);
+
+    // Test unmountAndLockPartition for non-mounted partition
+    auto idleRes = unmountAndLockPartition("/dev/sdd1", [], []);
+    assert(idleRes.success);
+    assert(idleRes.message == "Partition /dev/sdd1 is not mounted or unlocked.");
 
     // Test complex LVM over LUKS
     string complexJson = `{
@@ -515,6 +631,12 @@ unittest {
     // Unlocked crypt: crypt_root = 1
     assert(complexDisks[0].cryptUnlockedCount == 1);
     assert(complexDisks[0].totalMountedOrUnlocked == 4);
+    assert(complexDisks[0].partitions.length == 2);
+    assert(complexDisks[0].partitions[0].path == "/dev/nvme0n1p1");
+    assert(complexDisks[0].partitions[0].mountPaths == ["/dev/nvme0n1p1"]);
+    assert(complexDisks[0].partitions[1].path == "/dev/nvme0n1p2");
+    assert(complexDisks[0].partitions[1].mountPaths.length == 2); // vg-swap, vg-root
+    assert(complexDisks[0].partitions[1].cryptLockPaths == ["/dev/mapper/crypt_root", "/dev/nvme0n1p2"]);
 
     // Empty/bare unmounted disk
     assert(complexDisks[1].path == "/dev/sdd");
@@ -523,6 +645,7 @@ unittest {
     assert(complexDisks[1].mountedCount == 0);
     assert(complexDisks[1].cryptUnlockedCount == 0);
     assert(complexDisks[1].totalMountedOrUnlocked == 0);
+    assert(complexDisks[1].partitions.length == 0);
 
     // Malformed JSON should return empty array safely
     assert(parseLsblkJson("").length == 0);

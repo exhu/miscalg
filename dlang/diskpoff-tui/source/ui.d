@@ -1,7 +1,7 @@
 module ui;
 
 import std.algorithm : clamp, max, min;
-import std.array : empty, replicate;
+import std.array : empty, join, replicate;
 import std.conv : to;
 import std.format : format;
 import std.string : leftJustifier, strip;
@@ -15,15 +15,39 @@ enum StatusType {
     error
 }
 
+enum RowType {
+    device,
+    partition
+}
+
+struct UiRow {
+    RowType type;
+    size_t diskIndex;           // Index into disks[]
+    string diskPath;            // Parent disk path, e.g. /dev/sdb
+    string devPath;             // Node device path, e.g. /dev/sdb or /dev/sdb1
+    string treePrefix;          // Prefix for device column
+    string devCol;              // Full formatted device column text
+    string nameCol;             // Model / Name column text
+    string serialCol;           // Serial column text
+    string mntCol;              // Mounted / Crypt column text
+
+    string[] mountPaths;        // Paths to unmount for this item subtree
+    string[] cryptLockPaths;    // Paths to lock for this item subtree
+    bool isExpanded;            // Only for RowType.device
+}
+
 struct TuiApp {
     Terminal* terminal;
     RealTimeConsoleInput* input;
 
     DiskInfo[] disks;
+    bool[string] expandedDisks;
+    UiRow[] visibleRows;
+
     size_t selectedIndex = 0;
     size_t scrollOffset = 0;
 
-    string statusMessage = "Ready. J/K/Up/Down: Select | Enter: Unmount/Poweroff | U: Unmount | P: Poweroff | Q: Quit";
+    string statusMessage = "Ready. J/K: Select | Enter: Expand/Collapse | U: Unmount | P: Poweroff | Q: Quit";
     StatusType statusType = StatusType.success;
 
     private int spinnerFrame = 0;
@@ -42,6 +66,120 @@ struct TuiApp {
         terminal.flush();
     }
 
+    private void flattenPartitions(
+        const ref PartitionInfo[] parts,
+        size_t diskIdx,
+        string diskPath,
+        string prefix,
+        ref UiRow[] rows
+    ) {
+        for (size_t i = 0; i < parts.length; i++) {
+            bool isLast = (i + 1 == parts.length);
+            string branch = isLast ? "└─ " : "├─ ";
+            string rowPrefix = prefix ~ branch;
+            string childPrefix = prefix ~ (isLast ? "   " : "│  ");
+
+            UiRow row;
+            row.type = RowType.partition;
+            row.diskIndex = diskIdx;
+            row.diskPath = diskPath;
+            row.devPath = parts[i].path;
+            row.treePrefix = rowPrefix;
+            row.devCol = rowPrefix ~ parts[i].path;
+
+            // Model / Name column:
+            string nameDetail = "";
+            if (!parts[i].label.empty) {
+                nameDetail = parts[i].label;
+                if (!parts[i].fstype.empty || !parts[i].size.empty) {
+                    nameDetail ~= " (";
+                    if (!parts[i].fstype.empty) nameDetail ~= parts[i].fstype;
+                    if (!parts[i].fstype.empty && !parts[i].size.empty) nameDetail ~= ", ";
+                    if (!parts[i].size.empty) nameDetail ~= parts[i].size;
+                    nameDetail ~= ")";
+                }
+            } else if (!parts[i].fstype.empty) {
+                nameDetail = parts[i].fstype;
+                if (!parts[i].size.empty) {
+                    nameDetail ~= " (" ~ parts[i].size ~ ")";
+                }
+            } else if (!parts[i].size.empty) {
+                nameDetail = parts[i].size;
+            } else {
+                nameDetail = "-";
+            }
+            row.nameCol = " " ~ nameDetail;
+
+            // Serial column:
+            row.serialCol = " -";
+
+            // Mounted / Crypt column:
+            string mntDetail = "";
+            if (parts[i].mountpoints.length > 0) {
+                mntDetail = parts[i].mountpoints.join(", ");
+            } else if (parts[i].type == "crypt" || (parts[i].fstype == "crypto_LUKS" && parts[i].children.length > 0)) {
+                mntDetail = "[unlocked]";
+            } else if (parts[i].fstype == "crypto_LUKS") {
+                mntDetail = "[locked]";
+            } else {
+                mntDetail = "[unmounted]";
+            }
+            row.mntCol = " " ~ mntDetail;
+
+            row.mountPaths = parts[i].mountPaths.dup;
+            row.cryptLockPaths = parts[i].cryptLockPaths.dup;
+            row.isExpanded = false;
+
+            rows ~= row;
+
+            if (parts[i].children.length > 0) {
+                flattenPartitions(parts[i].children, diskIdx, diskPath, childPrefix, rows);
+            }
+        }
+    }
+
+    void rebuildVisibleRows() {
+        visibleRows = [];
+        if (disks.length == 0) {
+            selectedIndex = 0;
+            return;
+        }
+
+        foreach (dIdx, ref disk; disks) {
+            bool isExp = expandedDisks.get(disk.path, false);
+
+            UiRow devRow;
+            devRow.type = RowType.device;
+            devRow.diskIndex = dIdx;
+            devRow.diskPath = disk.path;
+            devRow.devPath = disk.path;
+            devRow.treePrefix = " ";
+            devRow.devCol = " " ~ disk.path;
+            devRow.nameCol = " " ~ disk.name;
+            devRow.serialCol = " " ~ disk.serial;
+
+            if (disk.totalMountedOrUnlocked == 0) {
+                devRow.mntCol = " 0";
+            } else {
+                devRow.mntCol = format(" %d (%d mnt, %d crypt)",
+                    disk.totalMountedOrUnlocked, disk.mountedCount, disk.cryptUnlockedCount);
+            }
+            devRow.mountPaths = disk.mountPaths.dup;
+            devRow.cryptLockPaths = disk.cryptLockPaths.dup;
+            devRow.isExpanded = isExp;
+
+            visibleRows ~= devRow;
+
+            if (isExp && disk.partitions.length > 0) {
+                flattenPartitions(disk.partitions, dIdx, disk.path, " ", visibleRows);
+            }
+        }
+
+        if (selectedIndex >= visibleRows.length && visibleRows.length > 0) {
+            selectedIndex = visibleRows.length - 1;
+        }
+    }
+
     void refreshDisks() {
         string errorMsg;
         auto fetched = fetchDisks(&this.onBusy, errorMsg);
@@ -50,34 +188,56 @@ struct TuiApp {
             statusType = StatusType.error;
         } else {
             disks = fetched;
-            if (selectedIndex >= disks.length && disks.length > 0) {
-                selectedIndex = disks.length - 1;
-            }
+            rebuildVisibleRows();
             statusMessage = format("Disks refreshed (%d device%s found).", disks.length, disks.length == 1 ? "" : "s");
             statusType = StatusType.success;
         }
     }
 
     void moveUp() {
-        if (disks.length == 0) return;
+        if (visibleRows.length == 0) return;
         if (selectedIndex > 0) {
             selectedIndex--;
         }
     }
 
     void moveDown() {
-        if (disks.length == 0) return;
-        if (selectedIndex + 1 < disks.length) {
+        if (visibleRows.length == 0) return;
+        if (selectedIndex + 1 < visibleRows.length) {
             selectedIndex++;
         }
     }
 
     void handleEnter() {
-        if (disks.length == 0 || selectedIndex >= disks.length) return;
-        auto disk = disks[selectedIndex];
+        if (visibleRows.length == 0 || selectedIndex >= visibleRows.length) return;
+        auto row = visibleRows[selectedIndex];
 
-        if (disk.totalMountedOrUnlocked > 0) {
-            // Unmount and lock
+        if (row.type == RowType.device) {
+            bool curExp = expandedDisks.get(row.diskPath, false);
+            expandedDisks[row.diskPath] = !curExp;
+            rebuildVisibleRows();
+            
+            if (!curExp && disks[row.diskIndex].partitions.length == 0) {
+                statusMessage = format("Device %s expanded (no partitions).", row.diskPath);
+            } else {
+                statusMessage = format("Device %s %s.", row.diskPath, !curExp ? "expanded" : "collapsed");
+            }
+            statusType = StatusType.success;
+        }
+    }
+
+    void handleUnmountOnly() {
+        if (visibleRows.length == 0 || selectedIndex >= visibleRows.length) return;
+        auto row = visibleRows[selectedIndex];
+
+        if (row.type == RowType.device) {
+            auto disk = disks[row.diskIndex];
+            if (disk.totalMountedOrUnlocked == 0) {
+                statusMessage = format("Device %s has no mounted partitions or unlocked containers.", disk.path);
+                statusType = StatusType.success;
+                return;
+            }
+
             auto res = unmountAndLockDisk(disk, &this.onBusy);
             if (res.success) {
                 statusMessage = res.message;
@@ -87,8 +247,14 @@ struct TuiApp {
                 statusType = StatusType.error;
             }
         } else {
-            // Power off
-            auto res = powerOffDiskDevice(disk, &this.onBusy);
+            // Partition selected
+            if (row.mountPaths.length == 0 && row.cryptLockPaths.length == 0) {
+                statusMessage = format("Partition %s is not mounted or unlocked.", row.devPath);
+                statusType = StatusType.success;
+                return;
+            }
+
+            auto res = unmountAndLockPartition(row.devPath, row.mountPaths, row.cryptLockPaths, &this.onBusy);
             if (res.success) {
                 statusMessage = res.message;
                 statusType = StatusType.success;
@@ -100,32 +266,14 @@ struct TuiApp {
         refreshDisks();
     }
 
-    void handleUnmountOnly() {
-        if (disks.length == 0 || selectedIndex >= disks.length) return;
-        auto disk = disks[selectedIndex];
-
-        if (disk.totalMountedOrUnlocked == 0) {
-            statusMessage = format("Device %s has no mounted partitions or unlocked containers.", disk.path);
-            statusType = StatusType.success;
-            return;
-        }
-
-        auto res = unmountAndLockDisk(disk, &this.onBusy);
-        if (res.success) {
-            statusMessage = res.message;
-            statusType = StatusType.success;
-        } else {
-            statusMessage = res.message;
-            statusType = StatusType.error;
-        }
-        refreshDisks();
-    }
-
     void handlePowerOff() {
-        if (disks.length == 0 || selectedIndex >= disks.length) return;
-        auto disk = disks[selectedIndex];
+        if (visibleRows.length == 0 || selectedIndex >= visibleRows.length) return;
+        auto row = visibleRows[selectedIndex];
 
-        auto res = powerOffDiskDevice(disk, &this.onBusy);
+        // Power off the parent device even when an individual partition is selected
+        auto parentDisk = disks[row.diskIndex];
+
+        auto res = powerOffDiskDevice(parentDisk, &this.onBusy);
         if (res.success) {
             statusMessage = res.message;
             statusType = StatusType.success;
@@ -171,7 +319,7 @@ struct TuiApp {
         // Title line at row 0
         terminal.moveTo(0, 0);
         string title = " Removable Disks Manager (diskpoff-tui) ";
-        string helpTop = "[ J/K: Nav | Enter: Action | U: Unmount | P: Poweroff | R: Refresh | Q: Quit ] ";
+        string helpTop = "[ J/K: Nav | Enter: Expand/Collapse | U: Unmount | P: Poweroff | R: Refresh | Q: Quit ] ";
         int spaceBetween = max(0, w - cast(int) title.length - cast(int) helpTop.length);
         terminal.color(Color.white | Bright, Color.blue);
         terminal.write(title ~ " ".replicate(spaceBetween) ~ helpTop);
@@ -185,13 +333,13 @@ struct TuiApp {
         if (innerHeight < 1) innerHeight = 1;
 
         // Calculate columns
-        int devWidth = 14;
-        int serialWidth = 16;
-        int mntWidth = 20;
+        int devWidth = max(16, min(32, w * 25 / 100));
+        int serialWidth = max(12, min(20, w * 18 / 100));
+        int mntWidth = max(18, min(35, w * 28 / 100));
         int nameWidth = w - 2 - (devWidth + serialWidth + mntWidth + 3); // 3 vertical column separators
-        if (nameWidth < 10) {
-            nameWidth = 10;
-            devWidth = max(8, w - 2 - (nameWidth + serialWidth + mntWidth + 3));
+        if (nameWidth < 12) {
+            nameWidth = 12;
+            devWidth = max(10, w - 2 - (nameWidth + serialWidth + mntWidth + 3));
         }
 
         // 1. Top border
@@ -233,34 +381,22 @@ struct TuiApp {
         // 4. Data rows
         for (int row = 0; row < innerHeight; row++) {
             int curY = frameTop + 3 + row;
-            size_t diskIdx = scrollOffset + row;
+            size_t visibleIdx = scrollOffset + row;
             terminal.moveTo(0, curY);
 
             terminal.color(Color.white, Color.blue);
             terminal.write("|");
 
-            if (disks.length == 0) {
+            if (visibleRows.length == 0) {
                 if (row == 0) {
                     string emptyMsg = "  (No active disk devices found. Press R to refresh)";
                     terminal.write(truncateOrPad(emptyMsg, w - 2));
                 } else {
                     terminal.write(" ".replicate(w - 2));
                 }
-            } else if (diskIdx < disks.length) {
-                auto disk = disks[diskIdx];
-                bool isSelected = (diskIdx == selectedIndex);
-
-                string devStr = " " ~ disk.path;
-                string nameStr = " " ~ disk.name;
-                string serialStr = " " ~ disk.serial;
-                
-                string mntDetail;
-                if (disk.totalMountedOrUnlocked == 0) {
-                    mntDetail = " 0";
-                } else {
-                    mntDetail = format(" %d (%d mnt, %d crypt)", 
-                        disk.totalMountedOrUnlocked, disk.mountedCount, disk.cryptUnlockedCount);
-                }
+            } else if (visibleIdx < visibleRows.length) {
+                auto item = visibleRows[visibleIdx];
+                bool isSelected = (visibleIdx == selectedIndex);
 
                 if (isSelected) {
                     // Inverted selection: blue on white
@@ -269,11 +405,11 @@ struct TuiApp {
                     terminal.color(Color.white, Color.blue);
                 }
 
-                string lineText = truncateOrPad(devStr, devWidth) ~ "|" ~
-                                  truncateOrPad(nameStr, nameWidth) ~ "|" ~
-                                  truncateOrPad(serialStr, serialWidth) ~ "|" ~
-                                  truncateOrPad(mntDetail, mntWidth);
-                
+                string lineText = truncateOrPad(item.devCol, devWidth) ~ "|" ~
+                                  truncateOrPad(item.nameCol, nameWidth) ~ "|" ~
+                                  truncateOrPad(item.serialCol, serialWidth) ~ "|" ~
+                                  truncateOrPad(item.mntCol, mntWidth);
+
                 terminal.write(truncateOrPad(lineText, w - 2));
                 terminal.color(Color.white, Color.blue);
             } else {
@@ -360,7 +496,7 @@ struct TuiApp {
                     selectedIndex = 0;
                     draw();
                 } else if (key == KeyboardEvent.Key.End) {
-                    if (disks.length > 0) selectedIndex = disks.length - 1;
+                    if (visibleRows.length > 0) selectedIndex = visibleRows.length - 1;
                     draw();
                 } else if (key == '\r' || key == '\n') {
                     handleEnter();
