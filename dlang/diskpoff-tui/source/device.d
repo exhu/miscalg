@@ -1,6 +1,6 @@
 module device;
 
-import std.algorithm : canFind, filter, reverse, sort;
+import std.algorithm : canFind, filter, reverse, sort, startsWith;
 import std.array : empty, join;
 import std.conv : to;
 import std.datetime : Duration, msecs;
@@ -354,6 +354,11 @@ DiskInfo[] fetchDisks(void delegate(string desc) onBusy = null, ref string error
     return disks;
 }
 
+CommandResult mountPartition(string devPath, void delegate(string desc) onBusy = null) {
+    string[] cmd = ["udisksctl", "mount", "-b", devPath, "--no-user-interaction"];
+    return runCommandWithBusyAnimation(cmd, "Mounting " ~ devPath ~ "...", onBusy);
+}
+
 CommandResult unmountPartition(string devPath, void delegate(string desc) onBusy = null) {
     string[] cmd = ["udisksctl", "unmount", "-b", devPath, "--no-user-interaction"];
     return runCommandWithBusyAnimation(cmd, "Unmounting " ~ devPath ~ "...", onBusy);
@@ -374,6 +379,142 @@ struct OperationResult {
     string message;
 }
 
+bool isSwapPartition(const ref PartitionInfo part) {
+    if (part.fstype == "swap") return true;
+    if (part.type == "swap") return true;
+    foreach (m; part.mountpoints) {
+        if (m == "[SWAP]") return true;
+    }
+    return false;
+}
+
+bool isPartitionMounted(const ref PartitionInfo part) {
+    foreach (m; part.mountpoints) {
+        if (m.length > 0 && m != "null" && m != "[SWAP]") {
+            return true;
+        }
+    }
+    return false;
+}
+
+void collectMountablePartitionsFromTree(
+    const ref PartitionInfo part,
+    ref string[] candidatePaths,
+    ref string[] alreadyMountedPaths
+) {
+    // Exclude swap
+    if (isSwapPartition(part)) {
+        return;
+    }
+
+    // If it has children (e.g. decrypted LUKS container or LVM volume), recurse into children
+    if (part.children.length > 0) {
+        foreach (ref child; part.children) {
+            collectMountablePartitionsFromTree(child, candidatePaths, alreadyMountedPaths);
+        }
+        return;
+    }
+
+    // Skip locked LUKS containers (cannot be mounted directly without unlocking)
+    if (part.fstype == "crypto_LUKS") {
+        return;
+    }
+
+    if (part.path.empty) return;
+
+    if (isPartitionMounted(part)) {
+        if (!alreadyMountedPaths.canFind(part.path)) {
+            alreadyMountedPaths ~= part.path;
+        }
+    } else {
+        if (!candidatePaths.canFind(part.path)) {
+            candidatePaths ~= part.path;
+        }
+    }
+}
+
+void collectMountablePartitionsForDisk(
+    const ref DiskInfo disk,
+    ref string[] candidatePaths,
+    ref string[] alreadyMountedPaths
+) {
+    if (disk.partitions.length == 0) {
+        if (disk.path.empty) return;
+        if (disk.mountedCount > 0) {
+            alreadyMountedPaths ~= disk.path;
+        } else {
+            candidatePaths ~= disk.path;
+        }
+        return;
+    }
+
+    foreach (ref part; disk.partitions) {
+        collectMountablePartitionsFromTree(part, candidatePaths, alreadyMountedPaths);
+    }
+}
+
+private string formatOpError(string action, string devPath, string rawError) {
+    auto err = rawError.strip;
+    if (err.empty) {
+        return "Failed to " ~ action ~ " " ~ devPath ~ ".";
+    }
+
+    string[5] prefixes = [
+        "Error " ~ action ~ "ing " ~ devPath ~ ": ",
+        "Error " ~ action ~ " " ~ devPath ~ ": ",
+        "Error " ~ action ~ "ing: ",
+        "Error " ~ action ~ ": ",
+        "Error: "
+    ];
+
+    foreach (p; prefixes) {
+        if (err.startsWith(p)) {
+            err = err[p.length .. $].strip;
+            break;
+        }
+    }
+
+    return "Failed to " ~ action ~ " " ~ devPath ~ ": " ~ err;
+}
+
+OperationResult mountSinglePartition(string devPath, void delegate(string desc) onBusy = null) {
+    auto res = mountPartition(devPath, onBusy);
+    if (!res.isSuccess) {
+        string err = res.error.empty ? res.output : res.error;
+        return OperationResult(false, formatOpError("mount", devPath, err));
+    }
+    string msg = res.output.empty ? ("Successfully mounted " ~ devPath ~ ".") : res.output;
+    return OperationResult(true, msg);
+}
+
+OperationResult mountDiskPartitions(DiskInfo disk, void delegate(string desc) onBusy = null) {
+    string[] candidatePaths;
+    string[] alreadyMountedPaths;
+    collectMountablePartitionsForDisk(disk, candidatePaths, alreadyMountedPaths);
+
+    if (candidatePaths.empty) {
+        if (alreadyMountedPaths.length > 0) {
+            return OperationResult(true, "All partitions on " ~ disk.path ~ " are already mounted.");
+        }
+        return OperationResult(true, "No mountable partitions found on " ~ disk.path ~ ".");
+    }
+
+    string[] mountedList;
+    foreach (devPath; candidatePaths) {
+        auto res = mountPartition(devPath, onBusy);
+        if (!res.isSuccess) {
+            string err = res.error.empty ? res.output : res.error;
+            return OperationResult(false, formatOpError("mount", devPath, err));
+        }
+        mountedList ~= devPath;
+    }
+
+    if (mountedList.length == 1) {
+        return OperationResult(true, "Successfully mounted " ~ mountedList[0] ~ ".");
+    }
+    return OperationResult(true, "Successfully mounted " ~ mountedList.join(", ") ~ ".");
+}
+
 OperationResult unmountAndLockPartition(
     string devPath,
     string[] mountPaths,
@@ -389,7 +530,7 @@ OperationResult unmountAndLockPartition(
         auto res = unmountPartition(mPath, onBusy);
         if (!res.isSuccess) {
             string err = res.error.empty ? res.output : res.error;
-            return OperationResult(false, "Failed to unmount " ~ mPath ~ ": " ~ err);
+            return OperationResult(false, formatOpError("unmount", mPath, err));
         }
     }
 
@@ -398,7 +539,7 @@ OperationResult unmountAndLockPartition(
         auto res = lockCryptoDevice(cPath, onBusy);
         if (!res.isSuccess) {
             string err = res.error.empty ? res.output : res.error;
-            return OperationResult(false, "Failed to lock " ~ cPath ~ ": " ~ err);
+            return OperationResult(false, formatOpError("lock", cPath, err));
         }
     }
 
@@ -411,7 +552,7 @@ OperationResult unmountAndLockDisk(DiskInfo disk, void delegate(string desc) onB
         auto res = unmountPartition(mPath, onBusy);
         if (!res.isSuccess) {
             string err = res.error.empty ? res.output : res.error;
-            return OperationResult(false, "Failed to unmount " ~ mPath ~ ": " ~ err);
+            return OperationResult(false, formatOpError("unmount", mPath, err));
         }
     }
 
@@ -420,7 +561,7 @@ OperationResult unmountAndLockDisk(DiskInfo disk, void delegate(string desc) onB
         auto res = lockCryptoDevice(cPath, onBusy);
         if (!res.isSuccess) {
             string err = res.error.empty ? res.output : res.error;
-            return OperationResult(false, "Failed to lock " ~ cPath ~ ": " ~ err);
+            return OperationResult(false, formatOpError("lock", cPath, err));
         }
     }
 
@@ -440,7 +581,7 @@ OperationResult powerOffDiskDevice(DiskInfo disk, void delegate(string desc) onB
     auto pRes = powerOffDisk(disk.path, onBusy);
     if (!pRes.isSuccess) {
         string err = pRes.error.empty ? pRes.output : pRes.error;
-        return OperationResult(false, "Failed to power off " ~ disk.path ~ ": " ~ err);
+        return OperationResult(false, formatOpError("power off", disk.path, err));
     }
 
     return OperationResult(true, "Successfully powered off " ~ disk.path ~ ".");
@@ -647,9 +788,117 @@ unittest {
     assert(complexDisks[1].totalMountedOrUnlocked == 0);
     assert(complexDisks[1].partitions.length == 0);
 
+    // Test mount candidate collection for sampleJson
+    string[] candPaths, alreadyMntPaths;
+    collectMountablePartitionsForDisk(disks[0], candPaths, alreadyMntPaths);
+    assert(candPaths.length == 0);
+    assert(alreadyMntPaths == ["/dev/sdb1"]);
+
+    auto allMountedRes = mountDiskPartitions(disks[0], null);
+    assert(allMountedRes.success);
+    assert(allMountedRes.message == "All partitions on /dev/sdb are already mounted.");
+
+    candPaths = [];
+    alreadyMntPaths = [];
+    collectMountablePartitionsForDisk(disks[1], candPaths, alreadyMntPaths);
+    assert(candPaths.length == 0);
+    assert(alreadyMntPaths == ["/dev/mapper/luks-backup"]);
+
+    // Test mount candidate collection for complexJson
+    // nvme0n1 has /boot (nvme0n1p1) and vg-root (mounted), and vg-swap (swap)
+    candPaths = [];
+    alreadyMntPaths = [];
+    collectMountablePartitionsForDisk(complexDisks[0], candPaths, alreadyMntPaths);
+    assert(candPaths.length == 0);
+    assert(alreadyMntPaths.canFind("/dev/nvme0n1p1"));
+    assert(alreadyMntPaths.canFind("/dev/mapper/vg-root"));
+    assert(!alreadyMntPaths.canFind("/dev/mapper/vg-swap")); // swap must be excluded
+
+    // sdd has no partitions, unmounted whole disk
+    candPaths = [];
+    alreadyMntPaths = [];
+    collectMountablePartitionsForDisk(complexDisks[1], candPaths, alreadyMntPaths);
+    assert(candPaths == ["/dev/sdd"]);
+
+    // Test swap exclusion on unmounted partitions
+    string swapJson = `{
+       "blockdevices": [
+          {
+             "name": "sde",
+             "path": "/dev/sde",
+             "model": "Flash Drive",
+             "serial": "998877",
+             "type": "disk",
+             "mountpoints": [ null ],
+             "children": [
+                {
+                   "name": "sde1",
+                   "path": "/dev/sde1",
+                   "type": "part",
+                   "fstype": "ext4",
+                   "mountpoints": [ null ]
+                },
+                {
+                   "name": "sde2",
+                   "path": "/dev/sde2",
+                   "type": "part",
+                   "fstype": "swap",
+                   "mountpoints": [ null ]
+                },
+                {
+                   "name": "sde3",
+                   "path": "/dev/sde3",
+                   "type": "part",
+                   "fstype": "vfat",
+                   "mountpoints": [ null ]
+                }
+             ]
+          }
+       ]
+    }`;
+
+    auto swapDisks = parseLsblkJson(swapJson);
+    assert(swapDisks.length == 1);
+    candPaths = [];
+    alreadyMntPaths = [];
+    collectMountablePartitionsForDisk(swapDisks[0], candPaths, alreadyMntPaths);
+    // Should include sde1 and sde3, but NOT sde2 (swap)
+    assert(candPaths == ["/dev/sde1", "/dev/sde3"]);
+    assert(alreadyMntPaths.length == 0);
+
+    // Test disk with only swap partition
+    string onlySwapJson = `{
+       "blockdevices": [
+          {
+             "name": "sdf",
+             "path": "/dev/sdf",
+             "model": "Swap Drive",
+             "serial": "12345",
+             "type": "disk",
+             "mountpoints": [ null ],
+             "children": [
+                {
+                   "name": "sdf1",
+                   "path": "/dev/sdf1",
+                   "type": "part",
+                   "fstype": "swap",
+                   "mountpoints": [ null ]
+                }
+             ]
+          }
+       ]
+    }`;
+
+    auto onlySwapDisks = parseLsblkJson(onlySwapJson);
+    assert(onlySwapDisks.length == 1);
+    auto noMountableRes = mountDiskPartitions(onlySwapDisks[0], null);
+    assert(noMountableRes.success);
+    assert(noMountableRes.message == "No mountable partitions found on /dev/sdf.");
+
     // Malformed JSON should return empty array safely
     assert(parseLsblkJson("").length == 0);
     assert(parseLsblkJson("{ invalid json }").length == 0);
 }
+
 
 

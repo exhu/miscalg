@@ -1,6 +1,6 @@
 module ui;
 
-import std.algorithm : clamp, max, min;
+import std.algorithm : canFind, clamp, max, min;
 import std.array : empty, join, replicate;
 import std.conv : to;
 import std.format : format;
@@ -47,7 +47,7 @@ struct TuiApp {
     size_t selectedIndex = 0;
     size_t scrollOffset = 0;
 
-    string statusMessage = "Ready. J/K: Select | Enter: Expand/Collapse | U: Unmount | P: Poweroff | Q: Quit";
+    string statusMessage = "Ready. J/K: Select | Enter: Expand/Collapse | M: Mount | U: Unmount | P: Poweroff | Q: Quit";
     StatusType statusType = StatusType.success;
 
     private int spinnerFrame = 0;
@@ -180,7 +180,10 @@ struct TuiApp {
         }
     }
 
-    void refreshDisks() {
+    void refreshDisks(bool preserveStatus = false) {
+        auto prevMessage = statusMessage;
+        auto prevType = statusType;
+
         string errorMsg;
         auto fetched = fetchDisks(&this.onBusy, errorMsg);
         if (!errorMsg.empty) {
@@ -189,8 +192,13 @@ struct TuiApp {
         } else {
             disks = fetched;
             rebuildVisibleRows();
-            statusMessage = format("Disks refreshed (%d device%s found).", disks.length, disks.length == 1 ? "" : "s");
-            statusType = StatusType.success;
+            if (preserveStatus) {
+                statusMessage = prevMessage;
+                statusType = prevType;
+            } else {
+                statusMessage = format("Disks refreshed (%d device%s found).", disks.length, disks.length == 1 ? "" : "s");
+                statusType = StatusType.success;
+            }
         }
     }
 
@@ -224,6 +232,40 @@ struct TuiApp {
             }
             statusType = StatusType.success;
         }
+    }
+
+    void handleMount() {
+        if (visibleRows.length == 0 || selectedIndex >= visibleRows.length) return;
+        auto row = visibleRows[selectedIndex];
+
+        if (row.type == RowType.device) {
+            auto disk = disks[row.diskIndex];
+            auto res = mountDiskPartitions(disk, &this.onBusy);
+            if (res.success) {
+                statusMessage = res.message;
+                statusType = StatusType.success;
+            } else {
+                statusMessage = res.message;
+                statusType = StatusType.error;
+            }
+        } else {
+            // Partition selected
+            if (row.mountPaths.canFind(row.devPath)) {
+                statusMessage = format("Partition %s is already mounted.", row.devPath);
+                statusType = StatusType.success;
+                return;
+            }
+
+            auto res = mountSinglePartition(row.devPath, &this.onBusy);
+            if (res.success) {
+                statusMessage = res.message;
+                statusType = StatusType.success;
+            } else {
+                statusMessage = res.message;
+                statusType = StatusType.error;
+            }
+        }
+        refreshDisks(true);
     }
 
     void handleUnmountOnly() {
@@ -263,7 +305,7 @@ struct TuiApp {
                 statusType = StatusType.error;
             }
         }
-        refreshDisks();
+        refreshDisks(true);
     }
 
     void handlePowerOff() {
@@ -281,7 +323,7 @@ struct TuiApp {
             statusMessage = res.message;
             statusType = StatusType.error;
         }
-        refreshDisks();
+        refreshDisks(true);
     }
 
     private string truncateOrPad(string s, int width) {
@@ -319,7 +361,7 @@ struct TuiApp {
         // Title line at row 0
         terminal.moveTo(0, 0);
         string title = " Removable Disks Manager (diskpoff-tui) ";
-        string helpTop = "[ J/K: Nav | Enter: Expand/Collapse | U: Unmount | P: Poweroff | R: Refresh | Q: Quit ] ";
+        string helpTop = "[ J/K: Nav | Enter: Expand/Collapse | M: Mount | U: Unmount | P: Poweroff | R: Refresh | Q: Quit ] ";
         int spaceBetween = max(0, w - cast(int) title.length - cast(int) helpTop.length);
         terminal.color(Color.white | Bright, Color.blue);
         terminal.write(title ~ " ".replicate(spaceBetween) ~ helpTop);
@@ -503,6 +545,9 @@ struct TuiApp {
                     draw();
                 } else if (key == 'u' || key == 'U') {
                     handleUnmountOnly();
+                    draw();
+                } else if (key == 'm' || key == 'M') {
+                    handleMount();
                     draw();
                 } else if (key == 'p' || key == 'P') {
                     handlePowerOff();

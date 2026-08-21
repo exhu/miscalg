@@ -14,6 +14,7 @@ on that device, or unmount/lock and power-off the device. All errors are reporte
 ## Navigation
 J/DOWN, K/UP -- move selection down or up
 ENTER -- when device is selected toggles the view: expands or collapses the list with this devices' partitions.
+M -- mount all partitions (except swap) on the selected device, or the selected partition.
 U -- only unmount/lock all devices' partitions or a selected partition.
 P -- unmount/lock all devices' partitions and poweroff the device (even when individual partition of the device is selected).
 
