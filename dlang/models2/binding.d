@@ -47,9 +47,9 @@ enum EventCategory
 /// shared logic+view, view only, and dynamic embedded view models?
 /// ViewModel = only for presentation
 /// Model = both for presentation and logic
-/// CustomizedViewModel = calculated model instance for a component of a view, e.g.
+/// CustomizedViewModel / PresentationModel (e.g. by Generated View) = calculated model instance for a component of a view, e.g.
 /// calculated values to set on control based on the ViewModel passed:
-/// ViewModel: bool buttonEnabled, Customized: string buttonStyleName = ViewModel.buttonEnabled ? "normal : "disabled";
+/// ViewModel: bool buttonEnabled, Customized/Presentation: string buttonStyleName = ViewModel.buttonEnabled ? "normal : "disabled";
 /// Should model instances be owned by controllers, or some global storage?
 struct BindingSystem
 {
