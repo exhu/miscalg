@@ -411,11 +411,17 @@ struct TuiApp {
     }
 
     private void drawTableFrame(int width, int top, in ColumnLayout cols) {
-	// 1. Top border
+	// 1. Top border with column splitters (╦)
 	terminal.moveTo(0, top);
 	terminal.color(Color.white, Color.blue);
-	// TODO use doubleHorizSingleVertStyle.tDown to separate header cells based on cols
-	terminal.write(doubleStyle.tl ~ doubleStyle.h.replicate(width - 2) ~ doubleStyle.tr);
+	terminal.write(
+	    doubleStyle.tl ~
+	    doubleStyle.h.replicate(cols.dev)    ~ doubleHorizSingleVertStyle.tDown ~
+	    doubleStyle.h.replicate(cols.name)   ~ doubleHorizSingleVertStyle.tDown ~
+	    doubleStyle.h.replicate(cols.serial) ~ doubleHorizSingleVertStyle.tDown ~
+	    doubleStyle.h.replicate(cols.mnt)    ~
+	    doubleStyle.tr
+	);
 
 	// 2. Header row
 	terminal.moveTo(0, top + 1);
@@ -433,10 +439,16 @@ struct TuiApp {
 	writeHeaderCell(" Serial", cols.serial);
 	writeHeaderCell(" Mounted / Crypt", cols.mnt, true);
 
-	// 3. Header separator
+	// 3. Header separator with column splitters (╩)
 	terminal.moveTo(0, top + 2);
-	// TODO use doubleHorizSingleVertStyle.tUp to separate header cells based on cols
-	terminal.write(doubleStyle.tRight ~ doubleStyle.h.replicate(width - 2) ~ doubleStyle.tLeft);
+	terminal.write(
+	    doubleStyle.tRight ~
+	    doubleStyle.h.replicate(cols.dev)    ~ doubleHorizSingleVertStyle.cross ~
+	    doubleStyle.h.replicate(cols.name)   ~ doubleHorizSingleVertStyle.cross ~
+	    doubleStyle.h.replicate(cols.serial) ~ doubleHorizSingleVertStyle.cross ~
+	    doubleStyle.h.replicate(cols.mnt)    ~
+	    doubleStyle.tLeft
+	);
     }
 
     private void drawDataRows(int width, int startY, int rowCount, in ColumnLayout cols) {
@@ -467,9 +479,9 @@ struct TuiApp {
 	terminal.color(isSelected ? Color.blue : Color.white, 
 		    isSelected ? Color.white : Color.blue);
 
-	string lineText = truncateOrPad(item.devCol, cols.dev) ~ "|" ~
-			truncateOrPad(item.nameCol, cols.name) ~ "|" ~
-			truncateOrPad(item.serialCol, cols.serial) ~ "|" ~
+	string lineText = truncateOrPad(item.devCol, cols.dev) ~ singleStyle.v ~
+			truncateOrPad(item.nameCol, cols.name) ~ singleStyle.v ~
+			truncateOrPad(item.serialCol, cols.serial) ~ singleStyle.v ~
 			truncateOrPad(item.mntCol, cols.mnt);
 
 	terminal.write(truncateOrPad(lineText, totalWidth - 2));
