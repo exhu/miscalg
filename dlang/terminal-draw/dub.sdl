@@ -1,0 +1,5 @@
+name "tui_shadow_demo"
+description "TUI Cell Buffer and Shadow Demo in D"
+authors "Author"
+license "MIT"
+dependency "arsd-official:terminal" version="~>12.1.2"
