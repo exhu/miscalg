@@ -4,6 +4,13 @@ module binding;
   model with versioning
   is updated?
   value?
+
+  app cycle:
+    event(init/timer/input/idle) ->
+    logic.update (modifies models) ->
+    view.update (modifies view models, can depend on logic,
+	or other factors, e.g. cursor blinking is not dependent on logic models) ->
+    redraw (if view updated, or forced by system)
  */
 
 /// code that sets element's property/performs action
