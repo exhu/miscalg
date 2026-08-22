@@ -8,6 +8,8 @@ module binding;
   app cycle:
     event(init/timer/input/idle) ->
     logic.update (modifies models) ->
+    (in case of a game or video just accumulates events
+    and updates physics etc at fixed pace later, it's inside logic.update to decide)
     view.update (modifies view models, can depend on logic,
 	or other factors, e.g. cursor blinking is not dependent on logic models) ->
     redraw (if view updated, or forced by system)
@@ -48,6 +50,8 @@ enum EventCategory
     timer,
     /// window resize, dpi change etc.
     window,
+    /// when you need to do something in the idel too, e.g. benchmark maximum fps
+    idle,
   }
 
 /// single system for all active models (i.e. not per screen, because pollUpdate cleans version)
@@ -82,6 +86,141 @@ struct DialogBox
   @property void visible(bool b)
   {
     writefln("visible: %s", b);
+  }
+}
+
+struct LocalizedFields
+{
+  string warningTitle;
+  string errorTitle;
+  string informationTitle;
+}
+
+alias LocalizedModel= ObservableModel!LocalizedFields;
+
+struct Rect
+{
+  int x, y, w, h;
+}
+
+// draws shadow
+struct ShadowComponent
+{
+  bool on = true;
+}
+
+// participates in embedded windowing system (drag etc.)
+struct WindowComponent
+{
+}
+
+// control participates in focusing, different from windowing
+struct FocusComponent
+{
+  // 0 = automatic
+  int index;
+  // updated by system
+  private bool focused;
+}
+
+struct TextComponent
+{
+  void setText(string text) {}
+}
+
+struct ModalComponent
+{
+}
+
+import std.sumtype;
+alias UiComponent = SumType!(ShadowComponent, WindowComponent, FocusComponent, TextComponent, ModalComponent);
+
+struct UiControl
+{
+  Rect rect;
+  UiComponent[] components;
+}
+
+struct ControlHandle
+{
+  int id;
+}
+
+struct ControlSystem
+{
+  UiControl* getControl(in ControlHandle handle)
+  {
+    return null;
+  }
+
+  ControlHandle allocControl()
+  {
+    return ControlHandle();
+  }
+}
+
+// resuable dialog template
+struct DialogBoxView
+{
+  ControlHandle title;
+  
+  void build(ref ControlSystem cs, in ControlHandle parent, bool isError)
+  {
+    UiControl *root = cs.getControl(cs.allocControl());
+    root.rect.w = 100;
+    root.rect.h = 50;
+    root.components ~= UiComponent(WindowComponent());
+    root.components ~= UiComponent(ShadowComponent());
+    root.components ~= UiComponent(ModalComponent());
+    // TODO build hierarchy, store handles to controls to set data in update
+  }
+
+  void update(in LocalizedModel loc, bool visible)
+  {
+    // TODO
+    
+  }
+}
+
+struct MainScreenView
+{
+  DialogBoxView infoDialog;
+  DialogBoxView errorDialog;
+
+  void build(ref ControlSystem cs, in ControlHandle parent)
+  {
+    infoDialog.build(cs, parent, false);
+    errorDialog.build(cs, parent, true);
+  }
+
+  void update(in LocalizedModel loc, bool isError)
+  {
+    infoDialog.update(loc, !isError);
+    errorDialog.update(loc, isError);
+  }
+}
+
+struct MainScreenController
+{
+  Tracked!LocalizedModel loc;
+  ControlSystem cs;
+  MainScreenView view;
+  BindingSystem bsystem;
+
+  void build()
+  {
+    view.build(cs, ControlHandle());
+    
+    Binding b;
+    b.updateValue = (){
+      view.update(loc.model, false);
+    };
+
+    BoundModel bmodel;
+    bmodel.isUpdated = &loc.pollUpdate;
+    bmodel.bindings ~= b;
+
+    bsystem.models ~= bmodel;
   }
 }
 
