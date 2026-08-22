@@ -15,6 +15,8 @@ module binding;
     redraw (if view updated, or forced by system)
  */
 
+// TODO deprecate Binding stuff, write Context storing the model, Controller, View storing TrackedModelPointer
+
 /// code that sets element's property/performs action
 struct Binding
 {
@@ -24,7 +26,7 @@ struct Binding
 /// model that affects multiple dependent properties
 struct BoundModel
 {
-  bool delegate() isUpdated;
+  bool delegate() pollUpdate;
   /// this dynarray changes much when new ui elements are loaded/screens change...
   Binding[] bindings;
   void update()
@@ -64,14 +66,20 @@ enum EventCategory
 /// Should model instances be owned by controllers, or some global storage?
 struct BindingSystem
 {
+  enum UpdateType
+  {
+    defaultUpdate,
+    forceUpdate,
+  }
+  
   BoundModel[] models;
 
   /// this must be called everytime there's possibility that any model has updated
-  void update()
+  void update(UpdateType updateType = UpdateType.defaultUpdate)
   {
     foreach(ref m; models)
       {
-	if (m.isUpdated())
+	if (m.pollUpdate() || updateType == UpdateType.forceUpdate)
 	  m.update();
       }
   }
@@ -148,6 +156,8 @@ struct ControlHandle
 
 struct ControlSystem
 {
+  ControlHandle screenRoot;
+  
   UiControl* getControl(in ControlHandle handle)
   {
     return null;
@@ -184,6 +194,7 @@ struct DialogBoxView
 
 struct MainScreenView
 {
+  // TODO need to invent a way to defer complex control hierarchies
   DialogBoxView infoDialog;
   DialogBoxView errorDialog;
 
@@ -209,18 +220,31 @@ struct MainScreenController
 
   void build()
   {
-    view.build(cs, ControlHandle());
+    view.build(cs, cs.screenRoot);
     
+    // looks like you need to have updateNNN methods to make sense of granular model updates
+    // otherwise need to complicate by storing pointers/ids to model in the views...
+    // also BindingSystem does not make much sense,
+    // probably the right approach is to store model in a data context class, and
+    // controllers and views store a handle to it with a last read version and update at their own.
+   
     Binding b;
     b.updateValue = (){
       view.update(loc.model, false);
     };
 
     BoundModel bmodel;
-    bmodel.isUpdated = &loc.pollUpdate;
+    bmodel.pollUpdate = &loc.pollUpdate;
     bmodel.bindings ~= b;
 
     bsystem.models ~= bmodel;
+
+    bsystem.update(BindingSystem.UpdateType.forceUpdate);
+  }
+
+  void update()
+  {
+    bsystem.update();
   }
 }
 
@@ -242,7 +266,7 @@ void main()
   };
 
   BoundModel bmodel;
-  bmodel.isUpdated = &m.pollUpdate;
+  bmodel.pollUpdate = &m.pollUpdate;
   bmodel.bindings ~= b;
 
   BindingSystem bsystem;
