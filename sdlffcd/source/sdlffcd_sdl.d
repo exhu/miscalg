@@ -99,7 +99,7 @@ enum sdlffcd_FontHinting : int {
     SDLFFCD_FONT_HINTING_LIGHT_SUBPIXEL = 4
 }
 
-sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize);
+sdlffcd_Font* sdlffcd_font_open(const(void)* data, size_t data_size, float ptsize);
 bool sdlffcd_font_set_hinting(sdlffcd_Font* font, sdlffcd_FontHinting hinting);
 sdlffcd_FontHinting sdlffcd_font_get_hinting(const(sdlffcd_Font)* font);
 bool sdlffcd_font_set_size_dpi(sdlffcd_Font* font, float ptsize, int hdpi, int vdpi);
@@ -202,7 +202,7 @@ extern(D) unittest
     sdlffcd_audio_stream_close(null);
 
     // Text & font null checks
-    assert(sdlffcd_font_open(null, 12.0f) is null);
+    assert(sdlffcd_font_open(null, 0, 12.0f) is null);
     assert(!sdlffcd_font_set_hinting(null, sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL));
     assert(sdlffcd_font_get_hinting(null) == sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL);
     assert(!sdlffcd_font_set_size_dpi(null, 12.0f, 96, 96));

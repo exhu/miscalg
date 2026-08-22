@@ -26,5 +26,6 @@
 	"extraDependencyFiles": [
 		"sdlffcd_clib/_build/libsdlffcd_sdl.a",
 		"sdlffcd_clib/_build/libsdlffcd_ffmpeg.a"
-	]
+	],
+	"stringImportPaths": ["."]
 }

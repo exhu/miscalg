@@ -6,6 +6,8 @@ import std.math : floor;
 import sdlffcd.sdlffcd_clib;
 import sdlffcd.models;
 
+private immutable ubyte[] regularFontData = cast(immutable ubyte[]) import("fonts/GoogleSansCode-Regular.ttf");
+
 struct View
 {
   sdlffcd_Font* timestampFont;
@@ -38,8 +40,9 @@ struct View
 
   bool initialize(sdlffcd_AppContext* app)
   {
-    string fontPath = "fonts/GoogleSansCode-Regular.ttf";
-    timestampFont = sdlffcd_font_open(toStringz(fontPath), 19.0f);
+    if (app is null)
+      return false;
+    timestampFont = sdlffcd_font_open(regularFontData.ptr, regularFontData.length, 19.0f);
     if (timestampFont !is null)
     {
       sdlffcd_font_set_hinting(timestampFont, sdlffcd_FontHinting.SDLFFCD_FONT_HINTING_NORMAL);
@@ -67,7 +70,7 @@ struct View
     }
     else
     {
-      errorf("Failed to open font %s", fontPath);
+      error("Failed to open font");
     }
     return timestampFont !is null && timestampText !is null && inOutText !is null;
   }
@@ -183,3 +186,15 @@ struct View
     sdlffcd_app_present(app);
   }
 }
+
+unittest
+{
+  assert(regularFontData.length > 0);
+  View view;
+  assert(!view.initialize(null));
+  view.destroy();
+  assert(view.timestampFont is null);
+  assert(view.timestampText is null);
+  assert(view.inOutText is null);
+}
+

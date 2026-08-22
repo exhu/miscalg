@@ -1,5 +1,6 @@
 #pragma once
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* --- Window, Events & Application API --- */
@@ -160,8 +161,8 @@ typedef enum sdlffcd_FontHinting {
     SDLFFCD_FONT_HINTING_LIGHT_SUBPIXEL = 4
 } sdlffcd_FontHinting;
 
-/// Open font from file path at size in points. Returns NULL on failure.
-sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize);
+/// Open font from memory buffer at size in points. The memory buffer must remain valid for the lifetime of the font. Returns NULL on failure.
+sdlffcd_Font* sdlffcd_font_open(const void* data, size_t data_size, float ptsize);
 
 /// Set font hinting level.
 bool sdlffcd_font_set_hinting(sdlffcd_Font* font, sdlffcd_FontHinting hinting);

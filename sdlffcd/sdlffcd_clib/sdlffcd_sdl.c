@@ -404,11 +404,16 @@ void sdlffcd_audio_stream_close(sdlffcd_AudioStream* stream) {
 
 /* --- Text & Font Implementation --- */
 
-sdlffcd_Font* sdlffcd_font_open(const char* filepath, float ptsize) {
-    if (!filepath || ptsize <= 0.0f) return NULL;
-    TTF_Font* ttf_font = TTF_OpenFont(filepath, ptsize);
+sdlffcd_Font* sdlffcd_font_open(const void* data, size_t data_size, float ptsize) {
+    if (!data || data_size == 0 || ptsize <= 0.0f) return NULL;
+    SDL_IOStream* io = SDL_IOFromConstMem(data, data_size);
+    if (!io) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create SDL_IOStream for font: %s", SDL_GetError());
+        return NULL;
+    }
+    TTF_Font* ttf_font = TTF_OpenFontIO(io, true, ptsize);
     if (!ttf_font) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to open font %s: %s", filepath, SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to open font from memory: %s", SDL_GetError());
         return NULL;
     }
     sdlffcd_Font* font = (sdlffcd_Font*)calloc(1, sizeof(sdlffcd_Font));
