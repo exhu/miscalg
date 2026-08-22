@@ -8,6 +8,7 @@ import std.string : leftJustifier, strip;
 import std.utf : count, toUTF32;
 import arsd.terminal;
 import device;
+import boxdrawing;
 
 enum StatusType {
     pending,
@@ -340,138 +341,145 @@ struct TuiApp {
         return s ~ " ".replicate(padding);
     }
 
+    struct ColumnLayout {
+	int dev;
+	int name;
+	int serial;
+	int mnt;
+
+	static ColumnLayout calculate(int totalWidth) {
+	    int dev = max(16, min(32, totalWidth * 25 / 100));
+	    int serial = max(12, min(20, totalWidth * 18 / 100));
+	    int mnt = max(18, min(35, totalWidth * 28 / 100));
+
+	    // 3 separators + 2 border columns = 5 consumed width units
+	    int name = totalWidth - 2 - (dev + serial + mnt + 3);
+	    if (name < 12) {
+		name = 12;
+		dev = max(10, totalWidth - 2 - (name + serial + mnt + 3));
+	    }
+
+	    return ColumnLayout(dev, name, serial, mnt);
+	}
+    }
+
     void draw() {
-        int w = terminal.width;
-        int h = terminal.height;
+	const int w = terminal.width;
+	const int h = terminal.height;
 
-        if (w < 20 || h < 6) {
-            terminal.color(Color.white, Color.blue);
-            terminal.clear();
-            terminal.moveTo(0, 0);
-            terminal.write("Window too small");
-            drawStatusLine();
-            terminal.flush();
-            return;
-        }
+	// Reset base background
+	terminal.color(Color.white, Color.blue);
+	terminal.clear();
 
-        // Fill background with dark blue
-        terminal.color(Color.white, Color.blue);
-        terminal.clear();
+	if (w < 20 || h < 6) {
+	    terminal.moveTo(0, 0);
+	    terminal.write("Window too small");
+	    drawStatusLine();
+	    terminal.flush();
+	    return;
+	}
 
-        // Title line at row 0
-        terminal.moveTo(0, 0);
-        string title = " Removable Disks Manager (diskpoff-tui) ";
-        string helpTop = "[ J/K: Nav | Enter: Expand/Collapse | M: Mount | U: Unmount | P: Poweroff | R: Refresh | Q: Quit ] ";
-        int spaceBetween = max(0, w - cast(int) title.length - cast(int) helpTop.length);
-        terminal.color(Color.white | Bright, Color.blue);
-        terminal.write(title ~ " ".replicate(spaceBetween) ~ helpTop);
+	const int frameTop = 1;
+	const int frameBottom = h - 2;
+	const int innerHeight = max(1, (frameBottom - frameTop + 1) - 4);
 
-        // Frame parameters
-        int frameTop = 1;
-        int frameBottom = h - 2;
-        int frameHeight = frameBottom - frameTop + 1;
-        int innerHeight = frameHeight - 4; // top border, header row, header separator, bottom border
+	auto cols = ColumnLayout.calculate(w);
 
-        if (innerHeight < 1) innerHeight = 1;
+	updateScrollOffset(innerHeight);
 
-        // Calculate columns
-        int devWidth = max(16, min(32, w * 25 / 100));
-        int serialWidth = max(12, min(20, w * 18 / 100));
-        int mntWidth = max(18, min(35, w * 28 / 100));
-        int nameWidth = w - 2 - (devWidth + serialWidth + mntWidth + 3); // 3 vertical column separators
-        if (nameWidth < 12) {
-            nameWidth = 12;
-            devWidth = max(10, w - 2 - (nameWidth + serialWidth + mntWidth + 3));
-        }
+	drawTitleBar(w);
+	drawTableFrame(w, frameTop, cols);
+	drawDataRows(w, frameTop + 3, innerHeight, cols);
 
-        // 1. Top border
-        terminal.moveTo(0, frameTop);
-        terminal.color(Color.white, Color.blue);
-        terminal.write("+" ~ "-".replicate(w - 2) ~ "+");
+	// Bottom border
+	terminal.moveTo(0, frameBottom);
+	terminal.color(Color.white, Color.blue);
+	terminal.write(doubleStyle.bl ~ doubleStyle.h.replicate(w - 2) ~ doubleStyle.br);
 
-        // 2. Header row
-        terminal.moveTo(0, frameTop + 1);
-        terminal.write("|");
-        terminal.color(Color.white | Bright, Color.blue);
-        terminal.write(truncateOrPad(" Device", devWidth));
-        terminal.color(Color.white, Color.blue);
-        terminal.write("|");
-        terminal.color(Color.white | Bright, Color.blue);
-        terminal.write(truncateOrPad(" Model / Name", nameWidth));
-        terminal.color(Color.white, Color.blue);
-        terminal.write("|");
-        terminal.color(Color.white | Bright, Color.blue);
-        terminal.write(truncateOrPad(" Serial", serialWidth));
-        terminal.color(Color.white, Color.blue);
-        terminal.write("|");
-        terminal.color(Color.white | Bright, Color.blue);
-        terminal.write(truncateOrPad(" Mounted / Crypt", mntWidth));
-        terminal.color(Color.white, Color.blue);
-        terminal.write("|");
+	drawStatusLine();
+	terminal.flush();
+    }
 
-        // 3. Header separator
-        terminal.moveTo(0, frameTop + 2);
-        terminal.write("+" ~ "-".replicate(w - 2) ~ "+");
+    private void drawTitleBar(int width) {
+	const string title = " Removable Disks Manager (diskpoff-tui) ";
+	const string helpTop = "[ J/K: Nav | Enter: Expand/Collapse | M: Mount | U: Unmount | P: Poweroff | R: Refresh | Q: Quit ] ";
+	const int spaceBetween = max(0, width - cast(int)title.length - cast(int)helpTop.length);
 
-        // Adjust scrollOffset
-        if (selectedIndex < scrollOffset) {
-            scrollOffset = selectedIndex;
-        } else if (selectedIndex >= scrollOffset + innerHeight) {
-            scrollOffset = selectedIndex - innerHeight + 1;
-        }
+	terminal.moveTo(0, 0);
+	terminal.color(Color.white | Bright, Color.blue);
+	terminal.write(title ~ " ".replicate(spaceBetween) ~ helpTop);
+    }
 
-        // 4. Data rows
-        for (int row = 0; row < innerHeight; row++) {
-            int curY = frameTop + 3 + row;
-            size_t visibleIdx = scrollOffset + row;
-            terminal.moveTo(0, curY);
+    private void drawTableFrame(int width, int top, in ColumnLayout cols) {
+	// 1. Top border
+	terminal.moveTo(0, top);
+	terminal.color(Color.white, Color.blue);
+	terminal.write(doubleStyle.tl ~ doubleStyle.h.replicate(width - 2) ~ doubleStyle.tr);
 
-            terminal.color(Color.white, Color.blue);
-            terminal.write("|");
+	// 2. Header row
+	terminal.moveTo(0, top + 1);
+	terminal.write(doubleStyle.v);
 
-            if (visibleRows.length == 0) {
-                if (row == 0) {
-                    string emptyMsg = "  (No active disk devices found. Press R to refresh)";
-                    terminal.write(truncateOrPad(emptyMsg, w - 2));
-                } else {
-                    terminal.write(" ".replicate(w - 2));
-                }
-            } else if (visibleIdx < visibleRows.length) {
-                auto item = visibleRows[visibleIdx];
-                bool isSelected = (visibleIdx == selectedIndex);
+	void writeHeaderCell(string label, int colWidth, bool isLast = false) {
+	    terminal.color(Color.white | Bright, Color.blue);
+	    terminal.write(truncateOrPad(label, colWidth));
+	    terminal.color(Color.white, Color.blue);
+	    terminal.write(isLast ? doubleStyle.v : "|");
+	}
 
-                if (isSelected) {
-                    // Inverted selection: blue on white
-                    terminal.color(Color.blue, Color.white);
-                } else {
-                    terminal.color(Color.white, Color.blue);
-                }
+	writeHeaderCell(" Device", cols.dev);
+	writeHeaderCell(" Model / Name", cols.name);
+	writeHeaderCell(" Serial", cols.serial);
+	writeHeaderCell(" Mounted / Crypt", cols.mnt, true);
 
-                string lineText = truncateOrPad(item.devCol, devWidth) ~ "|" ~
-                                  truncateOrPad(item.nameCol, nameWidth) ~ "|" ~
-                                  truncateOrPad(item.serialCol, serialWidth) ~ "|" ~
-                                  truncateOrPad(item.mntCol, mntWidth);
+	// 3. Header separator
+	terminal.moveTo(0, top + 2);
+	terminal.write(doubleStyle.tRight ~ doubleStyle.h.replicate(width - 2) ~ doubleStyle.tLeft);
+    }
 
-                terminal.write(truncateOrPad(lineText, w - 2));
-                terminal.color(Color.white, Color.blue);
-            } else {
-                terminal.write(" ".replicate(w - 2));
-            }
+    private void drawDataRows(int width, int startY, int rowCount, in ColumnLayout cols) {
+	for (int row = 0; row < rowCount; row++) {
+	    const int curY = startY + row;
+	    const size_t visibleIdx = scrollOffset + row;
 
-            terminal.moveTo(w - 1, curY);
-            terminal.color(Color.white, Color.blue);
-            terminal.write("|");
-        }
+	    terminal.moveTo(0, curY);
+	    terminal.color(Color.white, Color.blue);
+	    terminal.write(doubleStyle.v);
 
-        // 5. Bottom border
-        terminal.moveTo(0, frameBottom);
-        terminal.color(Color.white, Color.blue);
-        terminal.write("+" ~ "-".replicate(w - 2) ~ "+");
+	    if (visibleRows.length == 0) {
+		string msg = (row == 0) ? "  (No active disk devices found. Press R to refresh)" : "";
+		terminal.write(truncateOrPad(msg, width - 2));
+	    } else if (visibleIdx < visibleRows.length) {
+		renderDataRow(visibleRows[visibleIdx], visibleIdx == selectedIndex, cols, width);
+	    } else {
+		terminal.write(" ".replicate(width - 2));
+	    }
 
-        // 6. Status line
-        drawStatusLine();
+	    terminal.moveTo(width - 1, curY);
+	    terminal.color(Color.white, Color.blue);
+	    terminal.write(doubleStyle.v);
+	}
+    }
 
-        terminal.flush();
+    private void renderDataRow(in typeof(visibleRows[0]) item, bool isSelected, in ColumnLayout cols, int totalWidth) {
+	terminal.color(isSelected ? Color.blue : Color.white, 
+		    isSelected ? Color.white : Color.blue);
+
+	string lineText = truncateOrPad(item.devCol, cols.dev) ~ "|" ~
+			truncateOrPad(item.nameCol, cols.name) ~ "|" ~
+			truncateOrPad(item.serialCol, cols.serial) ~ "|" ~
+			truncateOrPad(item.mntCol, cols.mnt);
+
+	terminal.write(truncateOrPad(lineText, totalWidth - 2));
+	terminal.color(Color.white, Color.blue);
+    }
+
+    private void updateScrollOffset(int viewHeight) {
+	if (selectedIndex < scrollOffset) {
+	    scrollOffset = selectedIndex;
+	} else if (selectedIndex >= scrollOffset + viewHeight) {
+	    scrollOffset = selectedIndex - viewHeight + 1;
+	}
     }
 
     void drawStatusLine() {
@@ -494,69 +502,145 @@ struct TuiApp {
         terminal.color(Color.white, Color.blue);
     }
 
-    void run() {
-        refreshDisks();
-        draw();
+	    void run() {
+	    refreshDisks();
+	draw();
 
-        bool running = true;
-        while (running) {
-            auto event = input.nextEvent();
-            if (event.type == InputEvent.Type.UserInterruptionEvent ||
-                event.type == InputEvent.Type.HangupEvent ||
-                event.type == InputEvent.Type.EndOfFileEvent) {
-                break;
-            }
+	while (processNextEvent()) {
+	    // Continue processing loop
+	}
+    }
 
-            if (event.type == InputEvent.Type.SizeChangedEvent) {
-                draw();
-                continue;
-            }
+    private bool processNextEvent() {
+	auto event = input.nextEvent();
 
-            if (event.type == InputEvent.Type.KeyboardEvent) {
-                auto kEvent = event.get!(InputEvent.Type.KeyboardEvent);
-                if (!kEvent.pressed) continue;
+	// Check for exit / termination events
+	if (event.type == InputEvent.Type.UserInterruptionEvent ||
+	    event.type == InputEvent.Type.HangupEvent ||
+	    event.type == InputEvent.Type.EndOfFileEvent) {
+	    return false;
+	}
 
-                auto key = kEvent.which;
+	// Terminal resize
+	if (event.type == InputEvent.Type.SizeChangedEvent) {
+	    draw();
+	    return true;
+	}
 
-                if (key == 'q' || key == 'Q' || key == KeyboardEvent.Key.escape) {
-                    running = false;
-                } else if (key == 'j' || key == 'J' || key == KeyboardEvent.Key.DownArrow) {
-                    moveDown();
-                    draw();
-                } else if (key == 'k' || key == 'K' || key == KeyboardEvent.Key.UpArrow) {
-                    moveUp();
-                    draw();
-                } else if (key == KeyboardEvent.Key.PageDown) {
-                    int step = max(1, terminal.height - 6);
-                    for (int i = 0; i < step; i++) moveDown();
-                    draw();
-                } else if (key == KeyboardEvent.Key.PageUp) {
-                    int step = max(1, terminal.height - 6);
-                    for (int i = 0; i < step; i++) moveUp();
-                    draw();
-                } else if (key == KeyboardEvent.Key.Home) {
-                    selectedIndex = 0;
-                    draw();
-                } else if (key == KeyboardEvent.Key.End) {
-                    if (visibleRows.length > 0) selectedIndex = visibleRows.length - 1;
-                    draw();
-                } else if (key == '\r' || key == '\n') {
-                    handleEnter();
-                    draw();
-                } else if (key == 'u' || key == 'U') {
-                    handleUnmountOnly();
-                    draw();
-                } else if (key == 'm' || key == 'M') {
-                    handleMount();
-                    draw();
-                } else if (key == 'p' || key == 'P') {
-                    handlePowerOff();
-                    draw();
-                } else if (key == 'r' || key == 'R') {
-                    refreshDisks();
-                    draw();
-                }
-            }
-        }
+	// Keyboard handling
+	if (event.type == InputEvent.Type.KeyboardEvent) {
+	    auto kEvent = event.get!(InputEvent.Type.KeyboardEvent);
+	    if (kEvent.pressed) {
+		return handleKeyEvent(kEvent.which);
+	    }
+	}
+
+	return true;
+    }
+
+    private bool handleKeyEvent(typeof(KeyboardEvent.which) key) {
+	bool shouldRedraw = true;
+
+	switch (key) {
+	    // Exit
+	    case 'q':
+	    case 'Q':
+	    case KeyboardEvent.Key.escape:
+		return false;
+
+	    // Navigation
+	    case 'j':
+	    case 'J':
+	    case KeyboardEvent.Key.DownArrow:
+		moveDown();
+		break;
+
+	    case 'k':
+	    case 'K':
+	    case KeyboardEvent.Key.UpArrow:
+		moveUp();
+		break;
+
+	    case KeyboardEvent.Key.PageDown:
+		pageDown();
+		break;
+
+	    case KeyboardEvent.Key.PageUp:
+		pageUp();
+		break;
+
+	    case KeyboardEvent.Key.Home:
+		jumpToStart();
+		break;
+
+	    case KeyboardEvent.Key.End:
+		jumpToEnd();
+		break;
+
+	    // Actions
+	    case '\r':
+	    case '\n':
+		handleEnter();
+		break;
+
+	    case 'u':
+	    case 'U':
+		handleUnmountOnly();
+		break;
+
+	    case 'm':
+	    case 'M':
+		handleMount();
+		break;
+
+	    case 'p':
+	    case 'P':
+		handlePowerOff();
+		break;
+
+	    case 'r':
+	    case 'R':
+		refreshDisks();
+		break;
+
+	    default:
+		shouldRedraw = false;
+		break;
+	}
+
+	if (shouldRedraw) {
+	    draw();
+	}
+
+	return true;
+    }
+
+    private int getPageStep() {
+	import std.algorithm.comparison : max;
+	return max(1, terminal.height - 6);
+    }
+
+    private void pageDown() {
+	const step = getPageStep();
+	foreach (_; 0 .. step) {
+	    moveDown();
+	}
+    }
+
+    private void pageUp() {
+	const step = getPageStep();
+	foreach (_; 0 .. step) {
+	    moveUp();
+	}
+    }
+
+    private void jumpToStart() {
+	selectedIndex = 0;
+    }
+
+    private void jumpToEnd() {
+	if (visibleRows.length > 0) {
+	    selectedIndex = visibleRows.length - 1;
+	}
     }
 }
