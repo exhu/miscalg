@@ -414,6 +414,7 @@ struct TuiApp {
 	// 1. Top border
 	terminal.moveTo(0, top);
 	terminal.color(Color.white, Color.blue);
+	// TODO use doubleHorizSingleVertStyle.tDown to separate header cells based on cols
 	terminal.write(doubleStyle.tl ~ doubleStyle.h.replicate(width - 2) ~ doubleStyle.tr);
 
 	// 2. Header row
@@ -424,7 +425,7 @@ struct TuiApp {
 	    terminal.color(Color.white | Bright, Color.blue);
 	    terminal.write(truncateOrPad(label, colWidth));
 	    terminal.color(Color.white, Color.blue);
-	    terminal.write(isLast ? doubleStyle.v : "|");
+	    terminal.write(isLast ? doubleStyle.v : singleStyle.v);
 	}
 
 	writeHeaderCell(" Device", cols.dev);
@@ -434,6 +435,7 @@ struct TuiApp {
 
 	// 3. Header separator
 	terminal.moveTo(0, top + 2);
+	// TODO use doubleHorizSingleVertStyle.tUp to separate header cells based on cols
 	terminal.write(doubleStyle.tRight ~ doubleStyle.h.replicate(width - 2) ~ doubleStyle.tLeft);
     }
 
