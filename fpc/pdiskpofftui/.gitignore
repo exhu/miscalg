@@ -1,0 +1,28 @@
+# Free Pascal and Lazarus build outputs
+bin/
+build/
+lib/
+*.o
+*.ppu
+*.a
+*.so
+*.dylib
+*.dll
+*.or
+*.rst
+*.rsj
+*.compiled
+
+# Lazarus Project Session (user-specific editor state)
+*.lps
+*.bak
+*~
+
+# Temporary linker files
+link.res
+ppas.sh
+
+# D build artifacts (for original-d)
+.dub/
+original-d/.dub/
+original-d/diskpoff-tui
