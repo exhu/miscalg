@@ -16,6 +16,7 @@ module binding;
  */
 
 // TODO deprecate Binding stuff, write Context storing the model, Controller, View storing TrackedModelPointer
+// delegates do not make much sense since they allocate memory
 
 /// code that sets element's property/performs action
 struct Binding
@@ -172,10 +173,13 @@ struct ControlSystem
 // resuable dialog template
 struct DialogBoxView
 {
+  TrackedModelPointer!LocalizedModel loc;
   ControlHandle title;
+
   
-  void build(ref ControlSystem cs, in ControlHandle parent, bool isError)
+  void build(ref ControlSystem cs, in ControlHandle parent, bool isError, TrackedModelPointer!LocalizedModel loc)
   {
+    this.loc = loc;
     UiControl *root = cs.getControl(cs.allocControl());
     root.rect.w = 100;
     root.rect.h = 50;
@@ -185,49 +189,61 @@ struct DialogBoxView
     // TODO build hierarchy, store handles to controls to set data in update
   }
 
-  void update(in LocalizedModel loc, bool visible)
+  void update(bool visible)
   {
+    if (loc.pollUpdate())
+      {
     // TODO
-    
+      }
   }
 }
 
 struct MainScreenView
 {
+  TrackedModelPointer!LocalizedModel loc;
   // TODO need to invent a way to defer complex control hierarchies
   DialogBoxView infoDialog;
   DialogBoxView errorDialog;
 
-  void build(ref ControlSystem cs, in ControlHandle parent)
+
+  void build(ref ControlSystem cs, in ControlHandle parent, TrackedModelPointer!LocalizedModel loc)
   {
-    infoDialog.build(cs, parent, false);
-    errorDialog.build(cs, parent, true);
+    this.loc = loc;
+    infoDialog.build(cs, parent, false, loc);
+    errorDialog.build(cs, parent, true, loc);
   }
 
-  void update(in LocalizedModel loc, bool isError)
+  void update(bool isError)
   {
-    infoDialog.update(loc, !isError);
-    errorDialog.update(loc, isError);
+    infoDialog.update(!isError);
+    errorDialog.update(isError);
   }
+}
+
+struct AppContext
+{
+  // allocated on gc heap for sharing
+  LocalizedModel* loc = new LocalizedModel;
 }
 
 struct MainScreenController
 {
-  Tracked!LocalizedModel loc;
+  TrackedModelPointer!LocalizedModel loc;
+
   ControlSystem cs;
   MainScreenView view;
   BindingSystem bsystem;
 
-  void build()
+  void build(in AppContext ctx)
   {
-    view.build(cs, cs.screenRoot);
+    view.build(cs, cs.screenRoot, loc);
     
     // looks like you need to have updateNNN methods to make sense of granular model updates
     // otherwise need to complicate by storing pointers/ids to model in the views...
     // also BindingSystem does not make much sense,
     // probably the right approach is to store model in a data context class, and
     // controllers and views store a handle to it with a last read version and update at their own.
-   
+    version(none){   
     Binding b;
     b.updateValue = (){
       view.update(loc.model, false);
@@ -240,6 +256,7 @@ struct MainScreenController
     bsystem.models ~= bmodel;
 
     bsystem.update(BindingSystem.UpdateType.forceUpdate);
+    }
   }
 
   void update()

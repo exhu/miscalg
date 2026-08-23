@@ -79,10 +79,6 @@ struct TrackedModelPointer(T)
     T* model;
     private ModelVersion lastSeenVersion;
 
-  invariant {
-    assert(model !is null);
-  }
-  @disable this();
   this(T* otherModel)
   {
     model = otherModel;
