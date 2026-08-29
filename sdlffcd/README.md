@@ -45,16 +45,26 @@
 
 ## Building & Testing
 
+### Meson (Primary Build System)
+
 ```bash
-# Run unit tests
-dub test
+# Setup build directory (ensure pkg-config finds SDL3/FFmpeg if in ~/.local)
+export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig:$PKG_CONFIG_PATH"
+meson setup _build
 
 # Build executable
-dub build
+meson compile -C _build
+
+# Run unit tests
+meson test -C _build --verbose
 
 # Run application with sample video
-./sdlffcd samplevideo.mp4
+./_build/sdlffcd samplevideo.mp4
 ```
+
+### IDE & Language Server Support (Dub)
+
+`dub.json` is maintained for editor autocompletion and diagnostics via `serve-d` or D IDE plugins. You can also run `dub test` or `dub build`.
 
 ## License
 

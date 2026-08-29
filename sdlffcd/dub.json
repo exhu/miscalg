@@ -7,8 +7,8 @@
 	"copyright": "Copyright © 2026, yur",
 	"name": "sdlffcd",
 	"sourceFiles": [
-		"sdlffcd_clib/_build/libsdlffcd_sdl.a",
-		"sdlffcd_clib/_build/libsdlffcd_ffmpeg.a"
+		"_build/sdlffcd_clib/libsdlffcd_sdl.a",
+		"_build/sdlffcd_clib/libsdlffcd_ffmpeg.a"
 	],
 	"libs": [
 		"sdl3",
@@ -21,11 +21,11 @@
 		"sdl3-ttf"
 	],
 	"preGenerateCommands": [
-		"export PKG_CONFIG_PATH=\"$HOME/.local/lib/pkgconfig:$PKG_CONFIG_PATH\" && if [ ! -d \"sdlffcd_clib/_build\" ]; then meson setup sdlffcd_clib/_build sdlffcd_clib; fi && meson compile -C sdlffcd_clib/_build"
+		"export PKG_CONFIG_PATH=\"$HOME/.local/lib/pkgconfig:$PKG_CONFIG_PATH\" && if [ ! -d \"_build\" ]; then meson setup _build .; fi && meson compile -C _build sdlffcd_sdl sdlffcd_ffmpeg"
 	],
 	"extraDependencyFiles": [
-		"sdlffcd_clib/_build/libsdlffcd_sdl.a",
-		"sdlffcd_clib/_build/libsdlffcd_ffmpeg.a"
+		"_build/sdlffcd_clib/libsdlffcd_sdl.a",
+		"_build/sdlffcd_clib/libsdlffcd_ffmpeg.a"
 	],
 	"stringImportPaths": ["."]
 }

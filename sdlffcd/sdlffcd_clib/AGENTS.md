@@ -12,7 +12,7 @@
   ```bash
   export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig:$PKG_CONFIG_PATH"
   ```
-- **Build Directory**: Use the `_build` subdirectory for Meson builds (`sdlffcd_clib/_build`).
+- **Build Directory**: Root `_build` subdirectory for Meson builds (`_build`).
 
 ---
 
@@ -20,7 +20,7 @@
 
 - **Symbol Prefix**: All public functions, structs, types, and enum constants must be prefixed with `sdlffcd_` or `SDLFFCD_`.
 - **Public vs. Private Headers**:
-  - `sdlffcd_sdl.h`: Public SDL API declarations and opaque struct definitions. Kept in 1-to-1 sync with `source/sdlffcd_sdl.d`.
+  - `sdlffcd_sdl.h`: Public SDL API declarations and opaque struct definitions. Kept in 1-to-1 sync with `source/sdlffcd/sdlffcd_sdl.d`.
   - `sdlffcd_sdl_private.h`: Internal header containing real SDL struct definitions.
-  - `sdlffcd_ffmpeg.h`: Public FFmpeg API declarations and opaque struct definitions. Kept in 1-to-1 sync with `source/sdlffcd_ffmpeg.d`.
+  - `sdlffcd_ffmpeg.h`: Public FFmpeg API declarations and opaque struct definitions. Kept in 1-to-1 sync with `source/sdlffcd/sdlffcd_ffmpeg.d`.
   - `sdlffcd_ffmpeg_private.h`: Internal header containing real FFmpeg struct definitions.
