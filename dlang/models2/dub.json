@@ -1,0 +1,9 @@
+{
+	"description": "A minimal D application.",
+	"license": "MIT",
+	"authors": [
+		"yur"
+	],
+	"copyright": "Copyright © 2026, yur",
+	"name": "models2"
+}

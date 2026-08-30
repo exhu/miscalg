@@ -36,26 +36,50 @@ template ObservableModel(T) if (is(T == struct))
   }
 }
 
-unittest
+template ObservableModelClass(T) if (is(T == struct))
 {
-  struct MyFields
+  final class ObservableModelClass
   {
-    bool yes;
-  }
+    // Encapsulated underlying model instance
+    private T model;
+    // 0 is used to mark uninitialized
+    private ModelVersion _version = 1;
 
-  alias MyModel = ObservableModel!MyFields;
-  MyModel m;
-  assert(m.version_ == 1);
-  m.yes = true;
-  assert(m.version_ == 2);
-  m.yes = true;
-  assert(m.version_ == 2);
-  m.yes = false;
-  assert(m.version_ == 3);
+    /// Read-only version counter tracking modifications
+    @property ModelVersion version_() const @safe pure nothrow @nogc
+    {
+      return _version;
+    }
+
+    // Generate getters and setters for each field in the source struct
+    static foreach (fieldName; FieldNameTuple!T)
+    {
+      // Public Getter
+      mixin("@property auto ", fieldName, "() const @safe pure nothrow @nogc { return model.", fieldName, "; }");
+
+      // Public Setter (increments version_ on change)
+      mixin("@property void ", fieldName, "(typeof(T.", fieldName, ") value) @safe { ",
+        "if (model.", fieldName, " != value) { ",
+        "model.", fieldName, " = value; ",
+        "_version++;",
+        "} ",
+        "}");
+    }
+  }
 }
 
 struct Tracked(T)
 {
+    this(ref return scope inout(typeof(this)) rhs) inout
+    {
+	model = rhs.model;
+    }
+
+    this(T otherModel)
+    {
+	model = otherModel;
+    }
+
     T model;
     ModelVersion lastSeenVersion;
 
@@ -73,6 +97,33 @@ struct Tracked(T)
     // Forward calls/member access directly to model
     alias model this;
 }
+
+unittest
+{
+  struct MyFields
+  {
+    bool yes;
+  }
+
+  alias MyModel = ObservableModelClass!MyFields;
+  auto m = new MyModel;
+  assert(m.version_ == 1);
+  m.yes = true;
+  assert(m.version_ == 2);
+  m.yes = true;
+  assert(m.version_ == 2);
+  m.yes = false;
+  assert(m.version_ == 3);
+
+  auto t = Tracked!MyModel(m);
+  t.yes = true;
+  assert(t.pollUpdate() == true);
+  t.yes = true;
+  assert(t.pollUpdate() == false);
+  t.yes = false;
+  assert(t.pollUpdate() == true);
+}
+
 
 struct TrackedModelPointer(T)
 {
@@ -102,6 +153,22 @@ struct TrackedModelPointer(T)
 
     // Forward calls/member access directly to model
     alias model this;
+}
+
+unittest
+{
+  struct MyFields
+  {
+    bool yes;
+  }
+  alias MyModel = ObservableModel!MyFields;
+  Tracked!MyModel t;
+  t.yes = true;
+  assert(t.pollUpdate() == true);
+  t.yes = true;
+  assert(t.pollUpdate() == false);
+  t.yes = false;
+  assert(t.pollUpdate() == true);
 }
 
 unittest
