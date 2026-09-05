@@ -8,7 +8,7 @@ void main()
     bool yes;
   }
 
-  alias MyModel = ObservableModel!MyFields;
+  alias MyModel = VersionedModel!MyFields;
   Tracked!MyModel m;
 
   DialogBox dlg;

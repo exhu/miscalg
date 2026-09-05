@@ -5,5 +5,6 @@
 		"yur"
 	],
 	"copyright": "Copyright © 2026, yur",
-	"name": "models2"
+    "name": "models2",
+    "dflags": ["-mixin=output.d"]
 }

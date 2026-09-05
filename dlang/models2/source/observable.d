@@ -1,12 +1,32 @@
 module observable;
 
+/*
+  poll ui architecture:
+  view receives models, exposes event callbacks for controller
+  view events, and other controller subscribed events enque controller.update, which
+  calls view.update, which calls pollUpdate for all models.
+
+  view abstracts gui/tui implementation.
+
+  view is top-level abstraction that is setup and has subscribed by the controller
+  subview is a reusable view fragment, which propagates events to it's parent view,
+  e.g. a reusable form/dialog that accepts it's own smaller model and generates some events
+  which are exported then via parent view.
+
+  view and subview may contain private models and logic code which drive the presentation,
+  e.g. accept an integer value and based on the value calculate a colour. 
+
+ */
+
+
+
 import std.traits : FieldNameTuple;
 
 alias ModelVersion = size_t;
 
-template ObservableModel(T) if (is(T == struct))
+template VersionedModel(T) if (is(T == struct))
 {
-  struct ObservableModel
+  struct VersionedModel
   {
     // Encapsulated underlying model instance
     private T model;
@@ -36,9 +56,13 @@ template ObservableModel(T) if (is(T == struct))
   }
 }
 
-template ObservableModelClass(T) if (is(T == struct))
+// replaced with opDispatch
+
+version(none) {
+
+template VersionedModelClass(T) if (is(T == struct))
 {
-  final class ObservableModelClass
+  final class VersionedModelClass
   {
     // Encapsulated underlying model instance
     private T model;
@@ -66,6 +90,42 @@ template ObservableModelClass(T) if (is(T == struct))
         "}");
     }
   }
+}
+
+}
+
+template VersionedModelClass(T) if (is(T == struct))
+{
+    import std.traits : FieldNameTuple, hasMember;
+
+    final class VersionedModelClass
+    {
+        private T model;
+        private ModelVersion _version = 1;
+
+        @property ModelVersion version_() const @safe pure nothrow @nogc
+        {
+            return _version;
+        }
+
+        // Getter
+        @property auto ref opDispatch(string name)() const @safe
+            if (hasMember!(T, name))
+        {
+            return __traits(getMember, model, name);
+        }
+
+        // Setter (increments version if value changed)
+        @property void opDispatch(string name, V)(auto ref V value) @safe
+            if (hasMember!(T, name) && is(typeof(__traits(getMember, model, name) = value)))
+        {
+            if (__traits(getMember, model, name) != value)
+            {
+                __traits(getMember, model, name) = value;
+                _version++;
+            }
+        }
+    }
 }
 
 struct Tracked(T)
@@ -105,7 +165,7 @@ unittest
     bool yes;
   }
 
-  alias MyModel = ObservableModelClass!MyFields;
+  alias MyModel = VersionedModelClass!MyFields;
   auto m = new MyModel;
   assert(m.version_ == 1);
   m.yes = true;
@@ -161,7 +221,7 @@ unittest
   {
     bool yes;
   }
-  alias MyModel = ObservableModel!MyFields;
+  alias MyModel = VersionedModel!MyFields;
   Tracked!MyModel t;
   t.yes = true;
   assert(t.pollUpdate() == true);
@@ -177,7 +237,7 @@ unittest
   {
     bool yes;
   }
-  alias MyModel = ObservableModel!MyFields;
+  alias MyModel = VersionedModel!MyFields;
   alias MyModelTrackedPointer = TrackedModelPointer!MyModel;
   Tracked!MyModel m;
   m.yes = true;

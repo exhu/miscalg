@@ -105,7 +105,7 @@ struct LocalizedFields
   string informationTitle;
 }
 
-alias LocalizedModel= ObservableModel!LocalizedFields;
+alias LocalizedModel= VersionedModel!LocalizedFields;
 
 struct Rect
 {
