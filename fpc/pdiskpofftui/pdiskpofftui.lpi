@@ -46,7 +46,6 @@
             <Debugging>
               <DebugInfoType Value="dsDwarf2Set"/>
               <UseHeaptrc Value="True"/>
-              <UseLineInfoUnit Value="True"/>
             </Debugging>
           </Linking>
         </CompilerOptions>
@@ -101,6 +100,7 @@
       <Optimizations>
         <OptimizationLevel Value="3"/>
       </Optimizations>
+      <SmallerCode Value="True"/>
     </CodeGeneration>
     <Linking>
       <Debugging>
