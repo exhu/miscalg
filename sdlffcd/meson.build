@@ -43,7 +43,8 @@ executable('sdlffcd',
   d_import_dirs : [d_import_dirs],
   dependencies : sdlffcd_clib_dep,
   install : true,
-  link_args: ['-link-defaultlib-shared=false'],
+# links druntime statically
+#  link_args: ['-link-defaultlib-shared=false'],
 )
 
 # Test Executable
