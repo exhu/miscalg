@@ -1,6 +1,6 @@
 project('fltk_exit_demo', 'cpp',
   version : '0.1',
-  default_options : ['warning_level=3', 'cpp_std=c++17'])
+  default_options : ['warning_level=3', 'cpp_std=c++20'])
 
 # Locate the fltk-config utility provided by libfltk1.3-dev
 fltk_config = find_program('fltk-config', required : true)
