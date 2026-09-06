@@ -128,6 +128,73 @@ template VersionedModelClass(T) if (is(T == struct))
     }
 }
 
+template VersionedModelClassLight(T) if (is(T == struct))
+{
+    final class VersionedModelClassLight
+    {
+        private T _model;
+        private ModelVersion _version = 1;
+
+        @property ModelVersion version_() const @safe pure nothrow @nogc
+        {
+            return _version;
+        }
+
+	@property const(T)* fields() const
+	{
+	    return &_model;
+	}
+
+      void mutate(bool delegate(ref T aFields) func)
+    {
+      if (func(_model))
+	{
+	  _version += 1;
+	}
+    }
+    }
+}
+
+/*
+  gui sends events, e.g. fltk callbacks on button press, slider/scroll.
+  model is modified.
+  need to update ui, but when? via a posted event to the event loop!
+
+  event-get: mouse click
+  button-on-click: send-update-domain-event
+  event-get: update-domain
+  update domain model, if changed: send-update-view-event
+  event-get: update-view
+  check which domain models diverged from view versions, update ui
+
+  example:
+
+  exit -> confirmation dialog -> exit, cancel
+
+  topviewmodel {
+  bool exit_dialog_visible = false;
+  }
+
+  view: event_ui_menu_exit clicked
+  logic: event_show_exit_dialog -- event by domain logic for domain logic, or model changed inplace
+  logic: topviewmodel.exit_dialog_visible = true;
+  view: topviewmodel.changed? message_box("exit?", yesno);
+  view: event_ui_exit_confirm or event_ui_exit_cancel
+  logic: app.exit()
+
+  main loop gets input events and delivers to ui
+  ui callbacks push events to ringbuffer and sends one wake main loop command
+  main loop gets wake event, calls update_data
+  update_data pulls all events from ringbuffer and updates models, calls update_view
+  update_view calls current view instances to update
+  current view instances check if their model version is out of date and issue ui calls
+
+
+  fltks example:
+  view recieves model pointer, constructs window or displays a dialog box based on the model dataCaches
+  on window close sends event_window_close fl::awake
+ */
+
 struct Tracked(T)
 {
     this(ref return scope inout(typeof(this)) rhs) inout
