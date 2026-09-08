@@ -195,13 +195,9 @@ void collectNodeDetails(
     }
 
     // Check crypt status
-    if (node.type == "crypt") {
-        cryptUnlockedCount++;
-        if (!node.path.empty && !cryptLockPaths.canFind(node.path)) {
-            cryptLockPaths ~= node.path;
-        }
-    } else if (node.fstype == "crypto_LUKS" && node.children.length > 0) {
+    if (node.fstype == "crypto_LUKS" && node.children.length > 0) {
         // LUKS container that is unlocked
+        cryptUnlockedCount++;
         if (!node.path.empty && !cryptLockPaths.canFind(node.path)) {
             cryptLockPaths ~= node.path;
         }
@@ -677,14 +673,14 @@ unittest {
     assert(disks[1].cryptUnlockedCount == 1);
     assert(disks[1].totalMountedOrUnlocked == 2);
     assert(disks[1].mountPaths == ["/dev/mapper/luks-backup"]);
-    assert(disks[1].cryptLockPaths == ["/dev/mapper/luks-backup", "/dev/sdc1"]);
+    assert(disks[1].cryptLockPaths == ["/dev/sdc1"]);
     assert(disks[1].partitions.length == 1);
     
     auto sdc1 = disks[1].partitions[0];
     assert(sdc1.path == "/dev/sdc1");
     assert(sdc1.fstype == "crypto_LUKS");
     assert(sdc1.mountPaths == ["/dev/mapper/luks-backup"]);
-    assert(sdc1.cryptLockPaths == ["/dev/mapper/luks-backup", "/dev/sdc1"]);
+    assert(sdc1.cryptLockPaths == ["/dev/sdc1"]);
     assert(sdc1.children.length == 1);
 
     auto luksBackup = sdc1.children[0];
@@ -693,7 +689,7 @@ unittest {
     assert(luksBackup.label == "BACKUP");
     assert(luksBackup.mountpoints == ["/mnt/backup"]);
     assert(luksBackup.mountPaths == ["/dev/mapper/luks-backup"]);
-    assert(luksBackup.cryptLockPaths == ["/dev/mapper/luks-backup"]);
+    assert(luksBackup.cryptLockPaths.length == 0);
 
     // Test unmountAndLockPartition for non-mounted partition
     auto idleRes = unmountAndLockPartition("/dev/sdd1", [], []);
@@ -777,7 +773,7 @@ unittest {
     assert(complexDisks[0].partitions[0].mountPaths == ["/dev/nvme0n1p1"]);
     assert(complexDisks[0].partitions[1].path == "/dev/nvme0n1p2");
     assert(complexDisks[0].partitions[1].mountPaths.length == 2); // vg-swap, vg-root
-    assert(complexDisks[0].partitions[1].cryptLockPaths == ["/dev/mapper/crypt_root", "/dev/nvme0n1p2"]);
+    assert(complexDisks[0].partitions[1].cryptLockPaths == ["/dev/nvme0n1p2"]);
 
     // Empty/bare unmounted disk
     assert(complexDisks[1].path == "/dev/sdd");
