@@ -5,7 +5,6 @@ A terminal user interface (TUI) for managing removable disk devices on Linux, bu
 ## TODO
 - review the code (fully generated from spec.md)
 - BUG: on the screen tries to poweroff all partitions event when they are not mounted
-- check if fixed: BUG: locking unlocked partition ends in error
 - write errors to log file
 
 ## Features
