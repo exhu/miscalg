@@ -1,0 +1,16 @@
+# FreePascal build outputs and binaries
+build/
+httpserver
+*.o
+*.ppu
+*.a
+*.so
+*.rsj
+*.rst
+*.compiled
+*.dbg
+*.or
+*.res
+link*.res
+ppas.sh
+backup/
