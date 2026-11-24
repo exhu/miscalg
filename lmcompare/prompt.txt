@@ -1,0 +1,22 @@
+make a multistep plan and write it to plan-overview.md with
+a brief description that refers multiple phases described in plan-NN.md docs with
+detailed step-by-step instructions for subagents to run. Run each phase in
+a new subagent sequencially. Each phase should be small enough to not overload
+subagents' context.
+
+the plan specified the implementation of
+a minimal http server in freepascal ObjFPC mode, that
+has simple routing support to serve a simple html and files.
+
+program directory:
+- assets/ -- static content to serve
+- src/ -- directory with program sources
+
+request routes:
+- / - serves index.html from assets (generate a simple html page with a line of
+  text describing the program), also put a form that has an input text field
+  asking to type a name and a submit button.
+- /hello - that's where submit sends the form request, passing the entered
+  name, displays "hello, <name>!" html page.
+
+pascal code rules: 2 spaces indent, units less than 1000 lines.
