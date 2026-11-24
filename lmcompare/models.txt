@@ -2,7 +2,11 @@ gemini:
 agy Orchestrator Gemini 4 Neon high + Hydrogen high
 
 claude:
-sonnet 5.5 medium + subagents in sonnet
+sonnet 5.5 medium plan proposed reinventing http classes and url parsers,
+so cancelled.
+
+opus 5.5 medium + sonnet 5.5 subagents
+
 
 TODO:
 sonnet plan + haiku agents
