@@ -6,7 +6,7 @@ Create the project directory structure and static web assets to be served by the
 
 ## Step-by-Step Instructions
 
-1. **Create directories** in `/home/yur/agy-projects/miscalg/lmcompare/gemini`:
+1. **Create directories** in the project root:
    - `assets`
    - `src`
    - `build`

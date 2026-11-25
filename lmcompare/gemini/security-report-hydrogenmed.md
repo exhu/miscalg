@@ -1,7 +1,7 @@
 # Security Review Report: `src/uhttpfiles.pas`
 
-**Target:** [src/uhttpfiles.pas](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas)  
-**Context Reviewed:** [src/uhandlers.pas](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhandlers.pas), [src/urouter.pas](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/urouter.pas), [src/server.pas](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/server.pas)  
+**Target:** [src/uhttpfiles.pas](src/uhttpfiles.pas)  
+**Context Reviewed:** [src/uhandlers.pas](src/uhandlers.pas), [src/urouter.pas](src/urouter.pas), [src/server.pas](src/server.pas)  
 **Date:** 2026-11-25
 
 ---
@@ -31,7 +31,7 @@ The most significant issue is **symlink traversal** in `ResolveSafeAssetPath` du
 
 ### F-01: Symlink Traversal / Arbitrary File Read via Lexical Path Check
 - **Severity:** High
-- **Location:** [uhttpfiles.pas#L131-L137](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L131-L137) (`ResolveSafeAssetPath`)
+- **Location:** [uhttpfiles.pas#L131-L137](src/uhttpfiles.pas#L131-L137) (`ResolveSafeAssetPath`)
 - **CWE:** CWE-59 (Improper Link Resolution Before File Access), CWE-22 (Path Traversal)
 
 #### Description
@@ -66,14 +66,14 @@ Canonicalize both `AAssetsDir` and `Candidate` using `realpath` (via `BaseUnix` 
 
 ### F-02: Denial of Service via Special Files (FIFOs / Device Nodes)
 - **Severity:** Medium
-- **Location:** [uhttpfiles.pas#L136](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L136) (`ResolveSafeAssetPath`), [uhttpfiles.pas#L181](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L181) (`ServeStaticFile`)
+- **Location:** [uhttpfiles.pas#L136](src/uhttpfiles.pas#L136) (`ResolveSafeAssetPath`), [uhttpfiles.pas#L181](src/uhttpfiles.pas#L181) (`ServeStaticFile`)
 - **CWE:** CWE-400 (Uncontrolled Resource Consumption)
 
 #### Description
 `ResolveSafeAssetPath` only checks `(not FileExists(Candidate)) or DirectoryExists(Candidate)`. On Linux, `FileExists` returns `True` for non-regular files such as named pipes (FIFOs), character/block devices, and Unix domain sockets, while `DirectoryExists` returns `False`.
 
 #### Impact
-If a named pipe or blocking device exists within `AAssetsDir`, `TFileStream.Create(FullPath, fmOpenRead or fmShareDenyWrite)` or reading `AResponse.ContentStream` can block indefinitely or stream unbounded data. Because [server.pas#L54](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/server.pas#L54) configures `FServer.Threaded := False`, a single blocking request stalls the entire HTTP server for all clients.
+If a named pipe or blocking device exists within `AAssetsDir`, `TFileStream.Create(FullPath, fmOpenRead or fmShareDenyWrite)` or reading `AResponse.ContentStream` can block indefinitely or stream unbounded data. Because [server.pas#L54](src/server.pas#L54) configures `FServer.Threaded := False`, a single blocking request stalls the entire HTTP server for all clients.
 
 #### Remediation
 Use `FpStat` (from `BaseUnix`) on the canonicalized path and verify `fpS_ISREG(StatBuf.st_mode)` so that only regular files are served.
@@ -82,7 +82,7 @@ Use `FpStat` (from `BaseUnix`) on the canonicalized path and verify `fpS_ISREG(S
 
 ### F-03: Hidden File / Dotfile Exposure
 - **Severity:** Medium
-- **Location:** [uhttpfiles.pas#L113-L141](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L113-L141) (`ResolveSafeAssetPath`)
+- **Location:** [uhttpfiles.pas#L113-L141](src/uhttpfiles.pas#L113-L141) (`ResolveSafeAssetPath`)
 - **CWE:** CWE-538 (Insertion of Sensitive Information into Externally-Accessible File or Directory), CWE-200 (Exposure of Sensitive Information)
 
 #### Description
@@ -98,7 +98,7 @@ Reject any path segment in `AUrlPath` that is `.` or begins with `.` (e.g., `(Se
 
 ### F-04: Inline Script Execution Risk via SVG & Missing `nosniff` Header
 - **Severity:** Medium
-- **Location:** [uhttpfiles.pas#L66-L67](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L66-L67) (`GetMimeTypeForFile`), [uhttpfiles.pas#L181-L186](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L181-L186) (`ServeStaticFile`)
+- **Location:** [uhttpfiles.pas#L66-L67](src/uhttpfiles.pas#L66-L67) (`GetMimeTypeForFile`), [uhttpfiles.pas#L181-L186](src/uhttpfiles.pas#L181-L186) (`ServeStaticFile`)
 - **CWE:** CWE-79 (Cross-site Scripting), CWE-16 (Configuration)
 
 #### Description
@@ -116,14 +116,14 @@ If untrusted or user-supplied `.svg` (or `.html`) files are ever placed in `AAss
 
 ### F-05: Quadratic String Concatenation (CPU/Memory DoS) in `EscapeHtml`
 - **Severity:** Low
-- **Location:** [uhttpfiles.pas#L32-L49](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L32-L49) (`EscapeHtml`)
+- **Location:** [uhttpfiles.pas#L32-L49](src/uhttpfiles.pas#L32-L49) (`EscapeHtml`)
 - **CWE:** CWE-407 (Inefficient Algorithmic Complexity)
 
 #### Description
 `EscapeHtml` builds `Result` character-by-character using `Result := Result + ...` inside a loop over `AText`. In FreePascal `AnsiString` (`{$H+}`), repeated single-character concatenation reallocates and copies the string on each iteration, resulting in $O(N^2)$ time and allocation overhead.
 
 #### Impact
-In [uhandlers.pas#L42-L48](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhandlers.pas#L42-L48), `EscapeHtml` is called directly on user-controlled `name` parameters from query strings or POST bodies. A large input causes disproportionate CPU and memory consumption, which is amplified by the single-threaded server loop in `server.pas`.
+In [uhandlers.pas#L42-L48](src/uhandlers.pas#L42-L48), `EscapeHtml` is called directly on user-controlled `name` parameters from query strings or POST bodies. A large input causes disproportionate CPU and memory consumption, which is amplified by the single-threaded server loop in `server.pas`.
 
 #### Remediation
 Pre-allocate or write in chunks using a `TStringBuilder` (from `SysUtils`) or a single-pass buffer copy (counting escaped length first, `SetLength(Result, OutLen)`, then filling by index).
@@ -132,7 +132,7 @@ Pre-allocate or write in chunks using a `TStringBuilder` (from `SysUtils`) or a 
 
 ### F-06: Unhandled `TFileStream` Exceptions & TOCTOU Race
 - **Severity:** Low
-- **Location:** [uhttpfiles.pas#L136](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L136), [uhttpfiles.pas#L181](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L181) (`ServeStaticFile`)
+- **Location:** [uhttpfiles.pas#L136](src/uhttpfiles.pas#L136), [uhttpfiles.pas#L181](src/uhttpfiles.pas#L181) (`ServeStaticFile`)
 - **CWE:** CWE-367 (Time-of-Check Time-of-Use Race Condition), CWE-755 (Improper Handling of Exceptional Conditions)
 
 #### Description
@@ -148,7 +148,7 @@ Wrap `TFileStream.Create` in `try..except` (handling `EFOpenError` / `EStreamErr
 
 ### F-07: Thread-Safety Race Condition in `EnsureMimeTypesLoaded`
 - **Severity:** Low
-- **Location:** [uhttpfiles.pas#L20-L30](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L20-L30) (`EnsureMimeTypesLoaded`)
+- **Location:** [uhttpfiles.pas#L20-L30](src/uhttpfiles.pas#L20-L30) (`EnsureMimeTypesLoaded`)
 - **CWE:** CWE-362 (Concurrent Execution using Shared Resource with Improper Synchronization)
 
 #### Description
@@ -164,7 +164,7 @@ Initialize `MimeTypes.LoadKnownTypes` once in the unit `initialization` section 
 
 ### F-08: Raw-Character Validation & Escaping Context Assumptions
 - **Severity:** Informational
-- **Location:** [uhttpfiles.pas#L87-L111](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L87-L111) (`IsPathTraversalAttempt`), [uhttpfiles.pas#L32-L49](file:///home/yur/agy-projects/miscalg/lmcompare/gemini/src/uhttpfiles.pas#L32-L49) (`EscapeHtml`)
+- **Location:** [uhttpfiles.pas#L87-L111](src/uhttpfiles.pas#L87-L111) (`IsPathTraversalAttempt`), [uhttpfiles.pas#L32-L49](src/uhttpfiles.pas#L32-L49) (`EscapeHtml`)
 - **CWE:** CWE-20 (Improper Input Validation), CWE-79 (Cross-site Scripting)
 
 #### Description

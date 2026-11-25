@@ -116,4 +116,4 @@ Other checks:
 
 - The server is single-threaded (`httpsrv.lpr:65`, `Threaded := False`). Any finding here that causes a long-running response would block all clients. None of the tested inputs did this.
 - Default root: `ExtractFilePath(ParamStr(0)) + '../assets'`. As noted in `security-report.md`, that path resolves to `bin/assets` for binaries in `bin/<config>/`, which does not exist. The server returns 404 for everything unless the root is passed as the second argument. This is a functional bug, not a security one.
-- The scratch build and fixtures are in `/tmp/claude-1000/-home-yur-agy-projects-miscalg-lmcompare-claude/261ba95c-222a-4a12-a1ce-102e1d863d1c/scratchpad/`. The repository was not modified.
+- The scratch build and fixtures are in `<scratchpad>/`. The repository was not modified.

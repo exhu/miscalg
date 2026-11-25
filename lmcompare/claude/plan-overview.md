@@ -50,7 +50,7 @@ build/, bin/         build output (git-ignored)
 
 ## Phases
 Run phases in order. Each phase is executed by a NEW subagent with the prompt:
-"Implement `plan-NN.md` in /home/yur/agy-projects/miscalg/lmcompare/claude. Read
+"Implement `plan-NN.md` in this project directory. Read
 `plan-overview.md` first for shared rules. Report what you did and the verification results."
 Do not start a phase until the previous one reports success.
 
