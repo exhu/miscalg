@@ -1,0 +1,23 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 2rem;
+  line-height: 1.5;
+}
+
+form {
+  margin-top: 1rem;
+}
+
+form label {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+form input {
+  margin-right: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+
+form button {
+  padding: 0.25rem 0.75rem;
+}
