@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 PORT=18080
 URL="localhost:$PORT"
-bin/httpsrv $PORT assets >/dev/null 2>&1 &
+bin/httpsrv $PORT assets >"${SERVER_LOG:-/dev/null}" 2>&1 &
 PID=$!
 trap 'kill $PID 2>/dev/null' EXIT
 
@@ -34,6 +34,9 @@ check "hello stranger" body_has 'hello, stranger!' "$URL/hello"
 check "hello POST" body_has 'hello, Ann!' -d 'name=Ann' "$URL/hello"
 check "/missing 404" test "$(status "$URL/missing")" = 404
 check "traversal blocked" test "$(status --path-as-is "$URL/../src/httpsrv.lpr")" != 200
+
+kill -TERM $PID 2>/dev/null && wait $PID 2>/dev/null
+check "clean shutdown" test $? = 0
 
 if [ "$FAILS" -ne 0 ]; then echo "$FAILS FAILED"; exit 1; fi
 echo "ALL PASS"

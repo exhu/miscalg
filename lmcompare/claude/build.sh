@@ -1,5 +1,3 @@
 #!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")"
-mkdir -p build bin
-fpc -Mobjfpc -Sh -FUbuild -FEbin -obin/httpsrv src/httpsrv.lpr
+# Thin wrapper; see .claude/skills/fpc-dev/SKILL.md. Args: [--mode speed|size|debug] [--clean]
+exec "$(dirname "$0")/.claude/skills/fpc-dev/scripts/build.sh" "$@"
