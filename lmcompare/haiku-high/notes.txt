@@ -1,0 +1,2 @@
+unit tests added with /plan (which switched to sonnet 5.5 medium),
+then continued with haiku 5.5 medium.

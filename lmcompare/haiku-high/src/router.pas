@@ -20,6 +20,10 @@ type
   private
     FRoutes: array of TRoute;
     FFallback: TRouteHandler;
+  protected
+    { Virtual so that tests can capture or silence the log output. }
+    procedure LogRequest(const AMethod, AUri: string; ACode: Integer); virtual;
+    procedure LogError(const AUri, AMessage: string); virtual;
   public
     procedure AddRoute(const APath: string; AHandler: TRouteHandler);
     procedure SetFallback(AHandler: TRouteHandler);
@@ -66,6 +70,17 @@ begin
   AResponse.Content := '<h1>404 Not Found</h1>';
 end;
 
+procedure TRouter.LogRequest(const AMethod, AUri: string; ACode: Integer);
+begin
+  WriteLn(AMethod, ' ', AUri, ' -> ', ACode);
+  Flush(Output);
+end;
+
+procedure TRouter.LogError(const AUri, AMessage: string);
+begin
+  WriteLn(ErrOutput, 'Handler error for ', AUri, ': ', AMessage);
+end;
+
 procedure TRouter.Dispatch(Sender: TObject; var ARequest: TFPHTTPConnectionRequest;
   var AResponse: TFPHTTPConnectionResponse);
 var
@@ -94,15 +109,14 @@ begin
   except
     on E: Exception do
     begin
-      WriteLn(ErrOutput, 'Handler error for ', ARequest.URI, ': ', E.Message);
+      LogError(ARequest.URI, E.Message);
       AResponse.Code := 500;
       AResponse.CodeText := 'Internal Server Error';
       AResponse.ContentType := 'text/plain; charset=utf-8';
-      AResponse.Content := 'Internal Server Error: ' + E.Message;
+      AResponse.Content := 'Internal Server Error';
     end;
   end;
-  WriteLn(ARequest.Method, ' ', ARequest.URI, ' -> ', AResponse.Code);
-  Flush(Output);
+  LogRequest(ARequest.Method, ARequest.URI, AResponse.Code);
 end;
 
 end.
